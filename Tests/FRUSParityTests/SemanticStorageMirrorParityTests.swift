@@ -43,12 +43,11 @@ import Testing
         let server = unavailable.replacingOccurrences(of: "This version of the app", with: "This server")
             .replacingOccurrences(of: "your library", with: "its library")
         #expect(SemanticStorageWords.unavailable == server && block.contains("unavailable: '\(server)'"))
-        // The footer: the app's, the server's, each volume's file in the image where the app's downloads with it, and
-        // its sentence on Related Documents' panel left for the row that ranks by meaning there (S26d).
+        // The footer: the app's, the server's, each volume's file in the image where the app's downloads with it; its
+        // sentence on Related Documents' panel stands since S26d, which puts the semantic matches there.
         let footer = "The app can find documents on the same subject even when they use none of the same words. Matches appear in the Related Documents panel, in a section of their own. Each volume needs a small extra file for this, which downloads with the volume and is removed with it (unless you disabled this). The feature is experimental, and how well it works on nineteenth-century material is not yet established."
         #expect(NoteViewParityTests.writes(section, "settings.vectors.footer.v4", footer))
         let serverFooter = footer.replacingOccurrences(of: "The app can", with: "The server can")
-            .replacingOccurrences(of: " Matches appear in the Related Documents panel, in a section of their own.", with: "")
             .replacingOccurrences(of: "which downloads with the volume and is removed with it (unless you disabled this)", with: "which the image holds for every volume")
         #expect(block.contains("footer: '\(serverFooter)'"))
         // Nothing to download or remove: the app's controls have no words on the server.

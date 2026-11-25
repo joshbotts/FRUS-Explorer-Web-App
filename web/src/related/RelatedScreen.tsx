@@ -5,22 +5,51 @@
 // rests under the keyboard, and is kept for the next list this browser opens, as the app keeps its
 // device's, with Reset to app defaults, which forgets it; and the ranked list, each row the document's
 // head or id, its volume and dateline, the opening of its text and its "why related" chips, strongest
-// first, then the app's lines for more than it shows and for an archival pool cut short. The ranking, the
-// chips' words and the pool's line are the kit's, on the server. The web's own: the scope and the tuning
-// are in the address, so Back from a document returns to the list as it was; the controls show what was
-// asked for at once, and keep their place and the focus while the server ranks, which a status line says;
-// a slider of an axis this server does not rank by yet is shown set aside, and says so; and a chip names
-// its axis in words, where the app draws the axis's symbol.
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+// first, then the app's lines for more than it shows and for an archival pool cut short. Since S26d every axis
+// ranks, the two experimental ones with the app's captions under their sliders; a row the semantic axis scored
+// carries the app's two verdicts on its menu, kept with the user's account, on a server that keeps them, and says the
+// one given; and Beyond your library follows the rows, as the app's section does, the documents it names and the
+// volumes, each opening the volume's page in Browse where the app offers a download. The ranking, the chips' words,
+// the pool's line and the section's sentences are the kit's, on the server. The web's own: the scope and the tuning
+// are in the address, so Back from a document returns to the list as it was; the controls show what was asked for at
+// once, and keep their place and the focus while the server ranks, which a status line says; a slider of an axis this
+// server cannot rank by is shown set aside, and says so; a chip names its axis in words, where the app draws the
+// axis's symbol; the verdicts' menu is a button of its own, where the app's is a row's context menu; a line says when
+// served volumes' vectors are missing; and a document Beyond your library names in a volume this server serves, as a
+// scoped list's leads, which look past its scope, may, opens itself, where the app calls its volume not downloaded.
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { documentQuery } from '../api/endpoints';
-import { type RelatedAxis, type RelatedDocuments, relatedQuery, type RelatedScope, storedWeights, storeWeights } from '../api/related';
+import {
+  type BeyondLibrary,
+  recordVerdict,
+  type RelatedAxis,
+  type RelatedDocuments,
+  relatedQuery,
+  type RelatedRow,
+  type RelatedScope,
+  type SemanticVerdict,
+  storedWeights,
+  storeWeights,
+} from '../api/related';
+import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
+import { MenuButton } from '../shell/MenuButton';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
-import { decodedWeights, emptyDetail, encodedWeights, overflowLine, rowTitle, weightText } from './relatedRules';
+import {
+  axisCaption,
+  carriesVerdicts,
+  decodedWeights,
+  emptyDetail,
+  encodedWeights,
+  isEmptyList,
+  overflowLine,
+  rowTitle,
+  weightText,
+} from './relatedRules';
 
 const route = getRouteApi('/related/$volumeId/$documentId');
 
@@ -42,6 +71,9 @@ export function RelatedScreen() {
   const [opened] = useState(() => storedWeights() ?? '');
   const weights = search.weights ?? opened;
   const anchor = useQuery(documentQuery(volumeId, documentId));
+  // A verdict is kept with the user's account, so a server that keeps no user data is offered none.
+  const me = useQuery(meQuery);
+  const keepsVerdicts = me.data?.userData === true;
   // The list on show stays while the next is ranked, so the tuning bar and its focus stay where they are.
   const related = useQuery({ ...relatedQuery(volumeId, documentId, scope, weights), placeholderData: keepPreviousData });
   // The axes and scopes of the last list the server gave, for the tuning bar while a list cannot be had.
@@ -65,11 +97,7 @@ export function RelatedScreen() {
       </p>
     );
   } else if (related.data) {
-    list = (
-      <div aria-busy={related.isPlaceholderData}>
-        <RelatedList related={related.data} />
-      </div>
-    );
+    list = <RelatedList related={related.data} busy={related.isPlaceholderData} verdicts={keepsVerdicts} />;
   }
   const status = preparing ? copy.related.preparing : related.isFetching ? copy.related.ranking : '';
 
@@ -230,7 +258,8 @@ function WeightRow({
   onRelease: () => void;
 }) {
   const id = useId();
-  const note = axis.available ? undefined : (copy.related.notRanked[axis.id] ?? copy.related.subjectsUnavailable);
+  // An axis set aside says why; an experimental one says what it is, as its value stands.
+  const note = axis.available ? axisCaption(axis.id, value) : (copy.related.notRanked[axis.id] ?? copy.related.subjectsUnavailable);
   return (
     <li className="weight-row">
       <label htmlFor={id}>{axis.name}</label>
@@ -262,8 +291,53 @@ function WeightRow({
   );
 }
 
-function RelatedList({ related }: { related: RelatedDocuments }) {
-  if (related.rows.length === 0) {
+function RelatedList({ related, busy, verdicts }: { related: RelatedDocuments; busy: boolean; verdicts: boolean }) {
+  const client = useQueryClient();
+  // What the last verdict said, for a screen reader, the row showing it to the eye; counted, so that the same words
+  // said again are a new announcement.
+  const [said, setSaid] = useState({ words: '', count: 0 });
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function judge(row: RelatedRow, verdict: SemanticVerdict) {
+    setFailure(null);
+    try {
+      await recordVerdict(client, `${related.volumeId}/${related.documentId}`, `${row.volumeId}/${row.documentId}`, verdict);
+      const words = copy.related.recorded(copy.related.marked[verdict]!, plainTitle(rowTitle(row)));
+      setSaid((last) => ({ words, count: last.count + 1 }));
+    } catch (error) {
+      setFailure(copy.related.feedbackFailed(errorMessage(error)));
+    }
+  }
+
+  return (
+    <>
+      <div aria-busy={busy}>
+        <Rows related={related} verdicts={verdicts} onVerdict={(row, verdict) => void judge(row, verdict)} />
+      </div>
+      {/* Polite, apart from the ranking's status line above the list, and outside the busy list, whose changes wait. */}
+      <p className="visually-hidden" aria-live="polite">
+        <span key={said.count}>{said.words}</span>
+      </p>
+      {failure && (
+        <p className="error" role="alert">
+          {failure}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** The list's rows and the lines under them, or the empty list's sentences. */
+function Rows({
+  related,
+  verdicts,
+  onVerdict,
+}: {
+  related: RelatedDocuments;
+  verdicts: boolean;
+  onVerdict: (row: RelatedRow, verdict: SemanticVerdict) => void;
+}) {
+  if (isEmptyList(related)) {
     return (
       <div className="related-empty">
         <h2>{copy.related.empty}</h2>
@@ -274,7 +348,9 @@ function RelatedList({ related }: { related: RelatedDocuments }) {
   const more = overflowLine(related.totalBeforeLimit, related.rows.length);
   return (
     <>
-      <ol className="related-list">
+      {/* No row in this library, but some beyond it: the verdict, then the section, as the app's list says it. */}
+      {related.rows.length === 0 && <p className="note">{emptyDetail(related.scope)}</p>}
+      <ol className="related-list" hidden={related.rows.length === 0}>
         {related.rows.map((row) => (
           <li key={`${row.volumeId}/${row.documentId}`}>
             <Link to="/doc/$volumeId/$documentId" params={{ volumeId: row.volumeId, documentId: row.documentId }}>
@@ -299,11 +375,82 @@ function RelatedList({ related }: { related: RelatedDocuments }) {
                 ))}
               </ul>
             )}
+            {verdicts && carriesVerdicts(row) && <Verdicts row={row} onVerdict={(verdict) => onVerdict(row, verdict)} />}
           </li>
         ))}
       </ol>
       {more && <p className="note">{more}</p>}
       {related.poolCut && <p className="note pool-cut">{related.poolCut}</p>}
+      {related.missingShards.length > 0 && <p className="note">{copy.related.missingShards(related.missingShards.length)}</p>}
+      {related.beyondLibrary && <Beyond beyond={related.beyondLibrary} />}
     </>
+  );
+}
+
+/** A semantic row's menu of the app's two verdicts, and the one the user gave, which describes the menu's button. */
+function Verdicts({ row, onVerdict }: { row: RelatedRow; onVerdict: (verdict: SemanticVerdict) => void }) {
+  const given = useId();
+  return (
+    <div className="related-verdicts">
+      <MenuButton
+        className="related-feedback"
+        label={copy.related.feedback}
+        accessibleLabel={copy.related.feedbackFor(plainTitle(rowTitle(row)))}
+        describedBy={row.verdict ? given : undefined}
+        entries={[
+          { kind: 'item', label: copy.related.helpful, onSelect: () => onVerdict('helpful') },
+          { kind: 'item', label: copy.related.notHelpful, onSelect: () => onVerdict('notHelpful') },
+        ]}
+      />
+      {row.verdict && (
+        <span id={given} className="related-verdict">
+          {copy.related.marked[row.verdict]}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Beyond your library, as the app's section shows it: the kit's sentence; the documents named and scored, each by its
+ * id in its volume, opening its volume's page in Browse where the server does not serve the volume, and saying so, or
+ * the document itself where it does, as a scoped list's leads, which look past its scope, may name; then the first five
+ * volumes with their counts, each opening its page in Browse; and the kit's line for the rest.
+ */
+function Beyond({ beyond }: { beyond: BeyondLibrary }) {
+  const headingId = useId();
+  return (
+    <section className="related-beyond" aria-labelledby={headingId}>
+      <h2 id={headingId}>{copy.related.beyond}</h2>
+      <p className="note">{beyond.caption}</p>
+      <ul className="related-list">
+        {beyond.documents.map((document) => (
+          <li key={`${document.volumeId}/${document.documentId}`}>
+            {document.served ? (
+              <Link to="/doc/$volumeId/$documentId" params={{ volumeId: document.volumeId, documentId: document.documentId }}>
+                {copy.related.beyondDocument(document.documentId, plainTitle(document.volumeTitle))}
+              </Link>
+            ) : (
+              <>
+                <Link to="/browse/$volumeId" params={{ volumeId: document.volumeId }}>
+                  {copy.related.beyondDocument(document.documentId, plainTitle(document.volumeTitle))}
+                </Link>
+                <p className="related-place">{copy.related.beyondNotServed}</p>
+              </>
+            )}
+            <p className="related-place">{document.chip}</p>
+          </li>
+        ))}
+        {beyond.volumes.map((volume) => (
+          <li key={volume.volumeId}>
+            <Link to="/browse/$volumeId" params={{ volumeId: volume.volumeId }}>
+              {plainTitle(volume.title)}
+            </Link>
+            <p className="related-place">{volume.countText}</p>
+          </li>
+        ))}
+      </ul>
+      {beyond.moreVolumes && <p className="note">{beyond.moreVolumes}</p>}
+    </section>
   );
 }

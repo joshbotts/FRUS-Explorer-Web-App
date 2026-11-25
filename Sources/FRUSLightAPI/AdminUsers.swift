@@ -51,7 +51,7 @@ public struct ResearchHolding: Codable, Equatable, Sendable {
 /// `GET /api/v1/admin/users/{name}/research`, and what an erasure removed.
 public struct ResearchHoldings: Codable, Equatable, Sendable, ResponseEncodable {
     public var userId: String
-    /// Each of the user's tables, in the user store's order, the stored keys last.
+    /// Each of the user's tables, in the user store's order, the stored keys and the verdicts on semantic matches last.
     public var holdings: [ResearchHolding]
     public var total: Int
 }
@@ -79,6 +79,8 @@ enum AdminUserRoutes {
 
     /// The model type a stored key's holding is named by.
     static let storedKeyType = "StoredKey"
+    /// The type a holding of the verdicts on semantic matches names, the kit's entry (S26d).
+    static let semanticFeedbackType = "SemanticFeedbackEntry"
 
     static func add(to admin: RouterGroup<APIRequestContext>, services: UserDataServices) {
         let store = services.store
@@ -268,10 +270,11 @@ enum AdminUserRoutes {
 
     private static func holdings(_ held: [String: Int], of user: String) -> ResearchHoldings {
         let types = Dictionary(MacImport.types.map { ($0.table, $0.model) }, uniquingKeysWith: { first, _ in first })
-        let tables = UserStoreSchema.erased.map(\.name) + [RelationalUserStore.secretsTable]
+        let tables = UserStoreSchema.erased.map(\.name) + [RelationalUserStore.secretsTable, RelationalUserStore.semanticFeedbackTable]
         let rows = tables.map { table in
-            ResearchHolding(type: table == RelationalUserStore.secretsTable ? storedKeyType : types[table] ?? table, table: table,
-                            count: held[table] ?? 0)
+            ResearchHolding(type: table == RelationalUserStore.secretsTable ? storedKeyType
+                                : table == RelationalUserStore.semanticFeedbackTable ? semanticFeedbackType : types[table] ?? table,
+                            table: table, count: held[table] ?? 0)
         }
         return ResearchHoldings(userId: user, holdings: rows, total: rows.reduce(0) { $0 + $1.count })
     }

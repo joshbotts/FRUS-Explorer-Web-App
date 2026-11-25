@@ -45,7 +45,10 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         // Which of the semantic features the server serves (PLAN's S26c), from what it has read, hashing nothing.
         var mapServed = false
         if case .success = await map.map() { mapServed = true }
-        status.semantic = await vectors.features(map: mapServed, encoder: encoder.settings.canStart)
+        var features = await vectors.features(map: mapServed, encoder: encoder.settings.canStart)
+        // Related Documents' semantic axis (PLAN's S26d), which ranks wherever the vectors are served.
+        features.relatedDocuments = features.vectors
+        status.semantic = features
         return status
     }
     CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, reader: reader)
@@ -62,7 +65,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     ArchivalNeighborsRoutes.add(to: router, provider: provider, resources: resources)
     ArchivalCollectionRoutes.add(to: router, provider: provider, resources: resources)
     VolumeSourcesRoutes.add(to: router, provider: provider, resources: resources)
-    RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources, users: users)
+    RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources, users: users, vectors: vectors)
     CrossReferenceGraphRoutes.add(to: router, provider: provider, resources: resources)
     // The Word Cloud (PLAN's S24i), from the bundled clouds, with the reader's own settings where a request acts for one.
     WordCloudRoutes.add(to: router, resources: resources, users: users)
@@ -83,7 +86,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     if let userData {
         AuthRoutes.add(to: router, services: userData)
         UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider, leads: leads,
-                           reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck))
+                           reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck), vectors: vectors)
         // The NARA Catalog proxy (PLAN's S22e), under the guard, with or without user data.
         NARARoutes.add(to: router, services: userData)
         AdminRoutes.add(to: router, services: userData, state: state, resources: resources, library: library, indexer: indexer,

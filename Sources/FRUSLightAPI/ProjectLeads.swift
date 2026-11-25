@@ -16,13 +16,15 @@
 // waits is that one, and one while it runs waits behind it, so the leads are ranked from the seed as it
 // stands after the change that asked; and each reads, when it starts, the tuning the project's newest
 // Refresh brought. The leads are computed over a served index only: with none, a Refresh is refused and the leads
-// stay as they were. Beyond your library, the app's count of the volumes the project reaches that the
-// device does not hold, is the semantic axis's, and waits for phase 4.
+// stay as they were. Since PLAN's S26d the rankings have the semantic axis, as the app's do, over the server's
+// vectors; Beyond your library, the app's count of the volumes the project reaches that the device does not hold,
+// is read beside Project Home, from the same seed (ProjectReach.swift).
 
 import FRUSCoreKit
 import FRUSLightCore
 import Foundation
 import Hummingbird
+import SemanticVectorsKit
 
 /// The seed and the tuning of a project's leads, as the app's `ProjectLeadsService` gathers them.
 enum ProjectLeadsSeed {
@@ -83,6 +85,26 @@ enum ProjectLeadsSeed {
             .sorted()
     }
 
+    /// The project `projectId` of `user`'s and its seed, read from the store as the app's `gatherSeed` reads its
+    /// models: nil for a project the user does not have. A record the store cannot read throws its
+    /// `ResearchExportError`, whose words name the table, the row and the column, never what the record holds.
+    static func gather(_ projectId: String, of user: String, in store: any UserDataStore) async throws
+        -> (project: ProjectExport, seed: [String])? {
+        let (rows, assignments) = try await Blocking.run {
+            (try store.researchRows(for: user, tables: ["projects", "collections", "collection_entries", "notes"]),
+             try store.tagAssignments(of: user))
+        }
+        guard let project = try ResearchExport.records(rows, "projects", ResearchExport.project)
+            .first(where: { $0.id.uuidString == projectId }) else { return nil }
+        let entries = try ResearchExport.children(rows["collection_entries"], in: "collection_entries", of: "collection_id")
+        let collections = try ResearchExport.records(rows, "collections") { row in
+            try ResearchExport.collection(row, entries: try ResearchExport.ordered(entries[try row.uuid("id")] ?? [],
+                                                                                  in: "collection_entries") { try $0.int("sort_order") })
+        }
+        let notes = try ResearchExport.records(rows, "notes") { try ResearchExport.note($0, links: [:]) }
+        return (project, keys(forProject: project, collections: collections, notes: notes, assignments: assignments))
+    }
+
     /// The tuning the leads are ranked with (`effectiveWeights(projectRaw:)`): the project's own, else the
     /// one the asking browser keeps, as the app reads its device's, else the defaults; each axis it leaves
     /// out at its default.
@@ -103,6 +125,8 @@ actor ProjectLeadsQueue {
     let jobs: any JobQueue
     let provider: ServedIndexProvider
     let resources: ServerResources
+    /// The semantic vectors the rankings' semantic axis reads (S26d), or none, when it contributes nothing.
+    let vectors: SemanticVectors?
     let now: @Sendable () -> Date
     /// The newest computation queued for each project, by its user and its id: its own, or the one an
     /// import queued for every project concerned.
@@ -125,11 +149,12 @@ actor ProjectLeadsQueue {
     }
 
     init(store: any UserDataStore, jobs: any JobQueue, provider: ServedIndexProvider, resources: ServerResources,
-         now: @escaping @Sendable () -> Date = Date.init) {
+         vectors: SemanticVectors? = nil, now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
         self.jobs = jobs
         self.provider = provider
         self.resources = resources
+        self.vectors = vectors
         self.now = now
     }
 
@@ -216,36 +241,23 @@ actor ProjectLeadsQueue {
     /// it does in the server's words, never what the project holds; a cancel stops it between two seeds.
     private func compute(_ key: Key, job: JobContext) async throws -> String? {
         try await Self.compute(key.project, of: key.user, browserWeights: tuning(key), job: job, store: store,
-                               provider: provider, resources: resources, now: now)
+                               provider: provider, resources: resources, vectors: vectors, now: now)
     }
 
     static func compute(_ projectId: String, of user: String, browserWeights: String?, job: JobContext,
                         store: any UserDataStore, provider: ServedIndexProvider, resources: ServerResources,
-                        now: @escaping @Sendable () -> Date) async throws -> String? {
-        let (rows, assignments) = try await Blocking.run {
-            (try store.researchRows(for: user, tables: ["projects", "collections", "collection_entries", "notes"]),
-             try store.tagAssignments(of: user))
-        }
-        let project: ProjectExport
-        let collections: [CollectionExport]
-        let notes: [ResearchNoteExport]
+                        vectors: SemanticVectors? = nil, now: @escaping @Sendable () -> Date) async throws -> String? {
+        let gathered: (project: ProjectExport, seed: [String])
         do {
-            guard let found = try ResearchExport.records(rows, "projects", ResearchExport.project)
-                .first(where: { $0.id.uuidString == projectId }) else {
+            guard let found = try await ProjectLeadsSeed.gather(projectId, of: user, in: store) else {
                 return "The project was deleted before its leads were computed"
             }
-            project = found
-            let entries = try ResearchExport.children(rows["collection_entries"], in: "collection_entries", of: "collection_id")
-            collections = try ResearchExport.records(rows, "collections") { row in
-                try ResearchExport.collection(row, entries: try ResearchExport.ordered(entries[try row.uuid("id")] ?? [],
-                                                                                      in: "collection_entries") { try $0.int("sort_order") })
-            }
-            notes = try ResearchExport.records(rows, "notes") { try ResearchExport.note($0, links: [:]) }
+            gathered = found
         } catch let error as ResearchExportError {
             // Its words name the table, the row and the column, never what the record holds.
             throw JobFailed("A project's leads were kept as they were: \(error.description)")
         }
-        let seed = ProjectLeadsSeed.keys(forProject: project, collections: collections, notes: notes, assignments: assignments)
+        let (project, seed) = gathered
         guard !seed.isEmpty else {
             // Nothing to rank from: the leads on show go, the dismissed ones stay, as the app's do.
             let kept = try await Blocking.run { try store.clearVisibleProjectLeads(ofProject: project.id.uuidString, for: user) }
@@ -254,7 +266,12 @@ actor ProjectLeadsQueue {
         guard let served = try await provider.servedIfReady() else {
             throw JobFailed("No index is served, so the project's leads were kept as they were.")
         }
-        let subjects = try await Blocking.run { resources.documentSubjectIndex }
+        let (subjects, stopwords) = try await Blocking.run {
+            (resources.documentSubjectIndex, RelatedDocumentsRoutes.lexicalStopwords(resources))
+        }
+        // The semantic axis's generation and shards, when the server serves its vectors.
+        var semantic: (bundle: SemanticBundle, shards: any SemanticShardSource)?
+        if let vectors, case .success(let bundle) = await vectors.bundle() { semantic = (bundle, vectors) }
         let weights = ProjectLeadsSeed.effectiveWeights(projectRaw: project.leadAxisWeights, browserRaw: browserWeights)
         let ranked = Array(seed.prefix(ProjectLeadsSeed.seedCap))
         var perSeed: [(seed: String, related: [(key: String, score: Double)])] = []
@@ -264,7 +281,8 @@ actor ProjectLeadsQueue {
             try await job.checkpoint()
             await job.progress("Ranking the documents related to the project's documents", fraction: Double(index) / Double(ranked.count))
             guard let anchor = DocumentKey(compositeString: seedKey) else { continue }
-            let result = await rank(anchor, weights: weights, served: served, resources: resources, subjects: subjects)
+            let result = await rank(anchor, weights: weights, served: served, resources: resources, subjects: subjects,
+                                    stopwords: stopwords, vectors: semantic)
             perSeed.append((seed: seedKey, related: result.rows.map { ($0.key.compositeString, $0.totalScore) }))
             for row in result.rows where records[row.key.compositeString] == nil {
                 records[row.key.compositeString] = row.record
@@ -299,14 +317,18 @@ actor ProjectLeadsQueue {
         return "Ranked from \(ranked.count == 1 ? "1 document" : "\(ranked.count) documents") of a project of \(user)'s: \(shown == 1 ? "1 lead" : "\(shown) leads")"
     }
 
-    /// One seed's related documents, as the service ranks them: no year, every volume, thirty, and no lines.
+    /// One seed's related documents, as the service ranks them: no year, every volume, thirty, and no lines, with the
+    /// semantic axis over `vectors`, the bundled generation and the server's shards, when they are served.
     @MainActor
     static func rank(_ anchor: DocumentKey, weights: AxisWeights, served: ServedIndex, resources: ServerResources,
-                     subjects: DocumentSubjectIndex?) async -> RelatedDocumentsResult {
-        await RelatedDocumentsEngine.rank(
+                     subjects: DocumentSubjectIndex?, stopwords: Set<String>,
+                     vectors: (bundle: SemanticBundle, shards: any SemanticShardSource)?) async -> RelatedDocumentsResult {
+        let semantic = vectors.map { ServedSemantics(bundle: $0.bundle, shards: $0.shards, served: served) }
+        return await RelatedDocumentsEngine.rank(
             anchor: anchor, anchorYear: nil, weights: weights, scopeVolumeIds: nil,
             limit: ProjectLeadsSeed.perSeedRelatedLimit, includeSnippets: false, includeOffIndexLeads: false,
-            dependencies: RelatedDocumentsRoutes.dependencies(served: served, resources: resources, subjects: subjects))
+            dependencies: RelatedDocumentsRoutes.dependencies(served: served, resources: resources, subjects: subjects,
+                                                              stopwords: stopwords, semantic: semantic?.source))
     }
 }
 

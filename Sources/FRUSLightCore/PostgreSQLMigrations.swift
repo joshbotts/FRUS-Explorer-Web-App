@@ -13,7 +13,7 @@
 /// reads as the order the store took its rows in. `user_search` is not here: search reads FTS5, in
 /// the store's local SQLite copy (`PostgreSQLUserStore`).
 enum PostgreSQLMigrations {
-    static let all: [[String]] = [one, two, three, four, five, six, seven, eight]
+    static let all: [[String]] = [one, two, three, four, five, six, seven, eight, nine]
 
     /// S2's: the single user, and corrections as override rows.
     static let one = [
@@ -588,5 +588,25 @@ enum PostgreSQLMigrations {
         """,
         "CREATE INDEX correction_log_by_document ON correction_log (volume_id, document_id)",
         "CREATE INDEX correction_log_by_override ON correction_log (override_id)",
+    ]
+
+    /// S26d's: app.db's nine, each user's verdicts on Related Documents' semantic matches, with `rowid`, the order the
+    /// store took them in, which is the log's order, as app.db's SQLite keeps it for every table.
+    static let nine = [
+        """
+        CREATE TABLE semantic_feedback (
+            rowid BIGINT GENERATED ALWAYS AS IDENTITY,
+            user_id TEXT COLLATE "C" NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+            anchor TEXT COLLATE "C" NOT NULL,
+            neighbour TEXT COLLATE "C" NOT NULL,
+            verdict TEXT COLLATE "C" NOT NULL CHECK (verdict IN ('helpful', 'notHelpful')),
+            cosine DOUBLE PRECISION,
+            era TEXT COLLATE "C",
+            same_volume BIGINT,
+            provenance_digest TEXT COLLATE "C",
+            recorded_at TEXT COLLATE "C" NOT NULL,
+            PRIMARY KEY (user_id, anchor, neighbour)
+        )
+        """,
     ]
 }

@@ -1,9 +1,10 @@
 // Related Documents' rules in the browser (PLAN's S23d), mirrored from the app's `RelatedDocumentsContent`
 // and held to its source by `RelatedDocumentsParityTests`: a row's title, the empty list's sentence by
-// scope, and the overflow line. And a tuning written as the app stores one, its departures from the
-// defaults, which the server reads with the kit's `AxisWeights(rawValue:)` and gives back in the kit's
-// own spelling.
-import type { RelatedAxis, RelatedRow, RelatedScope } from '../api/related';
+// scope, and the overflow line; since S26d the experimental axes' captions, which row carries the verdicts'
+// menu, and when the list is empty but for Beyond your library. And a tuning written as the app stores one, its
+// departures from the defaults, which the server reads with the kit's `AxisWeights(rawValue:)` and gives back in
+// the kit's own spelling.
+import type { RelatedAxis, RelatedDocuments, RelatedRow, RelatedScope } from '../api/related';
 import { copy } from '../copy';
 
 /** A row's title: its head, else the document's id (`row.record.header.isEmpty ? row.documentId : …`). */
@@ -14,6 +15,29 @@ export function rowTitle(row: Pick<RelatedRow, 'header' | 'documentId'>): string
 /** The empty list's sentence: one for all volumes, and one inviting to widen a narrower scope. */
 export function emptyDetail(scope: RelatedScope): string {
   return scope === 'all' ? copy.related.emptyDetail : copy.related.emptyDetailScoped;
+}
+
+/**
+ * The caption under an experimental axis's slider (`axisCaption(for:)`): the semantic axis's and the lexical axis's,
+ * each by whether its weight is 0; none for the other axes.
+ */
+export function axisCaption(axisId: string, weight: number): string | undefined {
+  if (axisId === 'semanticSimilarity') return weight === 0 ? copy.related.semanticOff : copy.related.semanticOn;
+  if (axisId === 'lexicalSimilarity') return weight === 0 ? copy.related.lexicalOff : copy.related.lexicalOn;
+  return undefined;
+}
+
+/** Whether a row carries the verdicts' menu: the semantic axis scored it (`row.axisScores[.semanticSimilarity] != nil`). */
+export function carriesVerdicts(row: Pick<RelatedRow, 'semanticScore'>): boolean {
+  return row.semanticScore !== undefined;
+}
+
+/**
+ * Whether the list says No Related Documents: no row, and nothing beyond the library
+ * (`rows.isEmpty, offIndexLeads.documentCount == 0`), which the server sends only when it found a document.
+ */
+export function isEmptyList(related: Pick<RelatedDocuments, 'rows' | 'beyondLibrary'>): boolean {
+  return related.rows.length === 0 && related.beyondLibrary === undefined;
 }
 
 /** "N more related", while more scored than the list shows (`totalBeforeLimit > rows.count`). */

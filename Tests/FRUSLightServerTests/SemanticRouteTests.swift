@@ -53,10 +53,11 @@ import Testing
         let router = buildRouter(state: fixture.state, resources: fixture.resources, reader: fixture.reader, vectors: Self.fixtureVectors())
         try await Application(router: router).test(.router) { client in
             let status = try decode(ServerStatus.self, try await client.execute(uri: "/api/v1/status", method: .get))
+            // Related Documents' semantic axis ranks wherever the vectors are served (S26d).
             #expect(status.semantic == SemanticFeatures(vectors: true, generation: "89481b18", shardsHeld: 3, shardsPublished: 553,
-                                                        map: true, encoder: false, relatedDocuments: false, searchByMeaning: false))
+                                                        map: true, encoder: false, relatedDocuments: true, searchByMeaning: false))
         }
-        // A server whose bundled vectors are refused serves neither them nor the map drawn from them.
+        // A server whose bundled vectors are refused serves neither them, nor the map drawn from them, nor the axis.
         let empty = try TemporaryDirectory()
         let refused = buildRouter(state: fixture.state, resources: fixture.resources, reader: fixture.reader,
                                   vectors: SemanticVectors(resources: empty.url, shards: empty.url))

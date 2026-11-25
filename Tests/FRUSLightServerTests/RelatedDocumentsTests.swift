@@ -29,8 +29,8 @@ import Testing
             #expect(list.scope == "all" && list.weights == "" && list.scopes.first == "volume" && list.scopes.last == "all")
             #expect(list.axes.map(\.id) == SimilarityAxis.allCases.map(\.rawValue))
             #expect(list.axes.map(\.weight) == SimilarityAxis.allCases.map(\.defaultWeight))
-            #expect(list.axes.filter { !$0.available }.map(\.id) == ["semanticSimilarity", "lexicalSimilarity"],
-                    "the kit's cross-reference store since S23c's pin move; no lexical search until S24e's follow-up, no semantic axis until phase 4")
+            #expect(list.axes.allSatisfy { $0.available },
+                    "the kit's cross-reference store since S23c's pin move; the lexical axis's search and the semantic axis's vectors since S26d")
             #expect(list.axes.first { $0.id == "sharedSubjects" }?.available == true, "the image's subject index")
             // A tuning in the kit's stored form is answered in the kit's spelling.
             let tuned = try decode(RelatedDocuments.self, try await client.execute(uri: "\(base)?weights=sharedPersons:1,dateProximity:0.5", method: .get))
@@ -98,6 +98,26 @@ import Testing
     /// A Refresh is a job of the server's queue; two asked for at once, or one while another waits, are that
     /// one; another user's project is refused; and a computation reads its own user's records alone, though
     /// two users hold one project's id, as two who imported one export do.
+    /// Beyond your library's documents say whether the server serves their volume. A scoped list's leads look past its
+    /// scope, by the kit's design, so they may name a document of a volume served, which the browser opens, where it says
+    /// of the others that their volume is not on this server. The scoped lists `RelatedDocumentsParityTests` reads over the
+    /// fixture shards name none of a served volume, so the answer is built here from leads of the kit's own type.
+    @Test func beyondYourLibrarysDocumentsSayWhetherTheServerServesThem() throws {
+        let resources = try TestResources.value()
+        let leads = SemanticOffIndexLeads(
+            documentCount: 3, volumes: [.init(volumeID: "frus1894Nicaragua", count: 2), .init(volumeID: "frus1969-76ve09p1", count: 1)],
+            isCapped: false,
+            documents: [.init(volumeID: "frus1894Nicaragua", documentID: "d7", score: 0.62),
+                        .init(volumeID: "frus1969-76ve09p1", documentID: "d3", score: 0.58)])
+        let section = try #require(RelatedDocumentsRoutes.beyondLibrary(leads, resources: resources,
+                                                                          served: [Self.volume, "frus1894Nicaragua"]))
+        #expect(section.documents.map { $0.served } == [true, false], "the first's volume is served, the second's not")
+        #expect(section.documents.map { $0.chip } == [0.62, 0.58].map { SemanticSimilarityGenerator.evidenceLabel(for: $0) })
+        #expect(section.volumes.map { $0.volumeId } == ["frus1894Nicaragua", "frus1969-76ve09p1"])
+        #expect(RelatedDocumentsRoutes.beyondLibrary(SemanticOffIndexLeads.none, resources: resources, served: []) == nil,
+                "a scan that found nothing has no section")
+    }
+
     @Test func aRefreshIsAJobOneWaitingAProject() async throws {
         let fixture = try await UserDataFixture(indexed: true, auth: .header, trustedProxies: SignInTests.loopback)
         defer { withExtendedLifetime(fixture) {} }

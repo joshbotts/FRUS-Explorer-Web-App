@@ -1,8 +1,20 @@
 // Related Documents' rules in the browser (PLAN's S23d): a row's title, the empty list's sentence, the
-// overflow line and a tuning as the app stores one.
+// overflow line and a tuning as the app stores one; since S26d the experimental axes' captions, which row carries
+// the verdicts, and when a list is empty.
 import { describe, expect, it } from 'vitest';
 import type { RelatedAxis } from '../api/related';
-import { decodedWeights, emptyDetail, encodedWeights, overflowLine, rowTitle, weightText } from './relatedRules';
+import { copy } from '../copy';
+import {
+  axisCaption,
+  carriesVerdicts,
+  decodedWeights,
+  emptyDetail,
+  encodedWeights,
+  isEmptyList,
+  overflowLine,
+  rowTitle,
+  weightText,
+} from './relatedRules';
 
 const axes: RelatedAxis[] = [
   { id: 'archivalProvenance', name: 'Archival provenance', weight: 1, defaultWeight: 1, available: true },
@@ -53,5 +65,20 @@ describe('Related Documents’ rules', () => {
     expect(weightText(0.5)).toBe('0.5');
     expect(weightText(1)).toBe('1.0');
     expect(weightText(0)).toBe('0.0');
+  });
+  it('captions the two experimental axes by whether each is off, and no other', () => {
+    expect(axisCaption('semanticSimilarity', 0)).toBe(copy.related.semanticOff);
+    expect(axisCaption('semanticSimilarity', 0.5)).toBe(copy.related.semanticOn);
+    expect(axisCaption('lexicalSimilarity', 0)).toBe(copy.related.lexicalOff);
+    expect(axisCaption('lexicalSimilarity', 0.1)).toBe(copy.related.lexicalOn);
+    expect(axisCaption('sharedPersons', 0)).toBeUndefined();
+  });
+
+  it('gives the verdicts to a row the semantic axis scored alone, and calls a list empty only with nothing beyond it', () => {
+    expect(carriesVerdicts({ semanticScore: 0.42 })).toBe(true);
+    expect(carriesVerdicts({ semanticScore: undefined })).toBe(false);
+    expect(isEmptyList({ rows: [], beyondLibrary: undefined })).toBe(true);
+    const beyond = { caption: 'x', documentCount: 1, volumeCount: 1, isCapped: false, documents: [], volumes: [] };
+    expect(isEmptyList({ rows: [], beyondLibrary: beyond })).toBe(false);
   });
 });

@@ -433,7 +433,11 @@ function PasswordDialog({ user, onDone, onCancel }: { user: AdminUser; onDone: (
 
 /** The non-empty holdings, in the export sheet's words. */
 function holdingLines(holdings: ResearchHoldings): string[] {
-  const names: Record<string, string> = { ...copy.dataSettings.types, StoredKey: words.storedKeys };
+  const names: Record<string, string> = {
+    ...copy.dataSettings.types,
+    StoredKey: words.storedKeys,
+    SemanticFeedbackEntry: words.semanticFeedback,
+  };
   return holdings.holdings.filter((holding) => holding.count > 0).map((holding) => words.holding(holding.count, names[holding.type] ?? holding.type));
 }
 
