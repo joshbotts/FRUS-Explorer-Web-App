@@ -55,6 +55,7 @@ import { type ArchivalSearch, type SeriesSearch, validateArchivalSearch, validat
 import { CrossReferenceAnalyticsScreen } from './analytics/CrossReferenceAnalyticsScreen';
 import { PersonAnalyticsScreen } from './analytics/PersonAnalyticsScreen';
 import { SemanticAnalyticsScreen } from './analytics/SemanticAnalyticsScreen';
+import { type SemanticSearch, validateSemanticSearch } from './analytics/semanticMapRules';
 import { type CrossReferenceSearch, type PeopleSearch, validateCrossReferenceSearch, validatePeopleSearch } from './analytics/personReferenceRules';
 import { ChronologyScreen } from './analytics/ChronologyScreen';
 import { CorpusAnalyticsScreen } from './analytics/CorpusAnalyticsScreen';
@@ -388,10 +389,13 @@ const aboutSeriesRoute = createRoute({
   component: AboutSeriesScreen,
 });
 
-// Semantic Analytics (S28b), which the app opens from its Analytics menu after Archival Analytics: the bundled map.
+// Semantic Analytics (S28b), which the app opens from its Analytics menu after Archival Analytics: the bundled map, and
+// since S28c its reading, the kit's `SemanticMapRequest` in the address: the lens, the scope, and the document or region
+// a link names.
 const semanticAnalyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/analytics/semantic',
+  validateSearch: (raw: Record<string, unknown>): SemanticSearch => validateSemanticSearch(raw),
   component: SemanticAnalyticsScreen,
 });
 

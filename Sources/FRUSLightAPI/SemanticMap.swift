@@ -60,6 +60,9 @@ actor SemanticMapFiles {
     struct Map: Sendable {
         /// The kit's reader, which S28c's lenses and picks read.
         let vectors: SemanticMapVectors
+        /// The map's index as the kit decodes it: the regions S28c's names, cards and picks read, by id, and the layout's
+        /// identity a region's id means anything against.
+        let index: SemanticMapArtifacts.MapIndex
         /// The placements as the answer sends them: the kit's block, six bytes a point.
         let points: ByteBuffer
         let regions: SemanticMapRegions
@@ -150,7 +153,7 @@ actor SemanticMapFiles {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         guard let json = try? encoder.encode(regions) else { return .failure(malformed("\(indexFile) could not be encoded")) }
         let regionsJSON = ByteBuffer(bytes: json)
-        return .success(Map(vectors: map, points: points, regions: regions, regionsJSON: regionsJSON,
+        return .success(Map(vectors: map, index: index, points: points, regions: regions, regionsJSON: regionsJSON,
                             pointsTag: entityTag(points), regionsTag: entityTag(regionsJSON)))
     }
 
@@ -203,6 +206,14 @@ actor SemanticMapFiles {
 }
 
 enum SemanticMapRoutes {
+    /// The map's points and regions, and since S28c its reading (`SemanticMapReading.swift`) over the same files, the
+    /// catalogue, the bundled source-provenance aggregate and the served index's volumes.
+    static func add(to router: Router<APIRequestContext>, map files: SemanticMapFiles, provider: ServedIndexProvider,
+                    resources: ServerResources) {
+        add(to: router, map: files)
+        SemanticMapReadingRoutes.add(to: router, reading: SemanticMapReading(files: files, provider: provider, resources: resources))
+    }
+
     static func add(to router: Router<APIRequestContext>, map files: SemanticMapFiles) {
         router.get("/api/v1/semantic/map") { request, _ -> Response in
             try FormQuery(request.uri.query).refuseUnknown([])

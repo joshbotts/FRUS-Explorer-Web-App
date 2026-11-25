@@ -2,10 +2,11 @@
 // Chromium, with no axe violations and no console error. Against the image, whose bundled map the server reads, so
 // nothing indexed is needed. Semantic Analytics opens from the header's Analytics menu by keyboard, after Archival
 // Analytics; its map draws the 314,616 points (the frame says, as `data-view`, the view it last drew: the magnification and
-// the centre); + zooms by the Mac's step, the arrow keys move the view and − zooms out, each frame unlike the one before,
-// and 0 fits the map again, to the first frame pixel for pixel; the buttons, a drag and the wheel do as much; and the
-// regions' table lists the 140 regions largest first, with the app's summary. What a frame costs under this browser's
-// renderer is printed: under CI's Chromium, its software one.
+// the centre); + zooms by the Mac's step, Shift and the arrow keys move the view (since S28c, whose list box of the
+// regions is the canvas's one stop, its Up and Down moving from region to region) and − zooms out, each frame unlike the
+// one before, and 0 fits the map again, to the first frame pixel for pixel, its names laid out again for the view; the
+// buttons, a drag and the wheel do as much; and the regions' table lists the 140 regions largest first, with the app's
+// summary. What a frame costs under this browser's renderer is printed: under CI's Chromium, its software one.
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -28,11 +29,13 @@ async function drawnShare(page: Page, image: Buffer): Promise<number> {
   }, [...image]);
 }
 
-/** Presses `key` on the focused map and waits for the frame of the view it moves to, which must be another. */
+/** Presses `key` on the focused map and waits for the frame of the view it moves to, which must be another, with its
+ *  names laid out for it. */
 async function press(page: Page, map: Locator, key: string): Promise<string> {
   const before = (await map.getAttribute('data-view')) ?? '';
   await page.keyboard.press(key);
   await expect(map).not.toHaveAttribute('data-view', before);
+  await expect(map).toHaveAttribute('data-names', 'laid-out');
   return (await map.getAttribute('data-view')) ?? '';
 }
 
@@ -41,14 +44,15 @@ async function press(page: Page, map: Locator, key: string): Promise<string> {
 async function frameTimes(page: Page, keys: string[]): Promise<number[]> {
   return page.evaluate(async (pressed) => {
     const frame = document.querySelector<HTMLElement>('.semantic-map-frame');
+    const keys = frame?.querySelector<HTMLElement>('.semantic-map-keys');
     const gl = frame?.querySelector('canvas')?.getContext('webgl2');
-    if (!frame || !gl) return [];
+    if (!frame || !keys || !gl) return [];
     const pixel = new Uint8Array(4);
     const times: number[] = [];
     for (const key of pressed) {
       const before = frame.dataset.view;
       const start = performance.now();
-      frame.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      keys.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey: key.startsWith('Arrow'), bubbles: true, cancelable: true }));
       for (let waited = 0; frame.dataset.view === before && waited < 300; waited++) {
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
@@ -79,20 +83,24 @@ test('opens the map from the Analytics menu, zooms and pans it by keyboard, fits
   await expect(page).toHaveURL(/analytics\/semantic$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Semantic Analytics' })).toBeFocused();
 
-  // The map, drawn: the whole of it, most of its frame the points' colours.
-  const map = page.getByRole('application', { name: 'Semantic map' });
+  // The map, drawn: the whole of it, most of its frame the points' colours, with its regions' names over it.
+  const map = page.locator('.semantic-map-frame');
+  const keys = page.getByRole('listbox', { name: 'Semantic map' });
   await expect(map).toHaveAttribute('data-view', '1.000 0 0', { timeout: 60_000 });
   const firstFrame = Date.now() - opened;
-  await expect(map).toHaveAccessibleDescription(/the arrow keys move across it, \+ and − zoom in and out, and 0 fits the whole map/);
+  await expect(keys).toHaveAccessibleDescription(/Shift with an arrow key moves across the map, \+ and − zoom in and out, and 0 fits the whole map/);
   await expect(page.getByRole('status').filter({ hasText: 'The whole map.' })).toBeVisible();
   await expect(page.getByText('Between regions', { exact: true })).toBeVisible();
-  await expect(page.getByText('Color separates neighboring regions rather than naming them; the names are in the table.')).toBeVisible();
+  await expect(page.getByText('Color separates neighboring regions rather than naming them; the names are on the map.')).toBeVisible();
+  await expect(map).toHaveAttribute('data-names', 'laid-out');
   await axeCheck(page);
 
-  // By keyboard: + zooms in by the Mac's step, the arrow keys move the view an eighth of it, − zooms out, and 0 fits it.
-  // Each frame is compared with the map focused, since the focus ring follows the frame's rounded corners into the
-  // canvas's box.
-  await tabTo(page, map);
+  // By keyboard: + zooms in by the Mac's step, Shift and the arrow keys move the view an eighth of it, − zooms out, and 0
+  // fits it. Each frame is compared with the map focused, since the focus ring follows the frame's rounded corners into
+  // the canvas's box, and with its names laid out for its view, the region the list is on ringed.
+  await tabTo(page, keys);
+  await expect(map).toHaveAttribute('data-names', 'laid-out');
+  await expect(page.locator('.semantic-map-name.is-active, .semantic-map-ring')).toHaveCount(1);
   const canvas = map.locator('canvas');
   const whole = await canvas.screenshot();
   const share = await drawnShare(page, whole);
@@ -102,10 +110,10 @@ test('opens the map from the Analytics menu, zooms and pans it by keyboard, fits
   let before = whole;
   for (const [key, view, status] of [
     ['+', /^1\.400 0 0$/, 'Zoomed in 1.4 times.'],
-    ['ArrowRight', /^1\.400 [1-9]\d* 0$/, undefined],
-    ['ArrowUp', /^1\.400 [1-9]\d* [1-9]\d*$/, undefined],
+    ['Shift+ArrowRight', /^1\.400 [1-9]\d* 0$/, undefined],
+    ['Shift+ArrowUp', /^1\.400 [1-9]\d* [1-9]\d*$/, undefined],
     ['-', /^1\.000 [1-9]\d* [1-9]\d*$/, 'Moved, at the whole map’s zoom.'],
-    ['ArrowLeft', /^1\.000 -?\d+ [1-9]\d*$/, undefined],
+    ['Shift+ArrowLeft', /^1\.000 -?\d+ [1-9]\d*$/, undefined],
   ] as const) {
     expect(await press(page, map, key)).toMatch(view);
     if (status) await expect(page.getByRole('status').filter({ hasText: status })).toBeVisible();
@@ -143,7 +151,7 @@ test('opens the map from the Analytics menu, zooms and pans it by keyboard, fits
   await expect(map).toHaveAttribute('data-view', /^1\.000 -\d+ \d+$/);
   await page.mouse.wheel(0, -200);
   await expect(map).toHaveAttribute('data-view', /^1\.[1-9]\d\d /);
-  await map.focus();
+  await keys.focus();
   expect(await press(page, map, '0')).toBe('1.000 0 0');
 
   // The regions' table: the 140 regions, largest first, with the app's summary over it.
