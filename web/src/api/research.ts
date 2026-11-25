@@ -390,8 +390,15 @@ export async function recordVisit(client: QueryClient, volumeId: string, documen
 }
 
 /** A search the screen ran, recorded as the Mac's search window records one, with its anchor. */
-export async function recordSearch(client: QueryClient, search: string, anchor?: SearchAnchor): Promise<RecordedSearchRun> {
-  const run = (await change<RecordedSearchRun>(client, 'POST', '/api/v1/me/history/searches', { search, anchor }))!;
+export async function recordSearch(
+  client: QueryClient,
+  search: string,
+  anchor?: SearchAnchor,
+  engine: 'keywords' | 'meaning' = 'keywords',
+): Promise<RecordedSearchRun> {
+  // A search by meaning is recorded as one, its list whole under the Meaning route's signature (S27d).
+  const body = engine === 'meaning' ? { search, anchor, mode: engine } : { search, anchor };
+  const run = (await change<RecordedSearchRun>(client, 'POST', '/api/v1/me/history/searches', body))!;
   if (run.outcome === 'inserted' || run.outcome === 'refreshed') trailChanged(client);
   return run;
 }

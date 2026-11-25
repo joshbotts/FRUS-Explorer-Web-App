@@ -60,6 +60,11 @@ public struct SearchItem: Codable, Equatable, Sendable {
     /// none for a search that acts for no one. A row draws a chip for each the user's tags name, as
     /// the Mac's draws `UserTag.chips(for:among:)`.
     public var userTagIds: [String]
+    /// A row a search by meaning ranked (PLAN's S27d): its calibrated cosine (`SearchResult.semanticScore`), whose
+    /// negation is its `bm25Score`, and the kit's chip for it, "Semantic match · 64%" (`SemanticScoreCopy.chipLabel`);
+    /// both absent from a keyword search's row.
+    public var semanticScore: Double?
+    public var chip: String?
 
     /// The locale the server writes a row's date in: the browser app's strings are US English.
     static let locale = Locale(identifier: "en_US")
@@ -95,6 +100,8 @@ public struct SearchItem: Codable, Equatable, Sendable {
         isFrontMatter = result.isFrontMatter
         subjectTagIds = result.subjectTagIds
         userTagIds = result.userTagIds
+        semanticScore = result.semanticScore
+        chip = result.semanticScore.map(SemanticScoreCopy.chipLabel(for:))
     }
 }
 

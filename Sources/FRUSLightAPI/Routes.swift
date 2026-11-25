@@ -24,6 +24,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     // takes its vectors' index from the same read.
     let vectors = vectors ?? SemanticVectors(resources: resources.directory, shards: state.configuration.semanticShards)
     let map = SemanticMapFiles(vectors: vectors)
+    // Search by meaning's engine (PLAN's S27d): the encoder and the vectors, which the trail and a capture run it with too.
+    let meaning = MeaningSearchRoutes.MeaningEngine(encoder: encoder, vectors: vectors)
     // Every GET route answers HEAD too, so HEAD /readyz says what GET says rather than falling to
     // the browser app's fallback.
     let router = Router(context: APIRequestContext.self, options: .autoGenerateHeadEndpoints)
@@ -48,6 +50,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         var features = await vectors.features(map: mapServed, encoder: encoder.settings.canStart)
         // Related Documents' semantic axis (PLAN's S26d), which ranks wherever the vectors are served.
         features.relatedDocuments = features.vectors
+        // Search by meaning (PLAN's S27d), wherever the vectors are served and the encoder can start.
+        features.searchByMeaning = features.vectors && features.encoder
         status.semantic = features
         return status
     }
@@ -55,6 +59,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     AnnotationRoutes.add(to: router, resources: resources)
     PeopleRoutes.add(to: router, provider: provider, resources: resources)
     SearchRoutes.add(to: router, provider: provider, resources: resources, users: users)
+    // Search by meaning (PLAN's S27d), the kit's Meaning engine over the served index, the vectors and the encoder.
+    MeaningSearchRoutes.add(to: router, provider: provider, resources: resources, users: users, engine: meaning)
     FacetRoutes.add(to: router, provider: provider, resources: resources, users: users)
     ReadingRoutes.add(to: router, provider: provider, resources: resources, users: users)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)
@@ -70,8 +76,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     // The Word Cloud (PLAN's S24i), from the family's clouds and, since S29e, counted live over the served index, with the
     // reader's own settings where a request acts for one.
     WordCloudRoutes.add(to: router, provider: provider, resources: resources, users: users)
-    // The semantic map's points and regions (PLAN's S28b), from the bundled map, read on first use.
-    SemanticMapRoutes.add(to: router, map: map)
+    // The semantic map's points and regions (PLAN's S28b), from the bundled map, read on first use, and its reading (S28c).
+    SemanticMapRoutes.add(to: router, map: map, provider: provider, resources: resources)
     // Archival Analytics and About the Series (PLAN's S24h).
     ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     AboutSeriesRoutes.add(to: router, provider: provider, resources: resources)
@@ -87,7 +93,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     if let userData {
         AuthRoutes.add(to: router, services: userData)
         UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider, leads: leads,
-                           reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck), vectors: vectors)
+                           reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck), vectors: vectors, meaning: meaning)
         // The NARA Catalog proxy (PLAN's S22e), under the guard, with or without user data.
         NARARoutes.add(to: router, services: userData)
         AdminRoutes.add(to: router, services: userData, state: state, resources: resources, library: library, indexer: indexer,

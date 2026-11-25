@@ -186,6 +186,8 @@ enum HistoryRoutes {
         /// The search, as the query string `GET /api/v1/search` reads.
         let search: String
         let anchor: SearchAnchor?
+        /// The engine it ran through, the app's `SearchMode`: `keywords`, as when it is left out, or `meaning` (PLAN's S27d).
+        let mode: String?
     }
 
     /// How many rows of each table a page holds at first, and how many Show More adds
@@ -194,7 +196,7 @@ enum HistoryRoutes {
     static let pageIncrement = 500
 
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, provider: ServedIndexProvider,
-                    resources: ServerResources, reader: ReaderService) {
+                    resources: ServerResources, reader: ReaderService, meaning: MeaningSearchRoutes.MeaningEngine) {
         let store = services.store
         let now = services.now
 
@@ -242,25 +244,34 @@ enum HistoryRoutes {
         }
         // A search the browser ran, recorded with what the server's run of it gives, as the Mac's
         // window records its executed state: its count, the rows it keeps, their ceiling, the volumes
-        // indexed, its scope's signature, the corpus it ran inside and the expression it compiled to.
+        // indexed, its scope's signature, the corpus it ran inside and the expression it compiled to. A
+        // search by meaning (PLAN's S27d) records its list whole, under the Meaning route's signature.
         me.post("history/searches") { request, context -> RecordedSearchRun in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let body = try await JSONBody.decode(Search.self, from: request, fields: ["search", "anchor"])
+            let body = try await JSONBody.decode(Search.self, from: request, fields: ["search", "anchor", "mode"])
             let asked = try SearchRequest(formEncoded: body.search)
+            let byMeaning = try isMeaning(body.mode)
             guard try await PreferenceRoutes.isLogging(user.id, in: store) else {
                 return RecordedSearchRun(outcome: "suppressed", anchor: body.anchor)
             }
             let queryText = (asked.parameters.keywords ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !queryText.isEmpty,
-                  let run = try? await ranSearch(asked, queryText: queryText, for: user.id, in: store, provider: provider) else {
+            let ran: Run?
+            if queryText.isEmpty {
+                ran = nil
+            } else if byMeaning {
+                ran = try? await ranMeaning(asked, for: user.id, in: store, provider: provider, resources: resources, engine: meaning)
+            } else {
+                ran = try? await ranSearch(asked, queryText: queryText, for: user.id, in: store, provider: provider)
+            }
+            guard let run = ran else {
                 return RecordedSearchRun(outcome: "skipped", anchor: body.anchor)
             }
             let project = try await Blocking.run { try store.activeProjectId(of: user.id) }.flatMap(UUID.init(uuidString:))
             var entry = SearchHistoryEntryExport(
                 id: UUID(), queryText: queryText, resultCount: run.count, projectId: project,
                 executedAt: UserStoreDate.rounded(now()), loadedCount: run.loaded, matchCount: run.count,
-                fetchLimit: SearchRequest.retainedLimit, indexedVolumeCount: run.indexedVolumeCount,
+                fetchLimit: run.fetchLimit, indexedVolumeCount: run.indexedVolumeCount,
                 scopeSignature: run.signature, appliedCorpusId: run.corpus, renderedExpression: run.expression)
             let table = TrailTable.searches.table
             var outcome = "inserted"
@@ -384,10 +395,39 @@ enum HistoryRoutes {
     struct Run {
         let count: Int
         let loaded: Int
+        /// The ceiling the rows were fetched under: the 7,500 a keyword search keeps, or a meaning search's hundred.
+        var fetchLimit = SearchRequest.retainedLimit
         let indexedVolumeCount: Int
         let signature: String
         let corpus: UUID?
         let expression: String?
+    }
+
+    /// Whether a record's `mode` is a search by meaning's; `keywords`, or none, is a keyword search's.
+    static func isMeaning(_ mode: String?) throws -> Bool {
+        switch mode {
+        case nil, "keywords": return false
+        case "meaning": return true
+        case let other?:
+            throw APIProblem(.badRequest, code: "INVALID_FIELD", detail: "mode: keywords or meaning, not \(other).")
+        }
+    }
+
+    /// The user's search by meaning `asked`, as the server runs it, recorded as the Mac's window records a Meaning run
+    /// (`MacSearchViewModel.recordSearchHistory`, PLAN's S27d): its list whole, as its count and the rows it loaded, since
+    /// a list of the nearest documents is the whole of its ranking; the engine's hundred as its ceiling
+    /// (`SemanticSearchBackend.hitLimit`); the Meaning route's signature, with the documents it ranked inside a working
+    /// corpus (`SearchScopeSignature.semanticSignature(for:)`); and the kit's rendered expression, which names the
+    /// bundled generation's model. A search the server refuses throws.
+    static func ranMeaning(_ asked: SearchRequest, for user: String, in store: any UserDataStore, provider: ServedIndexProvider,
+                           resources: ServerResources, engine: MeaningSearchRoutes.MeaningEngine) async throws -> Run {
+        let run = try await MeaningSearchRoutes.run(asked, for: user, in: store, provider: provider, resources: resources,
+                                                    engine: engine)
+        let served = try await provider.served()
+        let count = run.outcome.results.count
+        return Run(count: count, loaded: count, fetchLimit: SemanticSearchBackend.hitLimit,
+                   indexedVolumeCount: served.indexedVolumeIds.count, signature: run.signature,
+                   corpus: asked.workingCorpusId.flatMap(UUID.init(uuidString:)), expression: run.renderedExpression)
     }
 
     /// The user's search `asked`, as the server runs it: its exact count with their half, the rows it

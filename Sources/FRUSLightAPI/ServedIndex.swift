@@ -55,6 +55,8 @@ public final class ServedIndex: Sendable {
     public let retained = RetainedResults()
     /// The pages and counts of the searches run lately by relevance over this index.
     public let recent = RecentSearches()
+    /// The searches by meaning run lately over this index (PLAN's S27d), each kept for its user, question and parameters.
+    let meaning = MeaningRuns()
     /// The People screen's list of this index's person rollup, read once (People.swift, PLAN's S21g).
     public let people = ServedPeople()
     /// Person Analytics' and Cross-Reference Analytics' series over this index (PLAN's S24g), each computed once for its

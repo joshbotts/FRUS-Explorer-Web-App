@@ -463,7 +463,11 @@ public struct Me: Codable, Equatable, Sendable, ResponseEncodable {
 enum UserDataRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, resources: ServerResources,
                     reader: ReaderService, provider: ServedIndexProvider, leads: ProjectLeadsQueue? = nil,
-                    reviews: UpdateReviewSources? = nil, vectors: SemanticVectors) {
+                    reviews: UpdateReviewSources? = nil, vectors: SemanticVectors,
+                    meaning: MeaningSearchRoutes.MeaningEngine? = nil) {
+        // Search by meaning's engine (PLAN's S27d), which a meaning search's record in the trail and its capture run with:
+        // the server's, or one over these routes' vectors with no encoder, which refuses every search by meaning.
+        let meaning = meaning ?? MeaningSearchRoutes.MeaningEngine(encoder: .none, vectors: vectors)
         // Suggested Next's computations (PLAN's S23d): the server's, or one over these routes' stores.
         let leads = leads ?? ProjectLeadsQueue(store: services.store, jobs: services.jobs, provider: provider, resources: resources,
                                                vectors: vectors, now: services.now)
@@ -486,7 +490,7 @@ enum UserDataRoutes {
         // The verdicts on Related Documents' semantic matches (PLAN's S26d).
         SemanticFeedbackRoutes.add(to: me, services: services, resources: resources, provider: provider, vectors: vectors)
         ProjectRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
-        HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
+        HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader, meaning: meaning)
         ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider,
                            reviews: reviews ?? UpdateReviewSources(indexer: nil, teiCheck: nil))
         PreferenceRoutes.add(to: me, services: services)
@@ -494,14 +498,15 @@ enum UserDataRoutes {
         WordCloudSettingsRoutes.add(to: me, services: services, resources: resources)
         SecretRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)
-        SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources)
+        SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources, meaning: meaning)
         SavedSearchRoutes.add(to: me, services: services, provider: provider)
         VolumeScopeRoutes.add(to: me, services: services, provider: provider, resources: resources)
         // A working corpus's capture carries the results Checklist Mode hides, so its two routes have
         // a group of their own, with its larger limit (S17e).
         let captures = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: WorkingCorpusRoutes.bodyLimit))
-        WorkingCorpusRoutes.add(to: me, captures: captures, services: services, provider: provider, resources: resources)
+        WorkingCorpusRoutes.add(to: me, captures: captures, services: services, provider: provider, resources: resources,
+                                meaning: meaning)
         // The same guard with a note's larger limit, over a group of its own, so that the limit is
         // the route's.
         let notes = router.group("/api/v1/me")
