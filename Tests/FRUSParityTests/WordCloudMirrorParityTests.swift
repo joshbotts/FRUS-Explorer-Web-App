@@ -1,12 +1,14 @@
-// What the server and the browser app mirror of the app's Word Cloud (PLAN's S24i), held to the app's source at the pin,
-// line beside line, and since S27c's pin move to the kit's files where FRUS-Explorer#1987 moved the tokenizer's assembly,
-// the scope's signatures and keyness (`FRUSCoreKit/Analytics/WordCloud`), until S29e's rows call them:
-// `BundledCloudVectors`' reading of a scope's list and `LensChip`'s words; the tokenizer the app
-// assembles (`WordCloudTokenizer.configured`) and its settings bench (`WordCloudBench`); `WordCloudSettings`' lists and
-// their JSON as `SettingsSyncCoordinator` syncs it; `WordCloudDisplayState`'s states and count line; the scope menu
-// (`WordCloudScopeBar`), the scope's title (`WordCloudScopeResolver`) and the scoped hand-off; the generator's layer; the
-// browser's layout (`WordCloudLayout`), palette, typefaces and densities, and the settings pane's controls; and every
-// word the server writes and copy.ts holds, under the app's key.
+// What the server and the browser app mirror of the app's Word Cloud (PLAN's S24i, S29e), held to the app's source at
+// the pin, line beside line, where the kit does not hold it: since S29e the server calls the kit's tokenizer assembly
+// (`WordCloudTokenizer.configured`), its scope's signatures (`WordCloudScope(signature:)`) and its count
+// (`WordCloudCount.count`), and holds what stays the app's: `BundledCloudVectors`' reading of a scope's list and
+// `LensChip`'s words; its settings bench (`WordCloudBench`); `WordCloudSettings`' lists and their JSON as
+// `SettingsSyncCoordinator` syncs it; `WordCloudDisplayState`'s states, count lines and the lenses a health leaves;
+// the resolver (`WordCloudScopeResolver`), each scope's documents, limits and title; the loader's term limit and its
+// scopes that outlast a request (`WordCloudLoader`); the service's count and what keys it (`WordFrequencyService`);
+// the scope menu (`WordCloudScopeBar`) and the scoped hand-off; the generator's layer; the browser's layout
+// (`WordCloudLayout`), palette, typefaces and densities, and the settings pane's controls; and every word the server
+// writes and copy.ts holds, under the app's key.
 
 import FRUSLightCore
 import FRUSLightTestSupport
@@ -33,6 +35,11 @@ import Testing
     static let menu = "App/FRUSExplorerApp.swift"
     static let runner = "kit:CloudVectorsGeneratorCore/CloudVectorsRunner.swift"
     static let server = "Sources/FRUSLightAPI/WordCloud.swift"
+    static let live = "Sources/FRUSLightAPI/WordCloudLive.swift"
+    static let loader = "Analytics/WordCloud/WordCloudLoader.swift"
+    static let service = "Analytics/WordCloud/WordFrequencyService.swift"
+    static let searchModel = "Search/SearchViewModel.swift"
+    static let chronologyView = "Chronology/ChronologyView.swift"
     static let preferences = "Sources/FRUSLightAPI/Preferences.swift"
     static let rules = "web:cloud/cloudRules.ts"
     static let screen = "web:cloud/CloudScreen.tsx"
@@ -63,16 +70,14 @@ import Testing
             (Self.runner, #"let includeDiplomatic = true"#,
              Self.server, #"static let generatorIncludesDiplomatic = true"#),
             (Self.view, #"ForEach(WordCloudLens.allCases) { option in"#,
-             Self.server, #"static let lenses: [WordCloudLens] = WordCloudLens.allCases.filter { WordCloudLens.bundledCloudLenses.contains($0) }"#),
+             Self.server, #"static let lenses: [WordCloudLens] = WordCloudLens.allCases"#),
         ])
     }
 
     @Test func theReadersSettingsAreReadAndKeptAsTheAppsAre() throws {
         try ArchivalAndSeriesMirrorParityTests.expect([
-            (Self.configured, #"stopwords: stopwords.active(includeDiplomatic: includeDiplomatic) .union(extraStopwords),"#,
-             Self.server, #"stopwords: stopwords.active(includeDiplomatic: includeDiplomatic) .union(extraStopwords(for: lens)),"#),
-            (Self.configured, #"minimumLength: tuning.minimumLength, foldPlurals: tuning.foldPlurals, lens: lens, lexicon: lexicons.filter(for: lens), markings: tuning.filterMarkings ? stopwords.markings : [],"#,
-             Self.server, #"minimumLength: tuning.minimumLength, foldPlurals: tuning.foldPlurals, lens: lens, lexicon: lexicons.filter(for: lens), markings: tuning.filterMarkings ? stopwords.markings : [],"#),
+            (Self.configured, #"public static func configured(tuning: WordCloudTuning, lens: WordCloudLens = .allTerms, includeDiplomatic: Bool, extraStopwords: Set<String> = [], wordForm: WordCloudWordForm, stopwords: WordCloudStopwordSet, lexicons: WordCloudLexiconSet) -> WordCloudTokenizer {"#,
+             Self.server, #"WordCloudTokenizer.configured(tuning: tuning, lens: lens, includeDiplomatic: includeDiplomatic, extraStopwords: extraStopwords(for: lens),"#),
             (Self.bench, #"let kept = sample.filter { $0.count >= tuning.minimumCount && tokenizer.accepts($0.term.lowercased()) }"#,
              Self.server, #"return sample.filter { $0.count >= tuning.minimumCount && tokenizer.accepts($0.term.lowercased()) }"#),
             (Self.bench, #"wordForm: .dictionary"#,
@@ -134,18 +139,86 @@ import Testing
              Self.server, #"let volumeIds = resources.manifest .filter { $0.subseries == subseriesId } .map(\.volumeId) guard !volumeIds.isEmpty else { return nil }"#),
             (Self.view, #"case .corpus, .document, .collection, .userTag, .savedSearch, .dateRange: return nil"#,
              Self.server, #"case .corpus: return nil"#),
-            (Self.scope, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
-             Self.server, #"static let liveSignatures: Set<String> = ["doc", "col", "tag", "search", "scope", "subject", "daterange"]"#),
-            (Self.scope, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
-             Self.server, #"case "doc": guard value.firstIndex(of: "/") != nil else { return false } return true"#),
-            (Self.scope, #"case "col": guard let uuid = UUID(uuidString: value) else { return nil } self = .collection(id: uuid) case "tag": guard let uuid = UUID(uuidString: value) else { return nil } self = .userTag(id: uuid) case "search": guard let uuid = UUID(uuidString: value) else { return nil } self = .savedSearch(id: uuid) case "scope": guard let uuid = UUID(uuidString: value) else { return nil }"#,
-             Self.server, #"case "col", "tag", "search", "scope": return UUID(uuidString: value) != nil"#),
-            (Self.scope, #"let parts = value.components(separatedBy: "\u{1f}") guard let category = parts.first, !category.isEmpty else { return nil }"#,
-             Self.server, #"let parts = value.components(separatedBy: "\u{1f}") guard let category = parts.first, !category.isEmpty else { return false }"#),
-            (Self.scope, #"let bounds = value.components(separatedBy: "..") guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return nil }"#,
-             Self.server, #"let bounds = value.components(separatedBy: "..") guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return false }"#),
+            (Self.scope, #"public init?(signature: String) {"#,
+             Self.server, #"guard let scope = WordCloudScope(signature: raw) else {"#),
             (Self.lexicons, #"switch shared.polarity(of: term.lowercased()) {"#,
              Self.server, #"polarity: lens.colorsBySentiment ? lexicons.polarity(of: $0.term.lowercased()) : nil)"#),
+        ])
+    }
+
+    /// The live count (PLAN's S29e): each scope's documents, limits and title as the resolver gives them, the loader's
+    /// term limit and the scopes that outlast a request, the service's count and the settings that key it, and the
+    /// states a count's result decides, the app's lines beside the server's.
+    @Test func theLiveCountIsTheApps() throws {
+        try ArchivalAndSeriesMirrorParityTests.expect([
+            (Self.resolver, #"let title = manifestStore.entry(forVolumeId: volumeId)?.title ?? volumeId return Resolved( scope: scope, title: title, keys: [WordCloudDocumentKey(volumeId: volumeId, documentId: documentId)],"#,
+             Self.server, #"let title = resources.volume(volumeId)?.title ?? volumeId return plain(title, .keys([WordCloudDocumentKey(volumeId: volumeId, documentId: documentId)]))"#),
+            (Self.resolver, #"let volumeIds = manifestStore.bundledEntries .filter { $0.subseries == subseriesId } .map(\.volumeId)"#,
+             Self.server, #"let volumeIds = resources.manifest.filter { $0.subseries == subseriesId }.map(\.volumeId)"#),
+            (Self.resolver, #"let entries = (try await pipeline?.documents(forVolume: volumeId)) ?? [] return entries.map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }"#,
+             Self.live, #"keys += try await served.pipeline.documents(forVolume: id).map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }"#),
+            (Self.service, #"let keys = try await pipeline.allDocumentKeys()"#,
+             Self.live, #"return try await served.pipeline.allDocumentKeys()"#),
+            (Self.resolver, #"let title = collection.map { CollectionEditorNaming.listName(savedName: $0.name) }"#,
+             Self.server, #"title: CollectionEditorNaming.listName(savedName: collection.name),"#),
+            (Self.resolver, #"let keys = (collection?.documentEntries ?? []).map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }"#,
+             Self.server, #"let keys = collection.entries.map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }"#),
+            (Self.resolver, #"let keys = (try await pipeline?.documentKeys(forUserTagId: id.uuidString)) ?? []"#,
+             Self.server, #"let keys = assignments.filter { SearchUsers.caseFolded($0.tagId) == wanted }"#),
+            (Self.resolver, #"let results = try await searchService.search( parameters: saved.searchParameters, limit: SearchViewModel.searchHardLimit )"#,
+             Self.live, #"return try await search.service.search(parameters: parameters, limit: SmartCollectionSnapshot.resultLimit)"#),
+            (Self.searchModel, #"static let searchHardLimit: Int = 1_000"#,
+             "kit:FRUSCoreKit/Collections/SmartCollectionSnapshot.swift", #"public static let resultLimit = 1_000"#),
+            (Self.resolver, #"for volumeId in record?.volumeIds ?? [] {"#,
+             Self.server, #"documents: .volumes(record.volumeIds), owner: user,"#),
+            (Self.resolver, #"volumeIds = ScopeFacets.volumeIds(forCategory: category, subcategory: subcategory, resolvedByVolume: resolved) } else { volumeIds = ScopeFacets.volumeIds(forCategory: category, resolvedByVolume: resolved) }"#,
+             Self.server, #"ScopeFacets.volumeIds(forCategory: category, subcategory: $0, resolvedByVolume: resolved) } ?? ScopeFacets.volumeIds(forCategory: category, resolvedByVolume: resolved)"#),
+            (Self.resolver, #"for volumeId in volumeIds.sorted() {"#,
+             Self.server, #".volumes(volumeIds.sorted()))"#),
+            (Self.resolver, #"let title = subcategory.map { "\(category) · \($0)" } ?? category"#,
+             Self.server, #"return plain(subcategory.map { "\(category) · \($0)" } ?? category,"#),
+            (Self.resolver, #"range, scopeVolumeIds: nil, ascending: true, limit: Self.dateRangeKeyLimit)) ?? []"#,
+             Self.live, #"return try await served.pipeline.documentsInDateRange(range, scopeVolumeIds: nil, ascending: true, limit: dateRangeKeyLimit)"#),
+            (Self.resolver, #"private static let dateRangeKeyLimit = 5000"#,
+             Self.live, #"static let dateRangeKeyLimit = 5_000"#),
+            (Self.resolver, #"title: WordCloudScope.dateRangeTitle(startISO: startISO, endISO: endISO),"#,
+             Self.server, #"return plain(WordCloudScope.dateRangeTitle(startISO: startISO, endISO: endISO),"#),
+            (Self.resolver, #"title: String(localized: "wordcloud.scope.corpus", defaultValue: "Entire Corpus"),"#,
+             Self.server, #"return plain(appWords("wordcloud.scope.corpus", "Entire Corpus"), .corpus)"#),
+            (Self.loader, #"static let standardTermLimit = 1_000"#,
+             Self.live, #"static let termLimit = 1_000"#),
+            (Self.loader, #"if case .subseries = scope { return true } if case .subjectCategory = scope { return true }"#,
+             Self.live, #"case .corpus, .subseries, .subjectCategory: true"#),
+            (Self.service, #"wordForm: languageAnalysis.wordForm"#,
+             Self.live, #"wordForm: tagger.health.wordForm,"#),
+            (Self.service, #"let result = try await WordCloudCount.count( keys: keys, pipeline: pipeline, tokenizer: tokenizer, tagger: NaturalLanguageWordCloudTagger(), countedUnder: languageAnalysis, indexVersion: indexVersion, limit: limit, minimumCount: tuning.minimumCount, progress: progress)"#,
+             Self.live, #"try await WordCloudCount.count(keys: keys, pipeline: pipeline, tokenizer: tokenizer, tagger: tagger, countedUnder: tagger.health, indexVersion: indexVersion, limit: WordCloudLive.termLimit, minimumCount: minimumCount, progress: progress)"#),
+            // The key's parts are the app's: the tuning's token, the diplomatic layer and the hidden words sorted, which the
+            // server writes as a JSON list where the app joins them with commas.
+            (Self.service, #""\(signature)|n=\(limit)|diplo=\(includeDiplomatic)|x=\(extras)|t=\(tuning)""#,
+             Self.live, #""t=\(tuning.cacheToken)|diplo=\(includeDiplomatic)|x=\(TagReferences.encode(extraStopwords(for: lens).sorted()))""#),
+            (Self.service, #"extras.isEmpty ? "" : extras.sorted().joined(separator: ",")"#,
+             Self.live, #"TagReferences.encode(extraStopwords(for: lens).sorted())"#),
+            (Self.view, #"if let languageAnalysis, !languageAnalysis.supports(lens) { return .lensUnavailable(lens, languageAnalysis) } if result.terms.isEmpty { return result.documentCount == 0 ? .noIndexedText : .noTerms(lens) }"#,
+             Self.live, #"if result.terms.isEmpty { return result.documentCount == 0 ? "noIndexedText" : "noTerms" }"#),
+            (Self.view, #"if lens.isSignalDependent && result.terms.count < lens.minimumSignalTerms { return .insufficientSignal(lens) } return .terms"#,
+             Self.live, #"if lens.isSignalDependent && result.terms.count < lens.minimumSignalTerms { return "insufficientSignal" } return "terms""#),
+            (Self.view, #"WordCloudLens.allCases.filter { health.supports($0) }"#,
+             Self.live, #"WordCloudLens.allCases.filter { health.supports($0) }"#),
+            (Self.view, #"String(format: String(localized: "wordcloud.provenance %@ %@", defaultValue: "%1$@ from %2$@"), CountCopy.phrase(terms, one: String(localized: "wordcloud.count.terms.one", defaultValue: "%@ term"), many: String(localized: "wordcloud.count.terms.many", defaultValue: "%@ terms")), CountCopy.documents(documents))"#,
+             Self.live, #"String(format: appWords("wordcloud.provenance %@ %@", "%1$@ from %2$@"), CountCopy.phrase(terms, one: appWords("wordcloud.count.terms.one", "%@ term"), many: appWords("wordcloud.count.terms.many", "%@ terms"), locale: SearchItem.locale), CountCopy.documents(documents, locale: SearchItem.locale))"#),
+            (Self.view, #"guard !state.isLensUnavailable else { return nil }"#,
+             Self.server, #"answer.state = "lensUnavailable""#),
+            (Self.view, #"guard case let .resolved(ids) = CustomScopeResolver.indexedResolution( memberVolumeIds: record.volumeIds, indexed: appState.indexedVolumeIds) else { return nil } return ids.sorted()"#,
+             Self.live, #"guard case .resolved(let ids) = CustomScopeResolver.indexedResolution(memberVolumeIds: resolution.members ?? [], indexed: indexed)"#),
+            (Self.view, #"return ids.isEmpty ? nil : ids.sorted()"#,
+             Self.live, #"guard case .volumes(let ids) = resolution.documents, !ids.isEmpty else { return nil }"#),
+            (Self.view, #"let end = corpus.upperBound let start = cal.date(byAdding: .year, value: -1, to: end) ?? corpus.lowerBound"#,
+             "Sources/FRUSLightAPI/Chronology.swift", #"let start = cal.date(byAdding: .year, value: -1, to: upper) ?? lower"#),
+            (Self.chronologyView, #"let scope = WordCloudScope.dateRange( startISO: WordCloudScope.isoDay(from: min(vm.rangeStart, vm.rangeEnd)), endISO: WordCloudScope.isoDay(from: max(vm.rangeStart, vm.rangeEnd))"#,
+             "web:analytics/ChronologyScreen.tsx", #"search={{ scope: `daterange:${answer.from}..${answer.to}` }}"#),
+            (Self.chronologyView, #".disabled(!vm.hasLoaded || vm.totalShown == 0)"#,
+             "web:analytics/ChronologyScreen.tsx", #"{answer && answer.state === 'loaded' && answer.groups.length + (answer.spanning?.rows.length ?? 0) + (answer.overflow?.rows.length ?? 0) > 0 && ("#),
         ])
     }
 
@@ -260,6 +333,19 @@ import Testing
             (v, "wordcloud.scopeBar.label", "Scope", "wordCloud", "scope"),
             (v, "wordcloud.scope.subseries", "Subseries", "wordCloud", "subseries"),
             (v, "wordcloud.scope.volume", "Volume", "wordCloud", "volume"),
+            (v, "wordcloud.scope.collection", "Collection", "wordCloud", "collection"),
+            (v, "wordcloud.scope.tag", "Tag", "wordCloud", "tag"),
+            (v, "wordcloud.scope.savedSearch", "Saved Search", "wordCloud", "savedSearch"),
+            (v, "analytics.scope.customScopes", "My Volume Scopes", "wordCloud", "customScopes"),
+            (v, "wordcloud.scope.bySubject", "By Subject", "wordCloud", "bySubject"),
+            (v, "wordcloud.scope.subject.experimental", "Subjects — experimental", "wordCloud", "subjectExperimental"),
+            (v, "wordcloud.scope.dateRange", "Date Range", "wordCloud", "dateRange"),
+            (v, "wordcloud.scope.dateRange.from", "Range start", "wordCloud", "rangeStart"),
+            (v, "wordcloud.scope.dateRange.to", "Range end", "wordCloud", "rangeEnd"),
+            (v, "wordcloud.scope.untitled", "Untitled", "wordCloud", "untitled"),
+            (v, "wordcloud.viewInChronology", "View in Chronology", "wordCloud", "viewInChronology"),
+            (Self.chronologyView, "chronology.wordcloud", "Word Cloud for this range", "chronology", "wordCloud"),
+            (Self.chronologyView, "chronology.wordcloud.help", "Build a word cloud from the documents in the displayed date range", "chronology", "wordCloudHelp"),
             (v, "wordcloud.lens.label", "Show", "wordCloud", "show"),
             (v, "wordcloud.measure.label", "Size words by", "wordCloud", "sizeBy"),
             (v, "wordcloud.sentiment.positive", "Positive", "wordCloud", "positive"),
@@ -340,6 +426,11 @@ import Testing
                 && settings.contains("remove: (word: string) => `Remove ${word}`"))
         #expect(NoteViewParityTests.writes(view, "wordcloud.count.terms.one", "%@ term") && NoteViewParityTests.writes(view, "wordcloud.count.terms.many", "%@ terms")
                 && cloud.contains("countLine: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'term' : 'terms'}`"))
+        // S29e's: a document's scope as the scope bar names it, and a count's line.
+        #expect(NoteViewParityTests.writes(view, "wordcloud.scope.document %@", "Document %@")
+                && cloud.contains("document: (documentId: string) => `Document ${documentId}`"))
+        #expect(NoteViewParityTests.writes(view, "wordcloud.provenance %@ %@", "%1$@ from %2$@")
+                && cloud.contains("${count === 1 ? 'term' : 'terms'} from ${documents.toLocaleString('en-US')} ${documents === 1 ? 'document' : 'documents'}`"))
     }
 
     /// The settings bench's stand-in sample, every term and count, in its order, as the app's `WordCloudBench` lists it.
@@ -364,12 +455,12 @@ import Testing
     @Test func theAppsWordsAreTheServers() throws {
         let apps = try [Self.view, Self.lensUI, Self.keyness, Self.resolver, Self.bench, Self.backdrop]
             .map(ArchivalAndSeriesMirrorParityTests.source).joined(separator: " ")
-        let server = try ArchivalAndSeriesMirrorParityTests.source(Self.server)
+        let server = try [Self.server, Self.live].map(ArchivalAndSeriesMirrorParityTests.source).joined(separator: " ")
         let pattern = try NSRegularExpression(pattern: #"appWords\("((?:[^"\\]|\\.)*)", "((?:[^"\\]|\\.)*)"\)"#)
         let words = pattern.matches(in: server, range: NSRange(server.startIndex..., in: server)).map { match in
             (key: String(server[Range(match.range(at: 1), in: server)!]), value: String(server[Range(match.range(at: 2), in: server)!]))
         }
-        #expect(words.count >= 30, "the server writes \(words.count) of the app's words")
+        #expect(words.count >= 50, "the server writes \(words.count) of the app's words")
         for word in words {
             #expect(NoteViewParityTests.writes(apps, word.key, word.value), "the app writes \(word.key) as \(word.value)")
         }

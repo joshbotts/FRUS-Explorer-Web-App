@@ -16,10 +16,15 @@ afterEach(() => {
 });
 
 const lenses = [
-  { id: 'topics', label: 'Topics (nouns)', shortLabel: 'Topics', colorsBySentiment: false },
-  { id: 'actions', label: 'Actions (verbs)', shortLabel: 'Actions', colorsBySentiment: false },
-  { id: 'concepts', label: 'Concepts', shortLabel: 'Concepts', colorsBySentiment: false },
-  { id: 'sentiment', label: 'Sentiment', shortLabel: 'Sentiment', colorsBySentiment: true },
+  { id: 'allTerms', label: 'All terms', shortLabel: 'All terms', colorsBySentiment: false, available: true },
+  { id: 'people', label: 'People', shortLabel: 'People', colorsBySentiment: false, available: false },
+  { id: 'places', label: 'Places', shortLabel: 'Places', colorsBySentiment: false, available: false },
+  { id: 'organizations', label: 'Organizations', shortLabel: 'Organizations', colorsBySentiment: false, available: false },
+  { id: 'topics', label: 'Topics (nouns)', shortLabel: 'Topics', colorsBySentiment: false, available: true },
+  { id: 'actions', label: 'Actions (verbs)', shortLabel: 'Actions', colorsBySentiment: false, available: true },
+  { id: 'descriptors', label: 'Descriptors (adjectives)', shortLabel: 'Descriptors', colorsBySentiment: false, available: true },
+  { id: 'concepts', label: 'Concepts', shortLabel: 'Concepts', colorsBySentiment: false, available: true },
+  { id: 'sentiment', label: 'Sentiment', shortLabel: 'Sentiment', colorsBySentiment: true, available: true },
 ];
 
 const context: CloudContext = {
@@ -33,6 +38,8 @@ const context: CloudContext = {
     { id: '1961-63', volumes: [{ id: 'frus1961-63v06', title: 'Foreign Relations, 1961–1963,\n      Volume VI' }] },
     { id: '1969-76', volumes: [{ id: 'frus1969-76ve09p1', title: 'Documents on North Africa' }] },
   ],
+  subjects: [{ label: 'Economics', subcategories: ['Trade', 'Aid'] }],
+  dateRange: { from: '1975-12-31', to: '1976-12-31' },
   made: {
     generated: '2026-11-24',
     volumeCount: 553,
@@ -53,9 +60,13 @@ function cloud(url: URL): CloudAnswer {
     polarity: lens.colorsBySentiment ? (index % 2 === 0 ? 1 : -1) : undefined,
   }));
   return {
-    scope: { signature: scope, title: scope === 'corpus' ? 'Entire Corpus' : scope === 'vol:frus1961-63v06' ? 'Foreign Relations, 1961–1963, Volume VI' : scope.slice(4) },
+    scope: {
+      signature: scope,
+      title: scope === 'corpus' ? 'Entire Corpus' : scope === 'vol:frus1961-63v06' || scope.startsWith('doc:') ? 'Foreign Relations, 1961–1963, Volume VI' : scope.slice(4),
+    },
     lens,
     chip: lens.shortLabel,
+    source: 'family',
     state: 'terms',
     countLine: '5 terms',
     terms,
@@ -65,6 +76,8 @@ function cloud(url: URL): CloudAnswer {
   };
 }
 
+const recordId = '5E17F000-0000-4000-8000-0000000000A1';
+
 function server(answers: Record<string, unknown> = {}, user: Me = me, held: Preferences = preferences) {
   return stubServer({
     '/readyz': ready,
@@ -72,6 +85,10 @@ function server(answers: Record<string, unknown> = {}, user: Me = me, held: Pref
     '/api/v1/me/preferences': held,
     '/api/v1/cloud/context': context,
     '/api/v1/cloud': cloud,
+    '/api/v1/me/collections': { total: 1, items: [{ id: recordId, name: 'Talks', listName: 'Talks', documentCount: 2 }] },
+    '/api/v1/me/tags': { total: 1, items: [{ id: recordId, name: 'Canal' }] },
+    '/api/v1/me/saved-searches': { total: 1, items: [{ id: recordId, name: 'Treaties', queryText: 'treaty', search: {} }] },
+    '/api/v1/me/volume-scopes': { total: 1, items: [{ id: recordId, name: '', volumeIds: ['frus1961-63v06'] }] },
     ...answers,
   });
 }
@@ -82,29 +99,33 @@ describe('the Word Cloud', () => {
     renderAt('/cloud');
     expect(await screen.findByRole('heading', { level: 1, name: 'Word Cloud' })).toBeTruthy();
     const lensBar = await screen.findByRole('group', { name: 'Show' });
-    expect(within(lensBar).getAllByRole('radio').map((radio) => (radio as HTMLInputElement).labels?.[0]?.textContent)).toEqual([
-      'Topics (nouns)',
-      'Actions (verbs)',
-      'Concepts',
-      'Sentiment',
-    ]);
-    expect((within(lensBar).getByRole('radio', { name: 'Topics (nouns)' }) as HTMLInputElement).checked).toBe(true);
+    expect(within(lensBar).getAllByRole('radio').map((radio) => (radio as HTMLInputElement).labels?.[0]?.textContent)).toEqual(lenses.map((each) => each.label));
+    expect((within(lensBar).getByRole('radio', { name: 'All terms' }) as HTMLInputElement).checked).toBe(true);
     expect(await screen.findByRole('heading', { level: 2, name: 'Entire Corpus' })).toBeTruthy();
     expect(screen.getByText('5 terms')).toBeTruthy();
-    expect(screen.getByText('Topics', { selector: '.cloud-chip' })).toBeTruthy();
+    expect(screen.getByText('All terms', { selector: '.cloud-chip' })).toBeTruthy();
     expect(screen.getByText('Your settings took 45 words out of this list of 50.')).toBeTruthy();
     const table = screen.getByRole('table', { name: 'Terms by count' });
     expect(within(table).getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell').map((cell) => cell.textContent))).toEqual([
-      ['1', 'government-topics', '900', 'More'],
-      ['2', 'meeting-topics', '800', 'More'],
-      ['3', 'question-topics', '700', 'More'],
-      ['4', 'policy-topics', '600', 'More'],
-      ['5', 'agreement-topics', '500', 'More'],
+      ['1', 'government-allTerms', '900', 'More'],
+      ['2', 'meeting-allTerms', '800', 'More'],
+      ['3', 'question-allTerms', '700', 'More'],
+      ['4', 'policy-allTerms', '600', 'More'],
+      ['5', 'agreement-allTerms', '500', 'More'],
     ]);
     expect(screen.getByText('These clouds were counted by this server’s own tagger.')).toBeTruthy();
     const scope = screen.getByRole('combobox', { name: 'Scope' }) as HTMLSelectElement;
     expect(scope.value).toBe('corpus');
-    expect(Array.from(scope.querySelectorAll('optgroup')).map((group) => group.label)).toEqual(['Subseries', 'Volume: 1961-63', 'Volume: 1969-76']);
+    await waitFor(() =>
+      expect(Array.from(scope.querySelectorAll('optgroup')).map((group) => group.label)).toEqual([
+        'Subseries', 'Volume: 1961-63', 'Volume: 1969-76', 'Collection', 'Tag', 'Saved Search', 'My Volume Scopes', 'By Subject: Economics', 'Date Range',
+      ]),
+    );
+    const id = '5E17F000-0000-4000-8000-0000000000A1';
+    expect(Array.from(scope.options).map((option) => option.value)).toEqual(expect.arrayContaining([
+      `col:${id}`, `tag:${id}`, `search:${id}`, `scope:${id}`, 'subject:Economics\u001fTrade', 'subject:Economics\u001fAid', 'daterange',
+    ]));
+    expect(Array.from(scope.options).find((option) => option.value === `scope:${id}`)?.textContent).toBe('Untitled');
     expect(Array.from(scope.options).map((option) => option.textContent)).toContain('Foreign Relations, 1961–1963, Volume VI');
   });
 
@@ -122,7 +143,7 @@ describe('the Word Cloud', () => {
     expect(router.state.location.search).toMatchObject({ scope: 'vol:frus1961-63v06', lens: 'sentiment' });
     expect(await screen.findByRole('heading', { level: 2, name: 'Foreign Relations, 1961–1963, Volume VI' })).toBeTruthy();
     const asked = fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).filter((url) => url.pathname === '/api/v1/cloud');
-    expect(asked.map((url) => url.search)).toEqual(['?scope=corpus&lens=topics', '?scope=corpus&lens=sentiment', '?scope=vol%3Afrus1961-63v06&lens=sentiment']);
+    expect(asked.map((url) => url.search)).toEqual(['?scope=corpus&lens=allTerms', '?scope=corpus&lens=sentiment', '?scope=vol%3Afrus1961-63v06&lens=sentiment']);
   });
 
   it('refuses Distinctive with its reason, and keeps the measure in this browser', async () => {
@@ -132,35 +153,124 @@ describe('the Word Cloud', () => {
     const measure = await screen.findByRole('group', { name: 'Size words by' });
     await user.click(within(measure).getByRole('radio', { name: 'Distinctive' }));
     expect(screen.getByRole('heading', { name: 'No Distinctiveness Ranking' })).toBeTruthy();
-    expect(screen.getByText(/This server cannot count a scope’s words itself yet/)).toBeTruthy();
+    expect(screen.getByText(/which this server does not rank them against yet/)).toBeTruthy();
     expect(screen.queryByRole('table', { name: 'Terms by count' })).toBeNull();
     expect(window.localStorage.getItem('frus.wordcloud.measure')).toBe('keyness');
     await user.click(within(measure).getByRole('radio', { name: 'Frequency' }));
     expect(await screen.findByRole('table', { name: 'Terms by count' })).toBeTruthy();
   });
 
-  it('shows a document’s volume’s cloud from the rail, saying why, with the way back', async () => {
-    const fetch = server();
+  it('shows a document’s own cloud from the rail, counted live, with the way back (S29e)', async () => {
+    const fetch = server({
+      '/api/v1/cloud': (url: URL) => ({ ...cloud(url), source: 'live', countLine: '5 terms from 1 document', documentCount: 1,
+        account: 'This cloud was counted from its scope’s 1 document by this server’s own tagger.' }),
+    });
     renderAt('/cloud?scope=doc%3Afrus1961-63v06%2Fd5');
-    expect(await screen.findByText(/A document’s own word cloud is counted from its text/)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Back to the document' }).getAttribute('href')).toBe('/doc/frus1961-63v06/d5');
+    expect((await screen.findByRole('link', { name: 'Back to the document' })).getAttribute('href')).toBe('/doc/frus1961-63v06/d5');
     expect(await screen.findByRole('heading', { level: 2, name: 'Foreign Relations, 1961–1963, Volume VI' })).toBeTruthy();
+    expect(screen.getByText('5 terms from 1 document')).toBeTruthy();
+    expect(screen.getByText('This cloud was counted from its scope’s 1 document by this server’s own tagger.')).toBeTruthy();
+    expect(screen.queryByText('These clouds were counted by this server’s own tagger.')).toBeNull();
+    const scope = screen.getByRole('combobox', { name: 'Scope' }) as HTMLSelectElement;
+    expect(scope.value).toBe('doc:frus1961-63v06/d5');
+    expect(scope.selectedOptions[0]?.textContent).toBe('Document d5');
     const asked = fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).find((url) => url.pathname === '/api/v1/cloud');
-    expect(asked?.searchParams.get('scope')).toBe('vol:frus1961-63v06');
+    expect(asked?.searchParams.get('scope')).toBe('doc:frus1961-63v06/d5');
+  });
+
+  it('follows a count’s job until it ends, its bar and line saying how far it has come, then draws the cloud kept', async () => {
+    let finished = false;
+    let polls = 0;
+    const fetch = server({
+      '/api/v1/cloud': (url: URL) =>
+        finished
+          ? { ...cloud(url), source: 'live', countLine: '5 terms from 400 documents', documentCount: 400, account: 'Counted from 400 documents.' }
+          : { ...cloud(url), source: 'live', state: 'counting', terms: [], countLine: undefined,
+              message: { title: 'Building word cloud…', detail: 'This server is counting every indexed document as a job.' },
+              job: { id: 'J1', state: 'queued' } },
+      '/api/v1/cloud/jobs/J1': () => {
+        polls += 1;
+        if (polls === 1) return { id: 'J1', state: 'running', fraction: 0.5, progress: 'Counted the words of 200 of 400 documents' };
+        finished = true;
+        return { id: 'J1', state: 'succeeded', fraction: 1, progress: 'Counted 5 terms from 400 documents' };
+      },
+    });
+    renderAt('/cloud');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Building word cloud…' })).toBeTruthy();
+    expect(screen.getByText('This server is counting every indexed document as a job.')).toBeTruthy();
+    expect(await screen.findByText('Counted the words of 200 of 400 documents (50% counted)')).toBeTruthy();
+    expect((screen.getByRole('progressbar', { name: 'Counting this scope’s words' }) as HTMLProgressElement).value).toBe(0.5);
+    expect(await screen.findByRole('button', { name: 'government-allTerms' }, { timeout: 4000 })).toBeTruthy();
+    expect(screen.getByText('5 terms from 400 documents')).toBeTruthy();
+    expect(screen.getByText('Counted from 400 documents.')).toBeTruthy();
+    expect(fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname === '/api/v1/cloud')).toHaveLength(2);
+  });
+
+  it('says why a job ended without its cloud, and counts again after a stop', async () => {
+    let asked = 0;
+    server({
+      '/api/v1/cloud': (url: URL) => {
+        asked += 1;
+        return { ...cloud(url), source: 'live', state: 'counting', terms: [], message: { title: 'Building word cloud…', detail: 'Counting.' },
+          job: { id: `J${asked}`, state: 'queued' } };
+      },
+      '/api/v1/cloud/jobs/J1': { id: 'J1', state: 'cancelled', progress: 'Counted the words of 200 of 400 documents' },
+      '/api/v1/cloud/jobs/J2': { id: 'J2', state: 'failed', error: 'It stopped at an error, which the server’s log gives.' },
+    });
+    const user = userEvent.setup();
+    renderAt('/cloud');
+    expect(await screen.findByText('The count was stopped before it finished.')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Count Again' }));
+    expect(await screen.findByText('It stopped at an error, which the server’s log gives.')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Couldn’t Build Word Cloud' })).toBeTruthy();
+    // A failed job is asked again too, the keyboard going to the page's heading as the button goes.
+    await user.click(screen.getByRole('button', { name: 'Count Again' }));
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Word Cloud' }));
+    await waitFor(() => expect(asked).toBe(3));
+  });
+
+  it('says why the server’s tagger draws no entity lens, and draws a range’s days with its way to Chronology', async () => {
+    server({
+      '/api/v1/cloud': (url: URL) =>
+        url.searchParams.get('lens') === 'people'
+          ? { ...cloud(url), source: 'live', state: 'lensUnavailable', terms: [], countLine: undefined,
+              message: { title: 'Lens Unavailable on This Server', detail: 'This server’s tagger does not recognize names.' } }
+          : cloud(url),
+    });
+    const user = userEvent.setup();
+    const { router } = renderAt('/cloud?scope=daterange%3A1962-10-01..1962-10-31&lens=people');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Lens Unavailable on This Server' })).toBeTruthy();
+    expect(screen.getByText('This server’s tagger does not recognize names.')).toBeTruthy();
+    const scope = screen.getByRole('combobox', { name: 'Scope' }) as HTMLSelectElement;
+    expect(scope.value).toBe('daterange');
+    expect((screen.getByLabelText('Range start') as HTMLInputElement).value).toBe('1962-10-01');
+    expect((screen.getByLabelText('Range end') as HTMLInputElement).value).toBe('1962-10-31');
+    expect(screen.getByRole('link', { name: 'View in Chronology' }).getAttribute('href')).toBe('/chronology?from=1962-10-01&to=1962-10-31');
+    // A day typed is applied by Show, not as it is typed.
+    const start = screen.getByLabelText('Range start') as HTMLInputElement;
+    await user.clear(start);
+    await user.type(start, '1962-10-15');
+    expect(router.state.location.search).toMatchObject({ scope: 'daterange:1962-10-01..1962-10-31' });
+    await user.click(screen.getByRole('button', { name: 'Show' }));
+    expect(router.state.location.search).toMatchObject({ scope: 'daterange:1962-10-15..1962-10-31' });
+    await user.selectOptions(scope, 'corpus');
+    expect(router.state.location.search).toMatchObject({ scope: 'corpus' });
+    await user.selectOptions(scope, 'daterange');
+    expect(router.state.location.search).toMatchObject({ scope: 'daterange:1975-12-31..1976-12-31' });
   });
 
   it('hides a word from this cloud alone, gives the keyboard to the next word, and brings it back on asking', async () => {
     const fetch = server();
     const user = userEvent.setup();
     renderAt('/cloud');
-    await user.click(await screen.findByRole('button', { name: 'More for meeting-topics' }));
+    await user.click(await screen.findByRole('button', { name: 'More for meeting-allTerms' }));
     await user.click(screen.getByRole('menuitem', { name: 'Hide in this word cloud' }));
-    expect(screen.queryByRole('button', { name: 'meeting-topics' })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'question-topics' }));
-    expect(screen.getByText('meeting-topics hidden from this word cloud')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'meeting-allTerms' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'question-allTerms' }));
+    expect(screen.getByText('meeting-allTerms hidden from this word cloud')).toBeTruthy();
     expect(screen.getByText('4 terms')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Show 1 hidden words' }));
-    expect(screen.getByRole('button', { name: 'meeting-topics' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'meeting-allTerms' })).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 3, name: 'Terms by count' }));
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
@@ -177,12 +287,12 @@ describe('the Word Cloud', () => {
     });
     const user = userEvent.setup();
     renderAt('/cloud');
-    await user.click(await screen.findByRole('button', { name: 'More for government-topics' }));
+    await user.click(await screen.findByRole('button', { name: 'More for government-allTerms' }));
     await user.click(screen.getByRole('menuitem', { name: 'Hide this word in this lens' }));
     const posted = fetch.mock.calls.find(([, init]) => init?.method === 'POST');
-    expect(JSON.parse(String(posted?.[1]?.body))).toEqual({ word: 'government-topics', lens: 'topics' });
-    expect(screen.queryByRole('button', { name: 'government-topics' })).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'meeting-topics' }));
+    expect(JSON.parse(String(posted?.[1]?.body))).toEqual({ word: 'government-allTerms', lens: 'allTerms' });
+    expect(screen.queryByRole('button', { name: 'government-allTerms' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'meeting-allTerms' }));
     await waitFor(() =>
       expect(fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname === '/api/v1/cloud').length).toBe(2),
     );
@@ -203,7 +313,7 @@ describe('the Word Cloud', () => {
     const clouds = () => fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname === '/api/v1/cloud').length;
     const user = userEvent.setup();
     renderAt('/cloud');
-    expect(await screen.findByRole('button', { name: 'More for government-topics' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'More for government-allTerms' })).toBeTruthy();
     const box = screen.getByRole('checkbox', { name: 'Hide common diplomatic words' }) as HTMLInputElement;
     expect(box.checked).toBe(true);
     expect(clouds()).toBe(1);

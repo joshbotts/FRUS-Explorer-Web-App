@@ -208,9 +208,45 @@ export function sampleFontSize(rank: number, count: number): number {
 
 /** The Word Cloud's address: the scope, by the app's signature, and the lens. */
 export interface CloudSearch {
-  /** `corpus`, `sub:<subseries>`, `vol:<volume>`, or, from the reader's rail, `doc:<volume>/<document>`. */
+  /**
+   * The app's signature (`WordCloudScope.signature`): `corpus`, `sub:<subseries>`, `vol:<volume>`, `doc:<volume>/<document>`
+   * from the reader's rail, `col:`, `tag:`, `search:` or `scope:<id>` of the reader's own, `subject:<category>␟<sub-category>`
+   * or `daterange:<from>..<to>`.
+   */
   scope?: string;
   lens?: string;
+}
+
+const uuid = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
+const day = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Whether `scope` is a signature the app's `WordCloudScope(signature:)` reads. */
+export function isScopeSignature(scope: string): boolean {
+  if (scope === 'corpus') return true;
+  const colon = scope.indexOf(':');
+  if (colon < 0) return false;
+  const prefix = scope.slice(0, colon);
+  const value = scope.slice(colon + 1);
+  switch (prefix) {
+    case 'sub':
+    case 'vol':
+      return value !== '';
+    case 'doc':
+      return /^[^/]+\/.+$/.test(value);
+    case 'col':
+    case 'tag':
+    case 'search':
+    case 'scope':
+      return uuid.test(value);
+    case 'subject':
+      return value.split('\u001f')[0] !== '';
+    case 'daterange': {
+      const bounds = value.split('..');
+      return bounds.length === 2 && day.test(bounds[0]!) && day.test(bounds[1]!);
+    }
+    default:
+      return false;
+  }
 }
 
 /** The address's fields, each checked; what does not fit is dropped. */
@@ -219,13 +255,29 @@ export function validateCloudSearch(raw: Record<string, unknown>): CloudSearch {
   const scope = text(raw.scope);
   const lens = text(raw.lens);
   return {
-    scope: scope && (scope === 'corpus' || /^(sub|vol):.+$/.test(scope) || /^doc:[^/]+\/.+$/.test(scope)) ? scope : undefined,
+    scope: scope && isScopeSignature(scope) ? scope : undefined,
     lens: lens && /^[a-zA-Z]+$/.test(lens) ? lens : undefined,
   };
 }
 
-/** The volume of a document's scope from the rail, whose bundled cloud the page shows; none for another scope. */
+/** The document of a scope from the rail, whose cloud the page shows; none for another scope. */
 export function documentScope(scope: string | undefined): { volumeId: string; documentId: string } | undefined {
   const match = scope ? /^doc:([^/]+)\/(.+)$/.exec(scope) : null;
   return match ? { volumeId: match[1]!, documentId: match[2]! } : undefined;
+}
+
+/** A sub-category's scope, `subject:<category>␟<sub-category>` (`WordCloudScope.subjectCategory`). */
+export function subjectScope(category: string, subcategory: string): string {
+  return `subject:${category}\u001f${subcategory}`;
+}
+
+/** A range of days' scope, `daterange:<from>..<to>` (`WordCloudScope.dateRange`). */
+export function dateRangeScope(from: string, to: string): string {
+  return `daterange:${from}..${to}`;
+}
+
+/** The days of a range's scope; none for another scope. */
+export function dateRangeOf(scope: string | undefined): { from: string; to: string } | undefined {
+  const match = scope ? /^daterange:(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(scope) : null;
+  return match ? { from: match[1]!, to: match[2]! } : undefined;
 }

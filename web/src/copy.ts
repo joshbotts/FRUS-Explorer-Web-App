@@ -2481,15 +2481,31 @@ export const copy = {
    */
   wordCloud: {
     title: 'Word Cloud',
-    /** The reader's rail's tile, the app's, and its help, the web's own: the cloud is the document's volume's. */
+    /** The reader's rail's tile, the app's, and its help, the web's own: since S29e the cloud is the document's own. */
     tile: 'Word Cloud',
-    tileHelp: 'Show the bundled word cloud of this document’s volume',
+    tileHelp: 'Show the word cloud of this document’s own text',
     scope: 'Scope',
     subseries: 'Subseries',
     volume: 'Volume',
     volumesOf: (subseries: string) => `Volume: ${subseries}`,
+    /** The scope menu's other groups (S29e), the app's: the reader's own records, By Subject and Date Range. */
+    collection: 'Collection',
+    tag: 'Tag',
+    savedSearch: 'Saved Search',
+    customScopes: 'My Volume Scopes',
+    bySubject: 'By Subject',
+    subjectExperimental: 'Subjects — experimental',
+    dateRange: 'Date Range',
+    rangeStart: 'Range start',
+    rangeEnd: 'Range end',
+    /** The web's own: Date Range's two days are applied by Show, as Chronology applies its range. */
+    applyRange: 'Show',
+    untitled: 'Untitled',
+    document: (documentId: string) => `Document ${documentId}`,
+    viewInChronology: 'View in Chronology',
     show: 'Show',
-    lensHelp: 'The lens narrows the cloud to a kind of term. The bundled clouds carry four.',
+    lensHelp:
+      'The lens narrows the cloud to a kind of term. This server’s tagger recognizes no names, so the People, Places and Organizations lenses say why they are not drawn.',
     sizeBy: 'Size words by',
     measureHelp: 'Frequency sizes each word by how often it appears here. Distinctive compares this scope with the whole corpus.',
     positive: 'Positive',
@@ -2509,13 +2525,20 @@ export const copy = {
     hiddenEverywhere: (term: string) => `${term} hidden in all word clouds`,
     keynessTitle: 'No Distinctiveness Ranking',
     keynessReason:
-      'Distinctive ranks a scope’s words against the corpus reference this server’s tagger counted, which counts every word in its dictionary form. This server cannot count a scope’s words itself yet, and its clouds keep only the words each scope uses most, too few to rank. Size words by frequency instead.',
-    documentNotice:
-      'A document’s own word cloud is counted from its text, in dictionary forms, which this server does not count yet. This is its volume’s cloud, from the clouds its tagger counted from the corpus.',
+      'Distinctive ranks a scope’s words against the corpus reference this server’s tagger counted, which this server does not rank them against yet. Size words by frequency instead.',
     backToDocument: 'Back to the document',
+    /** A count that outlasts a request (S29e), the web's own: its job, followed until it ends. */
+    jobWaiting: 'Waiting for the server’s other jobs to finish.',
+    jobProgress: (fraction: number) => `${Math.round(fraction * 100)}% counted`,
+    jobProgressLabel: 'Counting this scope’s words',
+    jobCancelled: 'The count was stopped before it finished.',
+    countAgain: 'Count Again',
     errorTitle: 'Couldn’t Build Word Cloud',
     loading: 'Building word cloud…',
     countLine: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'term' : 'terms'}`,
+    /** A count's line, the app's "12 terms from 4,591 documents" (S29e). */
+    countFrom: (count: number, documents: number) =>
+      `${count.toLocaleString('en-US')} ${count === 1 ? 'term' : 'terms'} from ${documents.toLocaleString('en-US')} ${documents === 1 ? 'document' : 'documents'}`,
     removed: (removed: number, listed: number) =>
       `Your settings took ${removed === 1 ? 'one word' : `${removed} words`} out of this list of ${listed}.`,
     canvasLabel: (drawn: number, total: number) =>
@@ -2853,6 +2876,9 @@ export const copy = {
     to: 'To',
     show: 'Show',
     searchRange: 'Search in this range',
+    /** From S29e, the app's toolbar button, the range's word cloud, as a link beside Search in this range. */
+    wordCloud: 'Word Cloud for this range',
+    wordCloudHelp: 'Build a word cloud from the documents in the displayed date range',
     promptTitle: 'Choose a Date Range',
     promptDetail: 'Pick a start and end date, then click Show to browse every corpus document from that period.',
     emptyTitle: 'No Documents',
@@ -3441,6 +3467,7 @@ export const copy = {
         indexReviews: 'Reviews recorded in the index',
         indexCorrections: 'Corrections applied to the index',
         teiComparison: 'Comparison with the TEI folder',
+        wordCloud: 'Word Cloud count',
       } as Record<string, string>,
       states: { queued: 'Waiting', running: 'Running', succeeded: 'Finished', failed: 'Failed', cancelled: 'Cancelled' },
       stopping: 'Stopping at its next step',

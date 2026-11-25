@@ -103,7 +103,9 @@ import WordCloudKit
         return try await app.test(.router) { client in try await body(client) }
     }
 
-    static let lenses: [WordCloudLens] = [.topics, .actions, .concepts, .sentiment]
+    /// The lenses the family's files carry, which the page draws from them: All terms and Descriptors with the four the
+    /// app's own clouds carry (S29e).
+    static let lenses: [WordCloudLens] = [.allTerms, .topics, .actions, .descriptors, .concepts, .sentiment]
 
     @Test func everyCloudIsTheFilesList() async throws {
         let host = try Host.open()
@@ -112,10 +114,15 @@ import WordCloudKit
                 "the catalogue's subseries are the core file's")
         let checked = try await Self.run { client in
             let context = try ServedFixture.decode(CloudContext.self, try await client.execute(uri: "/api/v1/cloud/context", method: .get))
-            #expect(context.lenses.map(\.id) == Self.lenses.map(\.rawValue), "the lens bar's order")
-            #expect(context.lenses.map(\.label) == ["Topics (nouns)", "Actions (verbs)", "Concepts", "Sentiment"])
-            #expect(context.lenses.map(\.shortLabel) == ["Topics", "Actions", "Concepts", "Sentiment"])
-            #expect(context.lenses.map(\.colorsBySentiment) == [false, false, false, true])
+            #expect(context.lenses.map(\.id) == WordCloudLens.allCases.map(\.rawValue), "the lens bar's order, the app's nine (S29e)")
+            #expect(context.lenses.map(\.label) == ["All terms", "People", "Places", "Organizations", "Topics (nouns)", "Actions (verbs)",
+                                                    "Descriptors (adjectives)", "Concepts", "Sentiment"])
+            #expect(context.lenses.map(\.shortLabel) == ["All terms", "People", "Places", "Organizations", "Topics", "Actions", "Descriptors",
+                                                         "Concepts", "Sentiment"])
+            #expect(context.lenses.map(\.colorsBySentiment) == [false, false, false, false, false, false, false, false, true])
+            #expect(context.lenses.filter(\.available).map(\.id) == Self.lenses.map(\.rawValue).sorted { a, b in
+                WordCloudLens.allCases.firstIndex { $0.rawValue == a }! < WordCloudLens.allCases.firstIndex { $0.rawValue == b }!
+            }, "every lens the family's files carry, and no entity lens")
             #expect(context.measures.map(\.label) == ["Frequency", "Distinctive"] && context.corpus == "Entire Corpus")
             #expect(context.subseries.map(\.id) == subseries)
             #expect(context.subseries.flatMap(\.volumes).map(\.id) == subseries.flatMap { id in host.catalogue.filter { $0.subseries == id }.map(\.volumeId) })
@@ -141,7 +148,8 @@ import WordCloudKit
                     let (list, fallback) = host.answered(scope.scope, lens)
                     #expect(!list.isEmpty, "\(scope.signature) \(lens) has a list")
                     #expect(answer.terms.map { "\($0.term) \($0.count)" } == list, "\(scope.signature) \(lens)")
-                    #expect(answer.state == "terms" && answer.message == nil && answer.fallbackSubseries == fallback, "\(scope.signature) \(lens)")
+                    #expect(answer.state == "terms" && answer.message == nil && answer.fallbackSubseries == fallback && answer.source == "family",
+                            "\(scope.signature) \(lens)")
                     #expect(answer.listed == list.count && answer.removed == 0 && answer.settingsNotShown == nil, "\(scope.signature) \(lens)")
                     #expect(answer.countLine == "\(list.count) terms", "\(scope.signature) \(lens)")
                     #expect(answer.chip == (fallback.map { "\(answer.lens.shortLabel) · \($0) (era)" } ?? answer.lens.shortLabel), "\(scope.signature) \(lens)")
@@ -152,7 +160,7 @@ import WordCloudKit
             }
             return (count, fallbacks)
         }
-        #expect(checked.0 == 4 * (1 + 107 + 553), "every cloud: \(checked.0)")
+        #expect(checked.0 == 6 * (1 + 107 + 553), "every cloud: \(checked.0)")
         let thin = host.catalogue.reduce(0) { sum, volume in
             sum + Self.lenses.filter { lens in
                 let own = host.volumes.scopes[volume.volumeId]?.lists[lens.rawValue]
@@ -160,7 +168,7 @@ import WordCloudKit
             }.count
         }
         #expect(checked.1 == thin, "the server answers each volume's list the generator flagged thin, or holds none of, with its era's: \(checked.1) of \(thin)")
-        #expect(thin == 0, "the family's files flag no volume's list thin in the four lenses, so the fall-back is held over values below")
+        #expect(thin == 0, "the family's files flag no volume's list thin in the six lenses, so the fall-back is held over values below")
     }
 
     /// A reader's settings keep what the kit's tokenizer keeps of each list, and the settings the family's clouds cannot

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  dateRangeOf,
+  dateRangeScope,
   documentScope,
   estimatedSize,
   fontSize,
@@ -12,6 +14,7 @@ import {
   storedDensity,
   storedFontDesign,
   storedMeasure,
+  subjectScope,
   validateCloudSearch,
   wordColor,
 } from './cloudRules';
@@ -122,6 +125,24 @@ describe('the address', () => {
     expect(validateCloudSearch({ scope: 'doc:frus1961-63v06/d5' }).scope).toBe('doc:frus1961-63v06/d5');
     expect(validateCloudSearch({ scope: 'col:abc', lens: 'top ics' })).toEqual({ scope: undefined, lens: undefined });
     expect(validateCloudSearch({ scope: 'doc:frus1961-63v06' }).scope).toBeUndefined();
+  });
+
+  it('reads every scope the app’s `WordCloudScope(signature:)` reads, and nothing else (S29e)', () => {
+    const id = '5E17F000-0000-4000-8000-0000000000A1';
+    for (const scope of [`col:${id}`, `tag:${id.toLowerCase()}`, `search:${id}`, `scope:${id}`, 'subject:Economics', 'subject:Economics\u001fTrade',
+      'daterange:1962-10-01..1962-10-31']) {
+      expect(validateCloudSearch({ scope }).scope).toBe(scope);
+    }
+    for (const scope of ['col:abc', 'subject:', 'subject:\u001fTrade', 'daterange:1962-10-01', 'daterange:1962-10..1962-11', 'era:1969-76', 'everything']) {
+      expect(validateCloudSearch({ scope }).scope).toBeUndefined();
+    }
+  });
+
+  it('writes a sub-category’s and a range’s scopes as the app signs them, and reads a range’s days back', () => {
+    expect(subjectScope('Economics', 'Trade')).toBe('subject:Economics\u001fTrade');
+    expect(dateRangeScope('1962-10-01', '1962-10-31')).toBe('daterange:1962-10-01..1962-10-31');
+    expect(dateRangeOf('daterange:1962-10-01..1962-10-31')).toEqual({ from: '1962-10-01', to: '1962-10-31' });
+    expect(dateRangeOf('corpus')).toBeUndefined();
   });
 
   it('reads a document’s scope from the rail as its volume and document', () => {

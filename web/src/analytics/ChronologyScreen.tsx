@@ -133,6 +133,10 @@ export function ChronologyScreen() {
               <span>{answer.summary}</span>{' '}
               <Link to="/search" search={{ dateRangeEarliest: answer.from, dateRangeLatest: answer.to }}>
                 {words.searchRange}
+              </Link>{' '}
+              {/* From S29e, the app's Word Cloud for this range: the range's documents counted live. */}
+              <Link to="/cloud" search={{ scope: `daterange:${answer.from}..${answer.to}` }} title={words.wordCloudHelp}>
+                {words.wordCloud}
               </Link>
             </p>
           )}
