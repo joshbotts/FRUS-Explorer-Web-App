@@ -207,11 +207,15 @@ actor SemanticMapFiles {
 
 enum SemanticMapRoutes {
     /// The map's points and regions, and since S28c its reading (`SemanticMapReading.swift`) over the same files, the
-    /// catalogue, the bundled source-provenance aggregate and the served index's volumes.
+    /// catalogue, the bundled source-provenance aggregate and the served index's volumes; the reading is returned, for
+    /// Browse's clusters (PLAN's S28d), which read the map through it.
+    @discardableResult
     static func add(to router: Router<APIRequestContext>, map files: SemanticMapFiles, provider: ServedIndexProvider,
-                    resources: ServerResources) {
+                    resources: ServerResources) -> SemanticMapReading {
         add(to: router, map: files)
-        SemanticMapReadingRoutes.add(to: router, reading: SemanticMapReading(files: files, provider: provider, resources: resources))
+        let reading = SemanticMapReading(files: files, provider: provider, resources: resources)
+        SemanticMapReadingRoutes.add(to: router, reading: reading)
+        return reading
     }
 
     static func add(to router: Router<APIRequestContext>, map files: SemanticMapFiles) {

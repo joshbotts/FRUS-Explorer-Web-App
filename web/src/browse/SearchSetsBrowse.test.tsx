@@ -41,13 +41,14 @@ const server = (answers: Record<string, unknown> = {}) =>
   });
 
 describe('Browse’s axes', () => {
-  it('names All Volumes, Editors’ Annotations, People, Working Corpora and My Scopes on a server that keeps user data, and the first three elsewhere', async () => {
+  it('names All Volumes, Clusters, Editors’ Annotations, People, Working Corpora and My Scopes on a server that keeps user data, and the first four elsewhere', async () => {
     server();
     renderAt('/browse');
     const axes = await screen.findByRole('navigation', { name: 'Browse by' });
-    await waitFor(() => expect(within(axes).getAllByRole('link')).toHaveLength(5));
+    await waitFor(() => expect(within(axes).getAllByRole('link')).toHaveLength(6));
     expect(within(axes).getAllByRole('link').map((link) => [link.textContent, link.getAttribute('aria-current')])).toEqual([
       ['All Volumes', 'page'],
+      ['Clusters', null],
       ['Editors’ Annotations', null],
       ['People', null],
       ['Working Corpora', null],
@@ -58,7 +59,7 @@ describe('Browse’s axes', () => {
     renderAt('/browse');
     await screen.findByRole('link', { name: 'Nicaragua' });
     const shared = screen.getByRole('navigation', { name: 'Browse by' });
-    expect(within(shared).getAllByRole('link').map((link) => link.textContent)).toEqual(['All Volumes', 'Editors’ Annotations', 'People']);
+    expect(within(shared).getAllByRole('link').map((link) => link.textContent)).toEqual(['All Volumes', 'Clusters', 'Editors’ Annotations', 'People']);
   });
 });
 

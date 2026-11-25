@@ -397,14 +397,45 @@ export const copy = {
     // S17f: the strip's line while the history records nothing, which is what hides an opened result.
     loggingOff: 'Opening a result does not hide it while Log Research Sessions is off in Settings. Mark Reviewed still hides a result.',
   },
-  /** Browse's axes, as the Mac's sidebar names the four the web has; the group's name is the web's own. */
+  /** Browse's axes, as the Mac's sidebar names the five the web has; the group's name is the web's own. */
   axes: {
     label: 'Browse by',
     volumes: 'All Volumes',
+    clusters: 'Clusters',
     annotations: 'Editors’ Annotations',
     people: 'People',
     corpora: 'Working Corpora',
     scopes: 'My Scopes',
+  },
+  /**
+   * Browse's Clusters (PLAN's S28d), in the words of the app's `ClustersIndexView` and `ClusterDocumentsView`, the kit's
+   * caption over the list (`ClustersAxis.indexCaption`) with its counts grouped as the web groups numbers, where "this
+   * device" becomes this server, and the server's refusals carry the app's sentences, its build a server. The line for a
+   * link that names another layout's cluster is the web's own, since the app keeps no cluster's id past its window.
+   */
+  clusters: {
+    title: 'Clusters',
+    loading: 'Loading the cluster data…',
+    unavailableTitle: 'Clusters Unavailable',
+    caption: (clusters: number, unclustered: number, documents: number) =>
+      `${clusters.toLocaleString('en-US')} clusters computed from document text. Labels are the most distinctive sampled terms, not subject headings. ${unclustered.toLocaleString('en-US')} documents (${(documents > 0 ? (unclustered / documents) * 100 : 0).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%) belong to no cluster and cannot be reached from this list. Era bars reflect each volume's coverage era, not document dates.`,
+    rowCount: (count: number) => `${count.toLocaleString('en-US')} documents`,
+    rowLabel: (label: string, count: number) => `${label}, ${count.toLocaleString('en-US')} documents`,
+    rowHelp: 'Browse this cluster’s documents, grouped by volume',
+    drillUnavailable: 'This cluster’s data could not be loaded.',
+    otherLayout: 'This link names a cluster of another release of the semantic map, which this server no longer draws.',
+    countLabel: 'Documents in the series',
+    footer:
+      'A cluster is a grouping detected by an AI model that the corpus fell into on its own. It is comprised of documents whose language reads alike to an AI model. It is detected mathematically by turning its text into numeric vectors and clustering documents measured as similar rather than chosen by an editor. Its label is automatically assigned from the most distinctive words in a sample of the cluster’s documents. It is not a subject heading. Era counts reflect each volume’s coverage era, not each document’s own date.',
+    seeOnMap: 'See on the semantic map',
+    saveCorpus: 'Save as Working Corpus',
+    saved: (name: string) => `Saved “${name}”.`,
+    savedTruncated: (name: string, kept: number, total: number) =>
+      `Saved “${name}” with the first ${kept.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} documents.`,
+    showMore: 'Show more',
+    paging: (shown: number, total: number) =>
+      `Showing the first ${shown.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} documents, in volume order.`,
+    notIndexed: 'Not indexed on this server',
   },
   /**
    * The People screen (PLAN's S21g), the app's People browser (`PersonIndexView`), its person sheet

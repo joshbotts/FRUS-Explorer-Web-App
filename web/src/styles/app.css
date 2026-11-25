@@ -5766,6 +5766,91 @@ dialog.save-corpus .captured dd {
   color: var(--text-secondary);
 }
 
+/* Browse's Clusters (PLAN's S28d): a region's row is its terms over its count beside its eras' histogram, the whole row
+   its link, as the app's row is one button; a bar is 5 px wide and 3 apart, 2 to 18 tall, the two largest accented, as
+   the app's `ClusterEraHistogramView` draws them. A region's page lists its facts as the app's card does. */
+.cluster-row .cluster-link {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  max-width: 44rem;
+  text-decoration: none;
+}
+
+.cluster-link .cluster-text {
+  min-width: 0;
+}
+
+.cluster-link .cluster-label {
+  text-decoration: underline;
+}
+
+.cluster-link .meta {
+  display: block;
+  margin: 0.125rem 0 0;
+  color: var(--text-secondary);
+}
+
+.cluster-histogram {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 3px;
+  height: 18px;
+}
+
+.cluster-bar {
+  width: 5px;
+  border-radius: 2.5px;
+  background: color-mix(in srgb, var(--text-secondary) 35%, transparent);
+}
+
+.cluster-bar.peak {
+  background: var(--accent);
+}
+
+@media (forced-colors: active) {
+  .cluster-bar {
+    forced-color-adjust: none;
+    background: GrayText;
+  }
+
+  .cluster-bar.peak {
+    background: CanvasText;
+  }
+}
+
+.cluster-facts {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  gap: 0.25rem 1.5rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.cluster-facts div {
+  display: contents;
+}
+
+.cluster-facts dt {
+  color: var(--text-secondary);
+}
+
+.cluster-facts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cluster .show-more {
+  margin: 1rem 0;
+}
+
+.cluster .show-more .note {
+  margin: 0.25rem 0 0;
+}
+
 .volume-row .edit {
   margin-left: 0.25rem;
   text-decoration: none;
