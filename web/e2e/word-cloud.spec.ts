@@ -1,19 +1,37 @@
-// S24i's done-when (docs/PLAN.md): Playwright changes the lens by keyboard on Chromium, with no axe violations. Against
-// the image with the synthetic export imported; the Word Cloud reads the language family's clouds (S29d), which need
-// nothing indexed. It opens from the header's Analytics menu, after Chronology, on the corpus: the lens is changed by the lens
-// bar's arrow keys and the list read back after each, the scope changed to a volume, and Distinctive refused with its
-// reason; a word hidden in this lens by its menu leaves the cloud and is shown again from Settings ▸ Word Cloud; the
-// reader's rail opens its document's volume's cloud, saying why; and Search offers Collocates refused, axe at each state.
-// Each test sets back the reader's word cloud settings and this browser's measure.
+// S24i's and S29e's done-when (docs/PLAN.md): Playwright changes the lens by keyboard on Chromium, with no axe violations,
+// and since S29e opens a document's cloud from the reader's rail and changes the lens and a setting by keyboard. Against
+// the image with the synthetic export imported; the corpus, a subseries and a volume are the language family's clouds
+// (S29d) at the family's settings, and every other scope, or any of them under other settings, is counted live from the
+// served index. The Word Cloud opens from the header's Analytics menu, after Chronology, on the corpus: the lens is
+// changed by the lens bar's arrow keys, an entity lens saying why the server draws none, the list read back after each,
+// the scope changed to a volume, and Distinctive refused with its reason; a word hidden in this lens by its menu leaves a
+// volume's cloud the index holds none of and is shown again from Settings ▸ Word Cloud; the reader's rail opens its
+// document's own cloud, counted live, whose lens and diplomatic layer are changed by keyboard, and the corpus is then
+// counted as a job the page follows; Chronology opens its range's cloud; and Search offers Collocates refused, axe at each
+// state. Each test sets back the reader's word cloud settings and this browser's measure.
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { backTabTo, tabTo } from './keyboard';
 import { send } from './notes';
 
-/** Sets back the word cloud's criteria a reader who has set nothing has, the words `hidden` names, and the measure. */
+/**
+ * Sets back the word cloud's criteria a reader who has set nothing has, the words `hidden` names and every other word the
+ * reader's lists hold, and the measure. Since S29e any hidden word makes a cloud of the corpus a count of the index, where
+ * the family's list answers at the family's settings, and the smoke test's research import leaves the owner one
+ * ("telegram"), which S24i's filtered lists never showed, the diplomatic layer having left it out of them.
+ */
 async function reset(page: Page, hidden: { word: string; lens?: string }[] = []): Promise<void> {
-  for (const each of hidden) {
+  const held = (await page.evaluate(async () => {
+    const response = await fetch(new URL('api/v1/me/preferences', document.baseURI), { headers: { Accept: 'application/json' } });
+    return (await response.json()) as { wordCloud: { globalStopwords: string[]; lensStopwords: Record<string, string[]> } };
+  })).wordCloud;
+  const words: { word: string; lens?: string }[] = [
+    ...hidden,
+    ...held.globalStopwords.map((word) => ({ word })),
+    ...Object.entries(held.lensStopwords).flatMap(([lens, list]) => list.map((word) => ({ word, lens }))),
+  ];
+  for (const each of words) {
     const query = new URLSearchParams(each.lens ? { word: each.word, lens: each.lens } : { word: each.word });
     await send(page, 'DELETE', `api/v1/me/preferences/hidden-words?${query.toString()}`);
   }
@@ -37,6 +55,13 @@ async function arrowTo(page: Page, key: 'ArrowRight' | 'ArrowLeft', next: Locato
   await expect(next).toBeFocused();
 }
 
+/** The lens bar's radio of a lens, by its label. */
+function lens(page: Page, label: string): Locator {
+  return page.getByRole('group', { name: 'Show' }).getByRole('radio', { name: label, exact: true });
+}
+
+const unavailable = 'This server’s tagger does not recognize names, so the “People” lens can’t be drawn. All terms, Topics (nouns), Actions (verbs), Descriptors (adjectives), Concepts, and Sentiment still work.';
+
 test('changes the lens by keyboard and reads the list, then the scope, and refuses Distinctive with its reason', async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto('search');
@@ -54,21 +79,28 @@ test('changes the lens by keyboard and reads the list, then the scope, and refus
     await expect(page.getByRole('heading', { level: 1, name: 'Word Cloud' })).toBeFocused();
     await expect(page.getByRole('heading', { level: 2, name: 'Entire Corpus' })).toBeVisible();
     await expect(page.getByText('50 terms', { exact: true })).toBeVisible();
-    expect((await terms(page)).slice(0, 5)).toEqual(['united', 'president', 'country', 'time', 'agreement']);
+    expect((await terms(page)).slice(0, 5)).toEqual(['united', 'say', 'president', 'soviet', 'take']);
+    await expect(page.locator('.cloud-chip')).toHaveText('All terms');
     await expect(page.getByRole('img', { name: /^Word cloud of \d+ of 50 terms/ }).locator('text').first()).toBeVisible();
     await axeCheck(page);
 
-    // The lens, by keyboard: the lens bar's arrow keys move from Topics to Actions, and on to Sentiment by Concepts.
-    const topics = page.getByRole('radio', { name: 'Topics (nouns)', exact: true });
-    await tabTo(page, topics);
-    await expect(topics).toBeChecked();
-    await arrowTo(page, 'ArrowRight', page.getByRole('radio', { name: 'Actions (verbs)', exact: true }));
+    // The lens, by keyboard: All terms first, then People, which the server's tagger cannot draw, then on to Actions.
+    await tabTo(page, lens(page, 'All terms'));
+    await expect(lens(page, 'All terms')).toBeChecked();
+    await arrowTo(page, 'ArrowRight', lens(page, 'People'));
+    await expect(page).toHaveURL(/lens=people/);
+    await expect(page.getByRole('heading', { level: 2, name: 'Lens Unavailable on This Server' })).toBeVisible();
+    await expect(page.getByText(unavailable)).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Terms by count' })).toHaveCount(0);
+    await axeCheck(page);
+    for (const next of ['Places', 'Organizations', 'Topics (nouns)']) await arrowTo(page, 'ArrowRight', lens(page, next));
+    await arrowTo(page, 'ArrowRight', lens(page, 'Actions (verbs)'));
     await expect(page).toHaveURL(/lens=actions/);
     await expect.poll(async () => (await terms(page)).slice(0, 3)).toEqual(['say', 'take', 'give']);
     await expect(page.locator('.cloud-chip')).toHaveText('Actions');
     await axeCheck(page);
-    await arrowTo(page, 'ArrowRight', page.getByRole('radio', { name: 'Concepts', exact: true }));
-    await arrowTo(page, 'ArrowRight', page.getByRole('radio', { name: 'Sentiment', exact: true }));
+    for (const next of ['Descriptors (adjectives)', 'Concepts']) await arrowTo(page, 'ArrowRight', lens(page, next));
+    await arrowTo(page, 'ArrowRight', lens(page, 'Sentiment'));
     await expect(page).toHaveURL(/lens=sentiment/);
     await expect.poll(async () => (await terms(page)).slice(0, 3)).toEqual(['agreement', 'war', 'problem']);
     await expect(page.getByRole('columnheader', { name: 'Polarity' })).toBeVisible();
@@ -89,7 +121,7 @@ test('changes the lens by keyboard and reads the list, then the scope, and refus
     await tabTo(page, frequency);
     await arrowTo(page, 'ArrowRight', page.getByRole('radio', { name: 'Distinctive', exact: true }));
     await expect(page.getByRole('heading', { level: 2, name: 'No Distinctiveness Ranking' })).toBeVisible();
-    await expect(page.getByText(/This server cannot count a scope’s words itself yet/)).toBeVisible();
+    await expect(page.getByText(/which this server does not rank them against yet/)).toBeVisible();
     await expect(page.getByRole('table', { name: 'Terms by count' })).toHaveCount(0);
     await axeCheck(page);
     await arrowTo(page, 'ArrowLeft', frequency);
@@ -101,7 +133,9 @@ test('changes the lens by keyboard and reads the list, then the scope, and refus
 
 test('hides a word in this lens from its menu, and shows it again from Settings ▸ Word Cloud', async ({ page }) => {
   test.setTimeout(90_000);
-  await page.goto('cloud?lens=concepts');
+  // A volume the synthetic export holds no document of, whose family's list a hidden word is taken out of.
+  const address = 'cloud?scope=vol%3Afrus1969-76ve09p1&lens=concepts';
+  await page.goto(address);
   await reset(page, [{ word: 'policy', lens: 'concepts' }]);
   try {
     await page.reload();
@@ -116,9 +150,9 @@ test('hides a word in this lens from its menu, and shows it again from Settings 
     await page.keyboard.press('Enter');
     // The word leaves the cloud, and the keyboard goes to the word in its place.
     await expect(page.getByRole('button', { name: 'policy', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'war', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'interest', exact: true })).toBeFocused();
     await expect(page.getByText('Your settings took one word out of this list of 50.')).toBeVisible();
-    await expect.poll(async () => (await terms(page))[0]).toBe('war');
+    await expect.poll(async () => (await terms(page))[0]).toBe('interest');
     await axeCheck(page);
 
     // Settings ▸ Word Cloud: the lens's list holds it, and Remove shows it again.
@@ -135,15 +169,15 @@ test('hides a word in this lens from its menu, and shows it again from Settings 
     await page.keyboard.press('Enter');
     await expect(remove).toHaveCount(0);
     await expect(page.getByText('No custom words yet.')).toBeVisible();
-    await page.goto('cloud?lens=concepts');
+    await page.goto(address);
     await expect.poll(async () => (await terms(page))[0]).toBe('policy');
   } finally {
     await reset(page, [{ word: 'policy', lens: 'concepts' }]);
   }
 });
 
-test('opens its document’s volume’s cloud from the reader’s rail, saying why, and Search offers Collocates refused', async ({ page }) => {
-  test.setTimeout(60_000);
+test('opens its document’s own cloud from the reader’s rail, and changes the lens and a setting by keyboard', async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto('doc/frus1961-63v06/d1');
   await reset(page);
   try {
@@ -151,12 +185,62 @@ test('opens its document’s volume’s cloud from the reader’s rail, saying w
     await tabTo(page, tile);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/cloud\?scope=doc(%3A|:)frus1961-63v06(%2F|\/)d1$/);
-    await expect(page.getByText(/A document’s own word cloud is counted from its text/)).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: /Volume VI, Kennedy-Khrushchev Exchanges/ })).toBeVisible();
-    expect((await terms(page)).slice(0, 3)).toEqual(['president', 'country', 'question']);
+    // "The ambassador was negotiating treaties with the minister.": the diplomatic layer leaves the ambassador and the
+    // minister out, as it does at the app's own settings.
+    await expect.poll(async () => terms(page)).toEqual(['negotiate', 'treaty']);
+    await expect(page.getByText('2 terms from 1 document', { exact: true })).toBeVisible();
+    await expect(page.getByText(/This cloud was counted from its scope’s 1 document by this server’s own tagger, FRUSLanguage /)).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to the document' })).toBeVisible();
     await axeCheck(page);
-    await page.getByRole('link', { name: 'Back to the document' }).click();
-    await expect(page).toHaveURL(/doc\/frus1961-63v06\/d1$/);
+
+    // The lens, by keyboard: People unavailable, then Topics, the document's nouns.
+    await tabTo(page, lens(page, 'All terms'));
+    await arrowTo(page, 'ArrowRight', lens(page, 'People'));
+    await expect(page.getByText(unavailable)).toBeVisible();
+    await axeCheck(page);
+    for (const next of ['Places', 'Organizations']) await arrowTo(page, 'ArrowRight', lens(page, next));
+    await arrowTo(page, 'ArrowRight', lens(page, 'Topics (nouns)'));
+    await expect.poll(async () => terms(page)).toEqual(['treaty']);
+    await axeCheck(page);
+
+    // A setting, by keyboard: Hide common diplomatic words off counts the document again with the ambassador and the minister.
+    const boilerplate = page.getByRole('checkbox', { name: 'Hide common diplomatic words' });
+    await tabTo(page, boilerplate);
+    await expect(boilerplate).toBeChecked();
+    await page.keyboard.press('Space');
+    await expect(boilerplate).not.toBeChecked();
+    await expect.poll(async () => terms(page)).toEqual(['ambassador', 'minister', 'treaty']);
+    await expect(page.getByText(/This cloud was counted from its scope’s 1 document by this server’s own tagger, .* under your settings\./)).toBeVisible();
+    await axeCheck(page);
+
+    // Under these settings the corpus is counted, as a job the page follows until it ends.
+    const scope = page.getByRole('combobox', { name: 'Scope' });
+    await backTabTo(page, scope);
+    await scope.selectOption('corpus');
+    await expect(page.getByRole('heading', { level: 2, name: 'Entire Corpus' })).toBeVisible();
+    // The synthetic export the smoke test imports holds seven documents: the fixtures' three and the own-text volume's four.
+    await expect(page.getByText(/^\d+ terms? from 7 documents$/)).toBeVisible({ timeout: 20_000 });
+    await expect.poll(async () => terms(page)).toContain('ambassador');
+    await axeCheck(page);
+  } finally {
+    await reset(page);
+  }
+});
+
+test('Chronology opens its range’s cloud, and Search offers Collocates refused', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('chronology?from=1960-11-01&to=1960-11-30');
+  await reset(page);
+  try {
+    const link = page.getByRole('link', { name: 'Word Cloud for this range' });
+    await tabTo(page, link, 60);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/cloud\?scope=daterange(%3A|:)1960-11-\d\d\.\.1960-11-\d\d/);
+    await expect(page.getByText(/^\d+ terms? from 2 documents$/)).toBeVisible();
+    await expect(page.getByLabel('Range start')).toHaveValue(/^1960-11-\d\d$/);
+    await expect(page.getByRole('link', { name: 'View in Chronology' })).toBeVisible();
+    await axeCheck(page);
 
     // Search's Reading picker: Collocates, the Mac's fourth, in reach of the keyboard with its reason, choosing nothing.
     await page.goto('search?keywords=negotiating+OR+canal');

@@ -15,12 +15,15 @@
 // line, the scope menu (`WordCloudScopeBar`) and the scoped hand-off (`scopedAnalyzeMenuLabel`, `analyticsScope()`),
 // with the reader's settings as `WordCloudSettings` reads them.
 //
-// The server counts no scope of its own yet: the kit's tokenizers count with the web's tagger (FRUSLanguage's
-// `FRUSWordCloudTagger`), as the family's run did, and a live scope, the Distinctive measure and collocates wait for the
-// kit's live count (S29e, S29f), so a request for a live scope is refused. The reader's settings a counted list cannot
-// show, those that would let in a word the generator never counted, are named by the kit's own comparability rule
+// Since S29e the server counts every other scope live, and these three too when the reader's settings are not the
+// family's (WordCloudLive.swift): the kit's count with the web's tagger (FRUSLanguage's `FRUSWordCloudTagger`), as the
+// family's run counted, over the served index. A scope the served index holds no text of is still read from the
+// family's files under any settings, filtered as above, and the settings such a list cannot show, those that would let
+// in a word the generator never counted, are named by the kit's own comparability rule
 // (`KeynessBaselineFile.Configuration.mismatches`), since the clouds were counted under the generator's configuration
-// (`CloudVectorsRunner`: the standard tuning, the diplomatic layer on).
+// (`CloudVectorsRunner`: the standard tuning, the diplomatic layer on). The Distinctive measure and collocates wait for
+// S29f. The lenses are the app's nine, its bar's order, and those the server's tagger cannot serve, the entity lenses,
+// which name people, places and organizations, are said to be unavailable in the terms of the kit's health.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -196,21 +199,15 @@ struct CloudSettings: Equatable, Sendable {
         return (try? encoder.encode(map)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
     }
 
-    /// `WordCloudTokenizer.configured(tuning:lens:includeDiplomatic:extraStopwords:wordForm:)`, the app's assembly of
-    /// its tokenizer, over the bundled lists: the stop lists the boilerplate switch chooses with the reader's hidden
-    /// words, the lens's lexicon, and the markings when they are filtered. Its filters read no tagger, so the form
-    /// plays no part in what they keep (`WordCloudBench.evaluate`).
+    /// The kit's assembly of the app's tokenizer (`WordCloudTokenizer.configured(tuning:lens:includeDiplomatic:
+    /// extraStopwords:wordForm:stopwords:lexicons:)`, S29b), over the bundled lists: the stop lists the boilerplate
+    /// switch chooses with the reader's hidden words, the lens's lexicon, and the markings when they are filtered. Its
+    /// filters read no tagger, so the form plays no part in what they keep (`WordCloudBench.evaluate`).
     func tokenizer(for lens: WordCloudLens, stopwords: WordCloudStopwordSet, lexicons: WordCloudLexiconSet) -> WordCloudTokenizer {
-        WordCloudTokenizer(
-            stopwords: stopwords.active(includeDiplomatic: includeDiplomatic)
-                .union(extraStopwords(for: lens)),
-            minimumLength: tuning.minimumLength,
-            foldPlurals: tuning.foldPlurals,
-            lens: lens,
-            lexicon: lexicons.filter(for: lens),
-            markings: tuning.filterMarkings ? stopwords.markings : [],
-            wordForm: .dictionary
-        )
+        WordCloudTokenizer.configured(tuning: tuning, lens: lens, includeDiplomatic: includeDiplomatic,
+                                      extraStopwords: extraStopwords(for: lens),
+                                      wordForm: .dictionary,
+                                      stopwords: stopwords, lexicons: lexicons)
     }
 
     /// `WordCloudBench.evaluate`: the terms of `sample` these settings keep, in the sample's order, each at least the
@@ -240,10 +237,12 @@ struct CloudSettings: Equatable, Sendable {
 
 // MARK: - The answers
 
-/// What the Word Cloud opens on: its lenses and measures, the scope menu (`WordCloudScopeBar`: Entire Corpus, each
-/// subseries, each volume under its subseries) and what the family's clouds say of themselves.
+/// What the Word Cloud opens on: its lenses and measures, the scope menu's catalogue and subjects (`WordCloudScopeBar`:
+/// Entire Corpus, each subseries, each volume under its subseries, and By Subject; the reader's own records are their
+/// lists') and what the family's clouds say of themselves.
 public struct CloudContext: Codable, Equatable, Sendable, ResponseEncodable {
-    /// The lenses the page draws of the clouds, in the lens bar's order (`WordCloudLens.allCases`).
+    /// The lenses the lens bar offers, the app's nine in its order (`WordCloudLens.allCases`), each saying whether the
+    /// server's tagger can draw it (PLAN's S29e).
     public var lenses: [CloudLens]
     /// "Size words by": Frequency and Distinctive (`KeynessCloudMeasure`).
     public var measures: [CloudMeasure]
@@ -251,6 +250,11 @@ public struct CloudContext: Codable, Equatable, Sendable, ResponseEncodable {
     public var corpus: String
     /// The catalogue's subseries in its order, each with its volumes.
     public var subseries: [CloudSubseries]
+    /// By Subject's categories that narrow, each with its sub-categories (`ScopeFacets.narrowingCategories`,
+    /// `subCategoryCatalog`), none without the subject data (PLAN's S29e).
+    public var subjects: [CloudSubjectCategory]
+    /// The range Date Range opens on, the corpus's last year (`defaultDateRangeScope()`), `yyyy-MM-dd`.
+    public var dateRange: CloudDateRange
     /// The clouds' own account, or none while their file cannot be read or is refused.
     public var made: Made?
 
@@ -275,6 +279,42 @@ public struct CloudLens: Codable, Equatable, Sendable {
     public var shortLabel: String
     /// Whether the cloud colours its words by sentiment (`WordCloudLens.colorsBySentiment`).
     public var colorsBySentiment: Bool
+    /// Whether the server's tagger can draw it, by the kit's health (`NaturalLanguageHealth.supports`): not the entity
+    /// lenses, since it recognizes no names (PLAN's S29e).
+    public var available: Bool
+}
+
+/// A category By Subject offers, with its sub-categories, each a scope (`subject:<category>␟<sub-category>`).
+public struct CloudSubjectCategory: Codable, Equatable, Sendable {
+    public var label: String
+    public var subcategories: [String]
+}
+
+/// A range of days, `yyyy-MM-dd`.
+public struct CloudDateRange: Codable, Equatable, Sendable {
+    public var from: String
+    public var to: String
+}
+
+/// A count's job (PLAN's S29e), which the page follows: its id, where it stands and what it does.
+public struct CloudJob: Codable, Equatable, Sendable, ResponseEncodable {
+    public var id: String
+    /// `queued`, `running`, `succeeded`, `failed` or `cancelled`.
+    public var state: String
+    /// A line of what it does now, or of what it did.
+    public var progress: String?
+    /// How far through it is, 0 to 1, where it can tell.
+    public var fraction: Double?
+    /// Why it failed, in the server's words.
+    public var error: String?
+
+    init(_ job: Job) {
+        id = job.id
+        state = job.state.rawValue
+        progress = job.progress
+        fraction = job.fraction
+        error = job.state == .failed ? job.error : nil
+    }
 }
 
 /// A measure the cloud can size its words by, by its raw value (`KeynessCloudMeasure.pickerLabel`).
@@ -295,7 +335,8 @@ public struct CloudSubseries: Codable, Equatable, Sendable {
     }
 }
 
-/// One scope's cloud under one lens: the family's list's words that the reader's settings keep.
+/// One scope's cloud under one lens: the family's list's words that the reader's settings keep, or the words a live
+/// count of the scope's documents kept (PLAN's S29e).
 public struct CloudAnswer: Codable, Equatable, Sendable, ResponseEncodable {
     /// The scope, by the app's signature, with the title the app gives it.
     public var scope: Scope
@@ -304,25 +345,39 @@ public struct CloudAnswer: Codable, Equatable, Sendable, ResponseEncodable {
     public var chip: String
     /// The subseries whose list stands in for a volume's, which the chip names, or none.
     public var fallbackSubseries: String?
-    /// What the main area shows: `terms`, `noTerms`, `insufficientSignal`, or `noCloud` where the family's clouds hold no
-    /// list for the scope, or are refused.
+    /// Where the words come from: `family`, the family's files, or `live`, a count of the scope's documents (S29e).
+    public var source: String
+    /// What the main area shows: `terms`, `noTerms`, `insufficientSignal`, `noIndexedText` where a count read no
+    /// document, `lensUnavailable` for a lens the server's tagger cannot serve, `counting` while a job counts the scope,
+    /// or `noCloud` where the family's clouds hold no list for the scope, or are refused.
     public var state: String
     /// The words of a state with nothing to draw.
     public var message: Message?
-    /// "48 terms": how many words are drawn, in the app's words; none where there is no list.
+    /// "48 terms", or a count's "48 terms from 393 documents": how many words are drawn, in the app's words; none where
+    /// there is no list.
     public var countLine: String?
-    /// The words kept, by count, as the file ranks them; on the sentiment lens each with its polarity.
+    /// The words kept, by count, as the file or the count ranks them; on the sentiment lens each with its polarity.
     public var terms: [Term]
-    /// How many words the family's list holds, and how many of them the reader's settings took out.
+    /// How many words the family's list holds, and how many of them the reader's settings took out; a count's words, and
+    /// none taken out, since its settings were counted.
     public var listed: Int
     public var removed: Int
     /// The settings of the reader's the family's clouds cannot show, in one sentence, or none.
     public var settingsNotShown: String?
-    /// The scoped hand-off a word's menu offers a volume's or a subseries' cloud.
+    /// The scoped hand-off a word's menu offers a volume's, a subseries', a volume scope's or a subject's cloud.
     public var analyzeWithin: AnalyzeWithin?
+    /// How many documents a count read.
+    public var documentCount: Int?
+    /// What a count says of itself, the web's own: its documents, the tagger and whose settings; the family's lists say
+    /// theirs in the context's account.
+    public var account: String?
+    /// The job counting the scope, while it is `counting`.
+    public var job: CloudJob?
 
     public struct Scope: Codable, Equatable, Sendable {
-        /// `corpus`, `sub:<subseries>` or `vol:<volume>`.
+        /// The app's signature (`WordCloudScope.signature`): `corpus`, `sub:<subseries>`, `vol:<volume>`,
+        /// `doc:<volume>/<document>`, `col:`, `tag:`, `search:` or `scope:<id>`, `subject:<category>[␟<sub-category>]` or
+        /// `daterange:<from>..<to>`.
         public var signature: String
         public var title: String
     }
@@ -386,10 +441,9 @@ enum CloudRules {
     /// environment:)`, which `run()` calls: `let includeDiplomatic = true`), which the file does not record.
     static let generatorIncludesDiplomatic = true
 
-    /// The lenses the page draws, in the lens bar's order: the app's bar lists `WordCloudLens.allCases`, and the app's
-    /// clouds carry `bundledCloudLenses`; the family's carry two more, All terms and Descriptors, which S29e's live
-    /// clouds bring to the bar.
-    static let lenses: [WordCloudLens] = WordCloudLens.allCases.filter { WordCloudLens.bundledCloudLenses.contains($0) }
+    /// The lenses the page offers, the app's bar's (`WordCloudLens.allCases`), All terms first (PLAN's S29e). The family's
+    /// clouds carry six of them; the entity lenses are unavailable, by the server's tagger's health.
+    static let lenses: [WordCloudLens] = WordCloudLens.allCases
 
     /// `BundledCloudVectors.terms(forScope:lens:)`: a scope's list, and, for a volume whose own list the generator
     /// flagged below its lens's signal threshold, or whose file cannot be read, its subseries' list, which the chip
@@ -471,14 +525,34 @@ enum CloudRules {
             // The web's own: the app's backdrop draws nothing for a scope its clouds lack.
             return .init(title: "No Counted Cloud",
                          detail: "The clouds this server’s tagger counted from the corpus hold no list for this scope under this lens.")
+        case "noIndexedText":
+            // `WordCloudView.emptyView`, a count that read no document (PLAN's S29e).
+            return .init(title: appWords("wordcloud.empty.title", "No Terms"),
+                         detail: appWords("wordcloud.empty.detail",
+                                          "There’s no indexed text in this scope yet. Download and index the relevant volumes, then try again."))
         default:
             return nil
         }
     }
 
-    /// `WordCloudDisplayState.noTermsDetail(for:)`, for the four lenses the page draws.
+    /// `WordCloudDisplayState.noTermsDetail(for:)`, for every lens.
     static func noTermsDetail(for lens: WordCloudLens) -> String {
         switch lens {
+        case .allTerms:
+            appWords("wordcloud.lens.noTerms.allTerms",
+                     "This scope’s documents were read, but none of their words passed the Word Cloud’s filters: the stopword lists, your hidden words, the minimum word length and the minimum count. You can change them in Settings → Word Cloud.")
+        case .people:
+            appWords("wordcloud.lens.noTerms.people",
+                     "This scope’s documents were read, but no person’s name in them passed the Word Cloud’s filters. Try a broader scope or a different lens.")
+        case .places:
+            appWords("wordcloud.lens.noTerms.places",
+                     "This scope’s documents were read, but no place name in them passed the Word Cloud’s filters. Try a broader scope or a different lens.")
+        case .organizations:
+            appWords("wordcloud.lens.noTerms.organizations",
+                     "This scope’s documents were read, but no organization’s name in them passed the Word Cloud’s filters. Try a broader scope or a different lens.")
+        case .descriptors:
+            appWords("wordcloud.lens.noTerms.descriptors",
+                     "This scope’s documents were read, but none of their adjectives passed the Word Cloud’s filters. Try a broader scope or a different lens.")
         case .topics:
             appWords("wordcloud.lens.noTerms.topics",
                      "This scope’s documents were read, but none of their nouns passed the Word Cloud’s filters. Try a broader scope or a different lens.")
@@ -491,35 +565,42 @@ enum CloudRules {
         case .sentiment:
             appWords("wordcloud.lens.noTerms.sentiment",
                      "This scope’s documents were read, but none of them uses a word from the Sentiment list. Try a broader scope or a different lens.")
-        default:
-            ""
         }
     }
 
-    /// `WordCloudLens.label`, the lens bar's name, for the four lenses the page draws.
+    /// `WordCloudLens.label`, the lens bar's name.
     static func label(_ lens: WordCloudLens) -> String {
         switch lens {
+        case .allTerms: appWords("wordcloud.lens.all", "All terms")
+        case .people: appWords("wordcloud.lens.people", "People")
+        case .places: appWords("wordcloud.lens.places", "Places")
+        case .organizations: appWords("wordcloud.lens.orgs", "Organizations")
         case .topics: appWords("wordcloud.lens.topics", "Topics (nouns)")
         case .actions: appWords("wordcloud.lens.actions", "Actions (verbs)")
+        case .descriptors: appWords("wordcloud.lens.descriptors", "Descriptors (adjectives)")
         case .concepts: appWords("wordcloud.lens.concepts", "Concepts")
         case .sentiment: appWords("wordcloud.lens.sentiment", "Sentiment")
-        default: lens.rawValue
         }
     }
 
-    /// `WordCloudLens.shortLabel`, the chip's name, for the four lenses the page draws.
+    /// `WordCloudLens.shortLabel`, the chip's name.
     static func shortLabel(_ lens: WordCloudLens) -> String {
         switch lens {
+        case .allTerms: appWords("wordcloud.lens.short.all", "All terms")
+        case .people: appWords("wordcloud.lens.short.people", "People")
+        case .places: appWords("wordcloud.lens.short.places", "Places")
+        case .organizations: appWords("wordcloud.lens.short.orgs", "Organizations")
         case .topics: appWords("wordcloud.lens.short.topics", "Topics")
         case .actions: appWords("wordcloud.lens.short.actions", "Actions")
+        case .descriptors: appWords("wordcloud.lens.short.descriptors", "Descriptors")
         case .concepts: appWords("wordcloud.lens.short.concepts", "Concepts")
         case .sentiment: appWords("wordcloud.lens.short.sentiment", "Sentiment")
-        default: lens.rawValue
         }
     }
 
     static func lens(_ lens: WordCloudLens) -> CloudLens {
-        CloudLens(id: lens.rawValue, label: label(lens), shortLabel: shortLabel(lens), colorsBySentiment: lens.colorsBySentiment)
+        CloudLens(id: lens.rawValue, label: label(lens), shortLabel: shortLabel(lens), colorsBySentiment: lens.colorsBySentiment,
+                  available: WordCloudLive.tagger.health.supports(lens))
     }
 
     /// `KeynessCloudMeasure.pickerLabel`.
@@ -659,22 +740,32 @@ enum CloudRules {
 // MARK: - The routes
 
 enum WordCloudRoutes {
-    /// The scope signatures of the app's other clouds, each counted live from a scope's text, which this server
-    /// cannot do (`WordCloudScope.init?(signature:)`).
-    static let liveSignatures: Set<String> = ["doc", "col", "tag", "search", "scope", "subject", "daterange"]
-
-    static func add(to router: Router<APIRequestContext>, resources: ServerResources, users: SearchUsers) {
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources, users: SearchUsers) {
         router.get("/api/v1/cloud/context") { request, _ -> CloudContext in
             try FormQuery(request.uri.query).refuseUnknown([])
             return try await Blocking.run { context(resources: resources) }
         }
-        router.get("/api/v1/cloud") { request, context -> CloudAnswer in
+        // A scope's cloud: 200 with its words, or 202 while a job counts it, which `job` names (PLAN's S29e).
+        router.get("/api/v1/cloud") { request, context -> EditedResponse<CloudAnswer> in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["scope", "lens"])
-            let scope = try scope(query.single("scope"), resources: resources)
+            let scope = try scope(query.single("scope"))
             let lens = try lens(query.single("lens"))
-            let settings = try await settings(for: request, context: context, users: users)
-            return try await Blocking.run { answer(scope, lens: lens, settings: settings, resources: resources) }
+            let reader = try await reader(for: request, context: context, users: users)
+            // A count within the request stops when its client goes, as the app's stops when another replaces it.
+            let answer = try await context.whileClientConnected {
+                try await cloud(scope, lens: lens, reader: reader, provider: provider, resources: resources, services: users.services)
+            }
+            return EditedResponse(status: answer.state == "counting" ? .accepted : .ok, headers: [.cacheControl: "no-store"], response: answer)
+        }
+        // A count's job, which the page follows until it ends: a word cloud's alone, by its id (PLAN's S29e).
+        router.get("/api/v1/cloud/jobs/:jobId") { request, context -> EditedResponse<CloudJob> in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let id = try context.parameters.require("jobId")
+            guard let jobs = users.services?.jobs, let job = await jobs.job(id), job.kind == .wordCloud else {
+                throw APIProblem(.notFound, code: "JOB_NOT_FOUND", detail: "No word cloud is being counted by a job with the id \(id).")
+            }
+            return EditedResponse(headers: [.cacheControl: "no-store"], response: CloudJob(job))
         }
     }
 
@@ -693,10 +784,20 @@ enum WordCloudRoutes {
                               topTermsPerList: file.provenance.topTermsPerList,
                               family: file.provenance.tokenizer.description, line: madeLine(file))
         }
+        // By Subject (`subjectScopeMenu`): a category is a heading, and each of its sub-categories a scope (#1040).
+        var subjects: [CloudSubjectCategory] = []
+        if let resolved = CorpusAnalyticsRoutes.detectedTopics(resources), !resolved.isEmpty {
+            subjects = ScopeFacets.narrowingCategories(resolvedByVolume: resolved).map { category in
+                CloudSubjectCategory(label: category.label,
+                                     subcategories: ScopeFacets.subCategoryCatalog(forCategory: category.label, resolvedByVolume: resolved)
+                                        .map(\.subcategory))
+            }
+        }
+        let range = ChronologyRoutes.defaultRange(entries)
         return CloudContext(lenses: CloudRules.lenses.map(CloudRules.lens),
                             measures: KeynessCloudMeasure.allCases.map { CloudMeasure(id: $0.rawValue, label: CloudRules.measureLabel($0)) },
                             corpus: appWords("wordcloud.scope.corpus", "Entire Corpus"),
-                            subseries: subseries, made: made)
+                            subseries: subseries, subjects: subjects, dateRange: CloudDateRange(from: range.from, to: range.to), made: made)
     }
 
     /// The family's clouds' own account, the web's sentence over the file's provenance, naming the tokenizer that counted
@@ -705,76 +806,234 @@ enum WordCloudRoutes {
         "These clouds were counted by this server’s own tagger, \(file.provenance.tokenizer), on \(CloudRules.day(file.generated)) from the corpus’s \(grouped(file.provenance.volumeCount)) volumes and \(CountCopy.documents(file.provenance.documentCount, locale: SearchItem.locale)) at the standard settings. Each list keeps the \(grouped(file.provenance.topTermsPerList)) words its scope uses most."
     }
 
-    // MARK: The cloud
+    // MARK: The scope
 
-    /// The scope an address names by the app's signature: the corpus, a subseries or a volume of the catalogue's. A
-    /// signature of the app's other clouds is refused (`LIVE_SCOPE`): each is counted live, which this server cannot do;
-    /// one the app would not read as a scope at all is a bad parameter, as the analytics routes refuse a subseries.
-    static func scope(_ raw: String?, resources: ServerResources) throws -> CloudScope {
-        guard let raw, raw != "corpus" else { return .corpus }
-        guard let colon = raw.firstIndex(of: ":") else {
-            throw APIProblem.invalidParameter("scope", "must be corpus, sub:<subseries> or vol:<volume>, not \(raw)")
+    /// The scope an address names by the app's signature, read as the app reads it (`WordCloudScope(signature:)`, the
+    /// kit's since S29b); the corpus where it names none. One the app would not read as a scope is a bad parameter.
+    static func scope(_ raw: String?) throws -> WordCloudScope {
+        guard let raw else { return .corpus }
+        guard let scope = WordCloudScope(signature: raw) else {
+            throw APIProblem.invalidParameter("scope", "must be the app's signature of a scope, such as corpus, sub:<subseries>, vol:<volume>, doc:<volume>/<document>, col:<id>, tag:<id>, search:<id>, scope:<id>, subject:<category> or daterange:<from>..<to>, not \(raw)")
         }
-        let prefix = String(raw[..<colon])
-        let value = String(raw[raw.index(after: colon)...])
-        switch prefix {
-        case "sub":
-            guard CloudRules.subseriesList(resources.manifest).contains(value) else {
-                throw APIProblem.invalidParameter("scope", "names no subseries of the published catalogue, \(value)")
-            }
-            return .subseries(value)
-        case "vol":
-            guard let entry = resources.volume(value) else { throw APIProblem.volumeNotFound(value) }
-            return .volume(volumeId: entry.volumeId, subseries: entry.subseries)
-        case let live where liveSignatures.contains(live) && isLiveScope(live, value):
-            throw APIProblem(.unprocessableContent, code: "LIVE_SCOPE",
-                             detail: "A cloud of this scope is counted from its documents' text, in their dictionary forms, which this server does not count yet. It reads the clouds its tagger counted from the corpus, of the corpus, each subseries and each volume.")
-        default:
-            throw APIProblem.invalidParameter("scope", "must be corpus, sub:<subseries> or vol:<volume>, not \(raw)")
-        }
+        return scope
     }
 
-    /// Whether `value` makes a scope of the app's under the live signature `prefix`, as `WordCloudScope.init?(signature:)`
-    /// reads it: a document by its volume and id, a record of the reader's by its id, a subject by its category, and a
-    /// range by its two days.
-    static func isLiveScope(_ prefix: String, _ value: String) -> Bool {
-        switch prefix {
-        case "doc":
-            guard value.firstIndex(of: "/") != nil else { return false }
-            return true
-        case "col", "tag", "search", "scope":
-            return UUID(uuidString: value) != nil
-        case "subject":
-            let parts = value.components(separatedBy: "\u{1f}")
-            guard let category = parts.first, !category.isEmpty else { return false }
-            return true
-        case "daterange":
-            let bounds = value.components(separatedBy: "..")
-            guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return false }
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// The lens an address names, one the page draws; the lens bar's first where it names none.
+    /// The lens an address names, one of the app's nine; the lens bar's first, All terms, where it names none, as the
+    /// app's view opens on it.
     static func lens(_ raw: String?) throws -> WordCloudLens {
         guard let raw else { return CloudRules.lenses[0] }
         guard let lens = WordCloudLens(rawValue: raw), CloudRules.lenses.contains(lens) else {
-            throw APIProblem.invalidParameter("lens", "must be one of \(CloudRules.lenses.map(\.rawValue).joined(separator: ", ")), the lenses the page draws, not \(raw)")
+            throw APIProblem.invalidParameter("lens", "must be one of \(CloudRules.lenses.map(\.rawValue).joined(separator: ", ")), the lenses the page offers, not \(raw)")
         }
         return lens
+    }
+
+    /// Whom a cloud is asked for: their settings, and their id where the request acts for one.
+    struct Reader: Sendable {
+        let settings: CloudSettings
+        let user: String?
+    }
+
+    /// The reader `request` acts for, with their Word Cloud settings as their synced preferences hold them; no one, with
+    /// the app's own settings, for a request that acts for no one.
+    static func reader(for request: Request, context: APIRequestContext, users: SearchUsers) async throws -> Reader {
+        guard let services = users.services, let user = try await users.requestUser(request, context: context, services: services)
+        else { return Reader(settings: .standard, user: nil) }
+        return Reader(settings: try await CloudSettings(PreferenceRoutes.syncedPreferences(of: user.id, in: services.store)), user: user.id)
     }
 
     /// The Word Cloud settings of the user `request` acts for, as their synced preferences hold them, or the app's own
     /// for a request that acts for no one.
     static func settings(for request: Request, context: APIRequestContext, users: SearchUsers) async throws -> CloudSettings {
-        guard let services = users.services, let user = try await users.requestUser(request, context: context, services: services)
-        else { return .standard }
-        return try await CloudSettings(PreferenceRoutes.syncedPreferences(of: user.id, in: services.store))
+        try await reader(for: request, context: context, users: users).settings
     }
 
-    /// One scope's cloud under one lens, its list filtered by `settings`.
+    /// `scope` resolved for `reader` as the app's `WordCloudScopeResolver.resolve` resolves it: its title, where its
+    /// documents come from and whose records it reads. A subseries or a volume the catalogue lacks is refused, as a
+    /// record of the reader's that is not theirs, or any for a request that acts for no one, is refused as not found,
+    /// where the app's dangling id resolves to nothing: one reader's scopes are never another's. A range whose days do
+    /// not read as days is a bad parameter.
+    static func resolve(_ scope: WordCloudScope, reader: Reader, services: UserDataServices?,
+                        resources: ServerResources) async throws -> CloudResolution {
+        func plain(_ title: String, _ documents: CloudResolution.Documents) -> CloudResolution {
+            CloudResolution(scope: scope, title: title, documents: documents, owner: nil, members: nil)
+        }
+        /// The reader whose record a scope names, and their store, or the record's refusal.
+        func owner(_ notFound: APIProblem) throws -> (String, any UserDataStore) {
+            guard let user = reader.user, let services else { throw notFound }
+            return (user, services.store)
+        }
+        switch scope {
+        case .corpus:
+            return plain(appWords("wordcloud.scope.corpus", "Entire Corpus"), .corpus)
+        case .subseries(let subseriesId):
+            let volumeIds = resources.manifest.filter { $0.subseries == subseriesId }.map(\.volumeId)
+            guard !volumeIds.isEmpty else {
+                throw APIProblem.invalidParameter("scope", "names no subseries of the published catalogue, \(subseriesId)")
+            }
+            return plain(subseriesId, .volumes(volumeIds))
+        case .volume(let volumeId):
+            guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
+            return plain(resources.volume(volumeId)?.title ?? volumeId, .volumes([volumeId]))
+        case .document(let volumeId, let documentId):
+            guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
+            let title = resources.volume(volumeId)?.title ?? volumeId
+            return plain(title, .keys([WordCloudDocumentKey(volumeId: volumeId, documentId: documentId)]))
+        case .collection(let id):
+            let (user, store) = try owner(CollectionRoutes.notFound(id.uuidString))
+            let collection = try await CollectionRoutes.collection(id.uuidString, of: user, in: store)
+            let keys = collection.entries.map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }
+            return CloudResolution(scope: scope, title: CollectionEditorNaming.listName(savedName: collection.name),
+                                   documents: .keys(keys), owner: user, members: nil)
+        case .userTag(let id):
+            let notFound = APIProblem(.notFound, code: "TAG_NOT_FOUND", detail: "You have no tag with the id \(id.uuidString).")
+            let (user, store) = try owner(notFound)
+            let wanted = SearchUsers.caseFolded(id.uuidString)
+            let (tags, assignments) = try await Blocking.run { (try store.tags(of: user), try store.tagAssignments(of: user)) }
+            guard let tag = tags.first(where: { SearchUsers.caseFolded($0.id) == wanted }) else { throw notFound }
+            // The documents the reader's assignments of the tag are on, each once, as `documentKeys(forUserTagId:)` reads the
+            // index's rows that an attached store's assignments name.
+            var seen = Set<WordCloudDocumentKey>()
+            let keys = assignments.filter { SearchUsers.caseFolded($0.tagId) == wanted }
+                .map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }
+                .filter { seen.insert($0).inserted }
+            return CloudResolution(scope: scope, title: tag.name, documents: .keys(keys), owner: user, members: nil)
+        case .savedSearch(let id):
+            let (user, store) = try owner(SavedSearchRoutes.notFound(id.uuidString))
+            let saved = try await SavedSearchRoutes.savedSearch(id.uuidString, of: user, in: store)
+            return CloudResolution(scope: scope, title: saved.name, documents: .search(saved.parameters, user: user), owner: user, members: nil)
+        case .customScope(let id):
+            let (user, store) = try owner(VolumeScopeRoutes.notFound(id.uuidString))
+            let record = try await VolumeScopeRoutes.scope(id.uuidString, of: user, in: store)
+            return CloudResolution(scope: scope, title: record.name, documents: .volumes(record.volumeIds), owner: user,
+                                   members: record.volumeIds)
+        case .subjectCategory(let category, let subcategory):
+            // The subjects by volume the scope bars read; none without the subject data, an explicitly empty cloud.
+            let resolved = try await Blocking.run { CorpusAnalyticsRoutes.detectedTopics(resources) ?? [:] }
+            let volumeIds = subcategory.map {
+                ScopeFacets.volumeIds(forCategory: category, subcategory: $0, resolvedByVolume: resolved)
+            } ?? ScopeFacets.volumeIds(forCategory: category, resolvedByVolume: resolved)
+            return plain(subcategory.map { "\(category) · \($0)" } ?? category, .volumes(volumeIds.sorted()))
+        case .dateRange(let startISO, let endISO):
+            guard WordCloudScope.day(fromISO: startISO) != nil, WordCloudScope.day(fromISO: endISO) != nil else {
+                throw APIProblem.invalidParameter("scope", "a range of dates is daterange:<yyyy-MM-dd>..<yyyy-MM-dd>, not daterange:\(startISO)..\(endISO)")
+            }
+            return plain(WordCloudScope.dateRangeTitle(startISO: startISO, endISO: endISO),
+                         .dateRange(DateRange(earliest: startISO, latest: endISO)))
+        }
+    }
+
+    /// The scope of the family's files a scope of the catalogue's is, the corpus, a subseries or a volume, which
+    /// `resolve` has checked; none for another.
+    static func familyScope(_ scope: WordCloudScope, resources: ServerResources) -> CloudScope? {
+        switch scope {
+        case .corpus: .corpus
+        case .subseries(let id): .subseries(id)
+        case .volume(let volumeId): resources.volume(volumeId).map { .volume(volumeId: $0.volumeId, subseries: $0.subseries) }
+        case .document, .collection, .userTag, .savedSearch, .customScope, .subjectCategory, .dateRange: nil
+        }
+    }
+
+    // MARK: The cloud
+
+    /// `scope`'s cloud under `lens` for `reader` (PLAN's S29e). A lens the server's tagger cannot serve is not counted.
+    /// The corpus, a subseries and a volume are the family's lists at the family's settings; under others they are
+    /// counted from the documents the served index holds of them, and with no index served, or none of their documents
+    /// in it, the family's list is filtered by the settings; a scope the family holds no list of its own of, such as a
+    /// volume side-loaded under an id the generator never counted, is counted wherever the index holds it. Every other
+    /// scope is counted, with an index served. A count kept answers at once; one that outlasts a request is `counting`,
+    /// with its job.
+    static func cloud(_ scope: WordCloudScope, lens: WordCloudLens, reader: Reader, provider: ServedIndexProvider,
+                      resources: ServerResources, services: UserDataServices?) async throws -> CloudAnswer {
+        let resolution = try await resolve(scope, reader: reader, services: services, resources: resources)
+        // A record with no name is the scope bar's Untitled, so the cloud's heading is never empty.
+        let heading = resolution.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? appWords("wordcloud.scope.untitled", "Untitled") : resolution.title
+        var answer = CloudAnswer(scope: .init(signature: scope.signature, title: heading), lens: CloudRules.lens(lens),
+                                 chip: CloudRules.chip(lens: lens, fallbackSubseries: nil), fallbackSubseries: nil, source: "live",
+                                 state: "noTerms", message: nil, countLine: nil, terms: [], listed: 0, removed: 0,
+                                 settingsNotShown: nil, analyzeWithin: nil)
+        // `WordCloudDisplayState.resolve`'s check before any count: a lens whose tagger cannot serve it is not counted, and
+        // needs no index to say so.
+        let health = WordCloudLive.tagger.health
+        guard health.supports(lens) else {
+            let indexed = (try? await provider.servedIfReady())??.indexedVolumeIds ?? []
+            answer.analyzeWithin = CloudRules.analyzeWithin(resolution, indexed: indexed, resources: resources)
+            answer.state = "lensUnavailable"
+            answer.message = CloudRules.lensUnavailable(lens, health: health)
+            return answer
+        }
+        let served: ServedIndex
+        if let familyScope = familyScope(scope, resources: resources) {
+            let (atTheFamilys, ownList) = try await Blocking.run { () -> (Bool, Bool) in
+                let directory = resources.languageDirectory
+                let core = try? resources.familyClouds.core.value(in: directory).get()
+                let volumes: CloudVectorsFile? = if case .volume = familyScope { try? resources.familyClouds.volumes.value(in: directory).get() } else { nil }
+                // The scope's own list: neither its era's, for a volume the family holds none of or flagged thin, nor none.
+                let found = CloudRules.terms(forScope: familyScope, lens: lens, core: core, volumes: volumes)
+                return (core.map { reader.settings.areTheFamilys($0, lens: lens) } ?? false, found != nil && found?.fallbackSubseries == nil)
+            }
+            // At the family's settings the scope's own list, which needs no index. Under others, or where the family holds
+            // no list of the scope's own, a count of the documents the index holds of it; with no index served, one being
+            // installed, or none of its documents in it, the family's list filtered by the settings.
+            let held = atTheFamilys && ownList ? nil : (try? await provider.servedIfReady()) ?? nil
+            guard let held, holdsText(resolution, served: held) else {
+                return try await Blocking.run { Self.answer(familyScope, lens: lens, settings: reader.settings, resources: resources) }
+            }
+            served = held
+        } else {
+            served = try await provider.served()
+        }
+        answer.analyzeWithin = CloudRules.analyzeWithin(resolution, indexed: served.indexedVolumeIds, resources: resources)
+        let lexicons = try await Blocking.run { resources.familyClouds.lexicons(in: resources.directory) }
+        let hasReader = reader.user != nil
+        let heavy = WordCloudLive.isHeavy(scope)
+        // The documents, read here for a count within the request and for a scope of a reader's own, which its count is
+        // kept by; a heavy scope's job reads its own.
+        let keys = heavy ? nil : try await WordCloudLive.keys(resolution, served: served, services: services)
+        let key = WordCloudLive.key(resolution, lens: lens, settings: reader.settings, keys: keys)
+        let keeper = served.wordClouds
+        if let kept = await keeper.result(for: key) {
+            CloudRules.live(kept, into: &answer, lens: lens, settings: reader.settings, hasReader: hasReader, lexicons: lexicons)
+            return answer
+        }
+        if let services, heavy || (keys?.count ?? 0) > WordCloudLive.requestLimit {
+            let job = try await WordCloudLive.job(resolution, key: key, lens: lens, settings: reader.settings, keeper: keeper,
+                                                  provider: provider, resources: resources, services: services, requestedBy: reader.user)
+            // A job that ended between the two reads has kept its count.
+            if let kept = await keeper.result(for: key) {
+                CloudRules.live(kept, into: &answer, lens: lens, settings: reader.settings, hasReader: hasReader, lexicons: lexicons)
+                return answer
+            }
+            answer.state = "counting"
+            answer.message = CloudRules.countingMessage(scope)
+            answer.job = CloudJob(job)
+            return answer
+        }
+        let counted: [WordCloudDocumentKey]
+        if let keys { counted = keys } else { counted = try await WordCloudLive.keys(resolution, served: served, services: services) }
+        let settings = reader.settings
+        // Within the request, in its turn: a burst of requests takes the gate's turns, never every processor.
+        let result = try await WordCloudLive.gate.run {
+            try await WordCloudLive.count(counted, lens: lens, settings: settings, served: served, resources: resources)
+        }
+        await keeper.keep(result, for: key)
+        CloudRules.live(result, into: &answer, lens: lens, settings: settings, hasReader: hasReader, lexicons: lexicons)
+        return answer
+    }
+
+    /// Whether the served index holds any of a family scope's documents: any volume, for the corpus, or any of the
+    /// catalogue's volumes of a subseries, or the volume.
+    static func holdsText(_ resolution: CloudResolution, served: ServedIndex?) -> Bool {
+        guard let indexed = served?.indexedVolumeIds, !indexed.isEmpty else { return false }
+        switch resolution.documents {
+        case .corpus: return true
+        case .volumes(let ids): return ids.contains { indexed.contains($0) }
+        case .keys, .search, .dateRange: return true
+        }
+    }
+
+    /// One scope's cloud under one lens from the family's files, its list filtered by `settings`.
     static func answer(_ scope: CloudScope, lens: WordCloudLens, settings: CloudSettings, resources: ServerResources) -> CloudAnswer {
         let directory = resources.directory
         let bundle = resources.familyClouds
@@ -788,7 +1047,7 @@ enum WordCloudRoutes {
         let resolved = CloudRules.terms(forScope: scope, lens: lens, core: core, volumes: volumes)
         var answer = CloudAnswer(scope: .init(signature: scope.signature, title: title), lens: CloudRules.lens(lens),
                                  chip: CloudRules.chip(lens: lens, fallbackSubseries: resolved?.fallbackSubseries),
-                                 fallbackSubseries: resolved?.fallbackSubseries, state: "noCloud",
+                                 fallbackSubseries: resolved?.fallbackSubseries, source: "family", state: "noCloud",
                                  message: CloudRules.message(state: "noCloud", lens: lens), countLine: nil, terms: [],
                                  listed: 0, removed: 0, settingsNotShown: nil,
                                  analyzeWithin: CloudRules.analyzeWithin(scope, title: title, resources: resources))
@@ -877,8 +1136,9 @@ enum WordCloudSettingsRoutes {
                 return CloudSample(kept: kept.map { CloudAnswer.Term(term: $0.term, count: $0.count, polarity: nil) },
                                    sampleSize: CloudRules.canonicalSample.count,
                                    summary: CloudRules.benchSummary(kept: kept.count, sampleSize: CloudRules.canonicalSample.count),
-                                   // The web's own: the app samples its last cloud, which this server never counts.
-                                   provenance: "A stand-in sample: this server counts no clouds of its own for the sample to come from.")
+                                   // The web's own: the app samples the last All terms cloud its device counted and kept on disk,
+                                   // which a server, keeping its counts for its served index and for no one reader, has not.
+                                   provenance: "A stand-in sample, as the app’s own when its device has kept no counted cloud of its own to sample.")
             }
         }
     }

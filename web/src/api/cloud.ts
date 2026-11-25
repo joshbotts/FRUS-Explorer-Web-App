@@ -1,8 +1,9 @@
-// The Word Cloud (PLAN's S24i): the language family's clouds (S29d), which the server's own tagger counted from the
-// corpus, for the corpus, each subseries and each volume under the four lenses the page draws, read on the server by the
-// kit and filtered there by the reader's own Word Cloud settings,
-// which follow them in their synced preferences; and the settings' writes, the criteria through the preferences and the
-// hidden words through routes of their own, as the app's settings write each.
+// The Word Cloud (PLAN's S24i, S29e): the language family's clouds (S29d), which the server's own tagger counted from the
+// corpus, for the corpus, each subseries and each volume, and since S29e every scope the app's cloud takes counted live
+// on the server from the served index's text by the kit's count with the same tagger, under the reader's own Word Cloud
+// settings, which follow them in their synced preferences; a count that outlasts a request is a job, which the page
+// follows here; and the settings' writes, the criteria through the preferences and the hidden words through routes of
+// their own, as the app's settings write each.
 import { keepPreviousData, type QueryClient, queryOptions } from '@tanstack/react-query';
 import { getJSON } from './client';
 import { type Preferences, preferencesQuery } from './research';
@@ -15,6 +16,8 @@ export interface CloudLens {
   label: string;
   shortLabel: string;
   colorsBySentiment: boolean;
+  /** Whether the server's tagger draws it, by the kit's health: not the entity lenses, which name people, places and organizations. */
+  available: boolean;
 }
 
 export interface CloudContext {
@@ -24,6 +27,10 @@ export interface CloudContext {
   /** "Entire Corpus". */
   corpus: string;
   subseries: { id: string; volumes: { id: string; title: string }[] }[];
+  /** By Subject's categories that narrow, each with its sub-categories, each a scope. */
+  subjects: { label: string; subcategories: string[] }[];
+  /** The range Date Range opens on, the corpus's last year, `yyyy-MM-dd`. */
+  dateRange: { from: string; to: string };
   /** The clouds' own account, and the tagger that counted them, the language family's name and version (S29d). */
   made?: { generated: string; volumeCount: number; documentCount: number; topTermsPerList: number; family: string; line: string };
 }
@@ -35,13 +42,27 @@ export interface CloudTerm {
   polarity?: number;
 }
 
+/** A count's job, which the page follows until it ends. */
+export interface CloudJob {
+  id: string;
+  state: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  /** What it does now, or what it did, in the server's words. */
+  progress?: string;
+  /** How far through it is, 0 to 1, where it can tell. */
+  fraction?: number;
+  /** Why it failed, in the server's words. */
+  error?: string;
+}
+
 export interface CloudAnswer {
   scope: { signature: string; title: string };
   lens: CloudLens;
   /** The lens's name, and the era's where a thin volume's own list stood aside for its subseries'. */
   chip: string;
   fallbackSubseries?: string;
-  state: 'terms' | 'noTerms' | 'insufficientSignal' | 'noCloud';
+  /** The family's files, or a count of the scope's documents. */
+  source: 'family' | 'live';
+  state: 'terms' | 'noTerms' | 'insufficientSignal' | 'noCloud' | 'noIndexedText' | 'lensUnavailable' | 'counting';
   message?: { title: string; detail: string };
   countLine?: string;
   terms: CloudTerm[];
@@ -49,6 +70,12 @@ export interface CloudAnswer {
   removed: number;
   settingsNotShown?: string;
   analyzeWithin?: { label: string; volumeIds: string[]; scopeLabel: string };
+  /** How many documents a count read. */
+  documentCount?: number;
+  /** What a count says of itself: its documents, the tagger and whose settings. */
+  account?: string;
+  /** The job counting the scope, while it is `counting`. */
+  job?: CloudJob;
 }
 
 export interface CloudSample {
@@ -77,9 +104,24 @@ export function cloudQuery(scope: string, lens: string, settings: string) {
   return queryOptions({
     queryKey: ['cloud', scope, lens, settings],
     queryFn: ({ signal }) => getJSON<CloudAnswer>('/api/v1/cloud', params, signal),
-    staleTime: 5 * 60_000,
+    // A count's job is asked about again whenever the page comes back to it, never answered from what was kept.
+    staleTime: (query) => (query.state.data?.state === 'counting' ? 0 : 5 * 60_000),
     retry: false,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Where a count's job stands, asked every second while it waits or runs. */
+export function cloudJobQuery(id: string) {
+  return queryOptions({
+    queryKey: ['cloudJob', id],
+    queryFn: ({ signal }) => getJSON<CloudJob>(`/api/v1/cloud/jobs/${encodeURIComponent(id)}`, undefined, signal),
+    // One poll that fails is asked again before the page says so.
+    retry: 2,
+    refetchInterval: (query) => {
+      const state = query.state.data?.state;
+      return state === undefined || state === 'queued' || state === 'running' ? 1_000 : false;
+    },
   });
 }
 

@@ -64,6 +64,8 @@ public final class ServedIndex: Sendable {
     /// Archival Analytics' Your Library over this index (PLAN's S24h): the archival profile of the volumes it holds,
     /// computed once and kept while the index is served, as the app's view loads it once.
     let archivalLibrary = KeptSeries<Int, ArchivalLibraryProfile>(capacity: 1)
+    /// The Word Cloud's live counts over this index (PLAN's S29e), each kept by its scope, lens, settings and tagger.
+    let wordClouds = WordCloudKeeper()
     /// The volumes the index holds documents of: what a working corpus and a volume scope resolve
     /// against (PLAN's S17e), as the app resolves them against the volumes its device has indexed.
     public let indexedVolumeIds: Set<String>
