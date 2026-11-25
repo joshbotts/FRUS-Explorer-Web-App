@@ -33,7 +33,7 @@ import Testing
              let found = ClustersAxis.membershipRows(in: map, clusterId: id)
              return ClustersAxis.documentKeys(rows: found.rows, index: vectorIndex)
              """#,
-             Self.server, #"ClustersAxis.documentKeys(rows: ClustersAxis.membershipRows(in: plane.map.vectors, clusterId: cluster.id).rows,"#),
+             Self.server, #"ClustersAxis.documentKeys(rows: ClustersAxis.membershipRows(in: plane.map.vectors, clusterId: id).rows,"#),
             (Self.view, #"ForEach(SemanticMapRegionRows.eraRows(cluster), id: \.label) { row in"#,
              Self.server, #"eraRows: SemanticMapRegionRows.eraRows(cluster, locale: SearchItem.locale)"#),
             (Self.view, #"LabeledContent(String(localized: "browser.clusters.drill.count", defaultValue: "Documents in the series"), value: cluster.documentCount.formatted())"#,
@@ -43,7 +43,9 @@ import Testing
             (Self.view, #"private static let pageSize = 500"#, Self.api, #"export const clusterPage = 500;"#),
             (Self.view, #"shownCount: min(loadedKeys.count, Self.pageSize),"#, Self.server, #"let shown = min(asked, keys.count)"#),
             (Self.view, #"shown = min(memberKeys.count, shown + pageSize)"#,
-             Self.api, #"last.shown < last.total ? { shown: Math.min(last.shown + clusterPage, last.total), after: last.shown } : undefined,"#),
+             Self.api, #"last.shown < last.total ? { shown: Math.min(last.shown + clusterPage, last.total), after: last.shown, layout: last.layoutIdentity } : undefined,"#),
+            (Self.view, #"private static let pageSize = 500"#,
+             Self.server, #"guard asked <= after + ClustersRoutes.pageSize else {"#),
             (Self.view, #"ForEach(CorporaAxis.volumeSections(from: Array(keys.prefix(shownCount)))) { section in"#,
              Self.server, #"let listed = Array(keys.prefix(shown))"#),
             (Self.view, #"if shownCount < keys.count { showMoreSection }"#, Self.screen, #"{pages.hasNextPage && ("#),
@@ -84,7 +86,12 @@ import Testing
             // The confirmation, amber for a capture cut short at the app's 7,500.
             (Self.view, #"if savedCapture.isTruncated {"#, Self.screen, #"warns: truncated,"#),
             (Self.view, #".foregroundStyle(.orange)"#, Self.screen, #"<p className={saved?.warns ? 'note warning' : 'note'} role="status">"#),
-            (Self.view, #".disabled(keys.isEmpty)"#, Self.screen, #"<button type="button" aria-disabled={saving ? 'true' : undefined} onClick={() => void save(first)}>"#),
+            (Self.view, #".disabled(keys.isEmpty)"#,
+             Self.screen, #"<button type="button" disabled={first.total === 0} aria-disabled={saving ? 'true' : undefined} onClick={() => void save(first)}>"#),
+            (Self.view, #".disabled(keys.isEmpty)"#, Self.server, #"guard !capture.documentKeys.isEmpty else {"#),
+            // The app reloads its rows' metadata when the count of indexed volumes changes; the web lists its pages again.
+            (Self.view, #".clusterMetadataLoad(clusterId: clusterId, indexedVolumeCount: appState.indexedVolumeIds.count) {"#,
+             Self.screen, #"const mixed = loaded !== undefined && loaded.some((page) => page.indexedVolumes !== loaded[0]?.indexedVolumes);"#),
             // See on the semantic map: the map on the region, its lens Regions, against the layout's identity.
             (Self.view, #"if let onSeeMap, let digest = BundledSemanticMap.index?.layoutIdentity {"#,
              Self.screen, #"<Link to="/analytics/semantic" search={{ region: first.id, layout: first.layoutIdentity }}>"#),

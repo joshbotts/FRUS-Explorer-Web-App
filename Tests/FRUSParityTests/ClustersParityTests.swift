@@ -118,6 +118,7 @@ import Testing
         // ends and after the capture's 7,500.
         let ids = [3, 122, 102, 75, 115, 72]
         try await ServedFixture.run { client, _ in
+            var listings: [Int: [Section]] = [:]
             for id in ids {
                 let cluster = try #require(kit.clusters.first { $0.id == id })
                 let keys = Self.members(kit, cluster)
@@ -134,7 +135,7 @@ import Testing
                     let answer = try await Self.documents(client, id, shown: page.shown, after: page.after, layout: layout)
                     #expect(answer.id == id && answer.label == ClustersAxis.rowLabel(cluster) && answer.name == ClustersAxis.mapStyleName(cluster))
                     #expect(answer.layoutIdentity == layout && answer.documentCount == cluster.documentCount && answer.total == keys.count)
-                    #expect(answer.shown == page.shown && answer.after == page.after)
+                    #expect(answer.shown == page.shown && answer.after == page.after && answer.indexedVolumes == Self.served.count)
                     let rows = SemanticMapRegionRows.eraRows(cluster, locale: Locale(identifier: "en_US"))
                     #expect(answer.eraRows == rows.map { .init(label: $0.label, count: $0.count) })
                     let coverage = WorkingCorpusResolver(indexedVolumeIds: Self.served).resolve(documentKeys: keys)
@@ -143,11 +144,13 @@ import Testing
                     #expect(answer.sections == expected, "cluster \(id), \(page.shown) shown after \(page.after)")
                     pages.append(answer)
                 }
-                // The pages merged as the browser merges them are the whole listing at once, its members the kit's, in order.
+                // The pages merged as the browser merges them are the app's listing of every member they list, its members
+                // the kit's, in order.
                 let shown = asked.last!.shown
-                let whole = try await Self.documents(client, id, shown: shown, layout: layout)
                 let sections = Self.merged(pages)
-                #expect(sections == whole.sections, "cluster \(id)'s pages merged are its first \(shown) at once")
+                let whole = try await Self.expected(Array(keys.prefix(shown)), after: 0, kit: kit, pipeline: pipeline)
+                #expect(sections == whole, "cluster \(id)'s pages merged are its first \(shown) listed at once")
+                listings[id] = sections
                 let listed = Set(sections.flatMap { $0.documents.map { "\($0.volumeId)/\($0.documentId)" } })
                 #expect(listed == Set(keys.prefix(shown)) && listed.count == shown)
                 #expect(sections.map(\.volumeId) == sections.map(\.volumeId).sorted())
@@ -160,8 +163,7 @@ import Testing
                 if id != 3 && id != 122 { #expect(sections.contains { $0.indexed && $0.documents.contains { $0.displayTitle != nil } }) }
             }
             // frus1961-63v06's d1 comes first of the volume's 79 in "edc nato nuclear": its earliest day, the tie by id.
-            let edc = try await Self.documents(client, 115, shown: 8_500, layout: layout)
-            let v06 = try #require(edc.sections.first { $0.volumeId == "frus1961-63v06" })
+            let v06 = try #require(listings[115]?.first { $0.volumeId == "frus1961-63v06" })
             let opening = v06.documents.prefix(4).map { "\($0.documentId) \($0.dateISO ?? "undated")" }
             #expect(v06.documents.first?.documentId == "d1" && v06.documents.count == 79, "\(opening)")
             #expect(v06.documents.first?.displayTitle == "1. Message From Chairman Khrushchev to President-elect Kennedy",

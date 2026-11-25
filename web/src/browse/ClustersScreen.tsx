@@ -8,7 +8,7 @@
 // the layout's identity, which the map's link carries too, and a link from another layout is refused.
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import {
   clusterDocumentsQuery,
@@ -132,9 +132,30 @@ export function ClusterScreen() {
   return <ClusterDrill key={`${clusterId}|${layout ?? ''}`} clusterId={clusterId} layout={layout} />;
 }
 
-/** The id of a volume's section heading, which the keyboard reaches when the last "Show more" takes its button away. */
+/** The id of a volume's section heading. */
 function sectionHeading(volumeId: string): string {
   return `cluster-volume-${volumeId}`;
+}
+
+/** The id of a listed document's row, its link where the server holds its volume, which the keyboard can be sent to. */
+function documentRow(volumeId: string, documentId: string): string {
+  return `cluster-document-${volumeId}-${documentId}`;
+}
+
+/**
+ * The row of the first document the last page listed, in the order the list draws them: in the volume a page boundary
+ * split, the first of its documents the pages before had not listed, or else the first of the first volume it added.
+ */
+export function firstNewlyListed(pages: readonly ClusterDocuments[]): string | undefined {
+  const last = pages.at(-1);
+  if (!last) return undefined;
+  const before = new Map(clusterSections(pages.slice(0, -1)).map((section) => [section.volumeId, new Set(section.documents.map((each) => each.documentId))]));
+  for (const section of last.sections) {
+    const listed = before.get(section.volumeId);
+    const added = section.documents.find((each) => !listed?.has(each.documentId));
+    if (added) return documentRow(section.volumeId, added.documentId);
+  }
+  return undefined;
 }
 
 function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string | undefined }) {
@@ -144,7 +165,12 @@ function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string
   const loaded = pages.data?.pages;
   const first = loaded?.[0];
   const last = loaded?.at(-1);
-  const title = first?.label ?? copy.clusters.title;
+  // A first page that fails, or any page of another layout than the address names or the first was listed in, which
+  // would list another region's documents under this one's name, is no list; a later page that fails otherwise keeps the
+  // pages before it, and says so by its button.
+  const layoutChanged = pages.error instanceof ApiError && pages.error.code === 'LAYOUT_CHANGED';
+  const failed = (pages.isError && loaded === undefined) || layoutChanged;
+  const title = failed ? copy.clusters.unavailableTitle : (first?.label ?? copy.clusters.title);
   useDocumentTitle(title);
   useHeadingReady(!pages.isPending);
   const [saving, setSaving] = useState(false);
@@ -152,17 +178,28 @@ function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string
   const [failure, setFailure] = useState<string | null>(null);
   const more = useRef<HTMLButtonElement>(null);
   // Whether "Show more" had the keyboard when it was pressed, so that the last page, which takes the button away, can
-  // send the keyboard to the first section it listed rather than to the page.
+  // send the keyboard to the first document it listed rather than leave it on the page.
   const keepFocus = useRef(false);
 
-  useEffect(() => {
-    if (!keepFocus.current || pages.isFetchingNextPage) return;
+  // Before the browser paints: the button is gone, so the keyboard is on the page, unless the reader moved it meanwhile.
+  useLayoutEffect(() => {
+    if (!keepFocus.current || pages.isFetchingNextPage || !loaded) return;
     keepFocus.current = false;
-    if (last && last.after > 0 && last.shown >= last.total) {
-      const volume = last.sections[0]?.volumeId;
-      if (volume !== undefined) document.getElementById(sectionHeading(volume))?.focus();
-    }
-  }, [last, pages.isFetchingNextPage]);
+    const final = loaded.at(-1);
+    if (!final || final.after === 0 || final.shown < final.total) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    const row = firstNewlyListed(loaded);
+    if (row !== undefined) document.getElementById(row)?.focus();
+  }, [loaded, pages.isFetchingNextPage]);
+
+  // Pages listed against different states of the served index, as when it indexes a volume between two of them, are
+  // listed again from the first, as the app's drill reloads its rows when the count of indexed volumes changes.
+  const { refetch, isFetching, isError } = pages;
+  const mixed = loaded !== undefined && loaded.some((page) => page.indexedVolumes !== loaded[0]?.indexedVolumes);
+  useEffect(() => {
+    if (mixed && !isFetching && !isError) void refetch();
+  }, [mixed, isFetching, isError, refetch]);
 
   function showMore() {
     if (!pages.hasNextPage || pages.isFetchingNextPage) return;
@@ -173,6 +210,8 @@ function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string
   async function save(region: ClusterDocuments) {
     if (saving) return;
     setSaving(true);
+    // Emptied first, so that a second save's line, the same words within a minute, is said again.
+    setSaved(null);
     setFailure(null);
     try {
       const corpus = await saveClusterCorpus(client, region.id, region.layoutIdentity);
@@ -184,7 +223,6 @@ function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string
         warns: truncated,
       });
     } catch (error) {
-      setSaved(null);
       setFailure(errorMessage(error));
     } finally {
       setSaving(false);
@@ -192,13 +230,11 @@ function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string
   }
 
   const sections = loaded ? clusterSections(loaded) : [];
-  // A page after the first that fails keeps the pages before it, and says so by its button.
-  const failed = pages.isError && loaded === undefined;
   return (
     <section className="screen browse cluster">
-      <Breadcrumb crumbs={[{ label: copy.clusters.title, axis: 'clusters' }]} current={failed ? copy.clusters.unavailableTitle : title} />
+      <Breadcrumb crumbs={[{ label: copy.clusters.title, axis: 'clusters' }]} current={title} />
       <h1 tabIndex={-1} data-loading={pages.isPending ? 'true' : undefined}>
-        {failed ? copy.clusters.unavailableTitle : title}
+        {title}
       </h1>
       {failed ? (
         <ClustersProblem error={pages.error} drill />
@@ -230,7 +266,7 @@ function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string
               {copy.clusters.seeOnMap}
             </Link>
             {me.data?.userData === true && (
-              <button type="button" aria-disabled={saving ? 'true' : undefined} onClick={() => void save(first)}>
+              <button type="button" disabled={first.total === 0} aria-disabled={saving ? 'true' : undefined} onClick={() => void save(first)}>
                 {copy.clusters.saveCorpus}
               </button>
             )}
@@ -277,8 +313,9 @@ function ClusterDrill({ clusterId, layout }: { clusterId: string; layout: string
  */
 const ClusterVolume = memo(function ClusterVolume({ section }: { section: WorkingCorpusDetail['sections'][number] }) {
   const heading = sectionHeading(section.volumeId);
+  // A section, not a landmark: a long list would make dozens, and two of the catalogue's volumes share a title.
   return (
-    <section className="corpus-volume" aria-labelledby={heading}>
+    <section className="corpus-volume">
       <h2 id={heading} tabIndex={-1}>
         {section.title ?? section.volumeId}
       </h2>
@@ -286,13 +323,17 @@ const ClusterVolume = memo(function ClusterVolume({ section }: { section: Workin
         {section.documents.map((document) =>
           section.indexed ? (
             <li key={document.documentId}>
-              <Link to="/doc/$volumeId/$documentId" params={{ volumeId: document.volumeId, documentId: document.documentId }}>
+              <Link
+                id={documentRow(document.volumeId, document.documentId)}
+                to="/doc/$volumeId/$documentId"
+                params={{ volumeId: document.volumeId, documentId: document.documentId }}
+              >
                 {document.displayTitle ?? document.documentId}
               </Link>
               {document.dateISO && <p className="meta">{document.dateISO}</p>}
             </li>
           ) : (
-            <li key={document.documentId} className="not-indexed">
+            <li key={document.documentId} id={documentRow(document.volumeId, document.documentId)} tabIndex={-1} className="not-indexed">
               <span>
                 {document.volumeId} · {document.documentId}
               </span>

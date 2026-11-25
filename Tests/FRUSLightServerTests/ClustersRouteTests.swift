@@ -38,6 +38,10 @@ import Testing
                 ("/api/v1/clusters/3?shown=500&shown=1000", 400, "INVALID_PARAMETER"),
                 ("/api/v1/clusters/3?shown=500&after=500", 400, "INVALID_PARAMETER"),
                 ("/api/v1/clusters/122?shown=500&after=300", 400, "INVALID_PARAMETER"),
+                // A page lists at most 500 members past those listed before, as "Show more" adds them.
+                ("/api/v1/clusters/3?shown=501", 400, "INVALID_PARAMETER"),
+                ("/api/v1/clusters/3?shown=37899", 400, "INVALID_PARAMETER"),
+                ("/api/v1/clusters/3?shown=1001&after=500", 400, "INVALID_PARAMETER"),
                 ("/api/v1/clusters/3?page=2", 400, "UNKNOWN_PARAMETER"),
             ] {
                 let (answered, named) = try await SemanticMapReadingRouteTests.status(client, uri)
@@ -59,20 +63,27 @@ import Testing
             let index = try decode(ClustersIndex.self, try await client.execute(uri: "/api/v1/clusters", method: .get))
             #expect(index.clusters.count == 140 && index.clusters.first?.id == 3)
             let page = try decode(ClusterDocuments.self, try await client.execute(uri: "/api/v1/clusters/115", method: .get))
-            #expect(page.total == 10_914 && page.shown == 500 && page.after == 0 && page.coverage == nil)
+            #expect(page.total == 10_914 && page.shown == 500 && page.after == 0 && page.coverage == nil && page.indexedVolumes == nil)
             #expect(page.sections.reduce(0) { $0 + $1.documents.count } == 500)
             #expect(page.sections.allSatisfy { !$0.indexed && $0.documents.allSatisfy { $0.displayTitle == nil && $0.dateISO == nil } })
             #expect(page.sections.allSatisfy { $0.title != nil }, "every volume the map places is in the catalogue")
             // The next page gives the sections it changed: the volume the boundary split, whole, and the volumes after it.
             let next = try decode(ClusterDocuments.self, try await client.execute(uri: "/api/v1/clusters/115?shown=1000&after=500", method: .get))
             #expect(next.shown == 1_000 && next.after == 500)
+            // The 501st member's volume, from a page of it alone.
+            let one = try decode(ClusterDocuments.self, try await client.execute(uri: "/api/v1/clusters/115?shown=501&after=500", method: .get))
+            let split = try #require(one.sections.first?.volumeId)
+            #expect(one.sections.count == 1)
             let boundary = try #require(page.sections.last)
-            if next.sections.first?.volumeId == boundary.volumeId {
-                #expect(next.sections.first!.documents.count > boundary.documents.count)
+            if split == boundary.volumeId {
+                #expect(next.sections.first?.volumeId == split, "the volume the boundary split comes first, whole")
+                #expect((next.sections.first?.documents.count ?? 0) > boundary.documents.count)
+            } else {
+                #expect(!next.sections.contains { $0.volumeId == boundary.volumeId }, "a volume the first page ended is not given again")
             }
             #expect(Set(next.sections.map(\.volumeId)).intersection(page.sections.dropLast().map(\.volumeId)).isEmpty)
             // Asked past its members, a page lists them all.
-            let whole = try decode(ClusterDocuments.self, try await client.execute(uri: "/api/v1/clusters/122?shown=1000", method: .get))
+            let whole = try decode(ClusterDocuments.self, try await client.execute(uri: "/api/v1/clusters/122?shown=500", method: .get))
             #expect(whole.shown == 254 && whole.total == 254)
         }
     }

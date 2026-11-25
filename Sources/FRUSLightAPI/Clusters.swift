@@ -17,9 +17,11 @@
 // A region's id means something only in the layout that minted it, so the documents and the save take the layout's
 // identity (`MapIndex.layoutIdentity`) beside it, as See on the Semantic Map's link does, and refuse another layout's.
 // The app's drill pages its members 500 at a time, "Show more" adding 500; here a page names how many are listed and
-// how many were listed before, and answers the sections of the listed members, less those of volumes none of whose
-// listed members came after the ones listed before, so that a browser replaces the one volume a page boundary split and
-// adds the rest, each section ordered over every listed member as the app orders it.
+// how many were listed before, at most 500 more, and answers the sections of the listed members, less those of volumes
+// none of whose listed members came after the ones listed before, so that a browser replaces the one volume a page
+// boundary split and adds the rest, each section ordered over every listed member as the app orders it. Each page says
+// how many volumes the served index held when it was listed, as the app's drill reloads its rows when that count
+// changes, so that a browser lists its pages again rather than keep rows listed against another index.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -76,6 +78,10 @@ public struct ClusterDocuments: Codable, Equatable, Sendable, ResponseEncodable 
     public var total: Int
     /// What the served index holds of the members, by the kit's resolver; absent while no index is served.
     public var coverage: CorpusCoverage?
+    /// How many volumes the served index held when the page was listed, nil while none is served: the count the app's
+    /// drill reloads its rows' titles and dates on, by which a browser lists its pages again when one is listed
+    /// against another index than the first.
+    public var indexedVolumes: Int?
     /// How many of the members, in volume order, the sections list: the first `shown`.
     public var shown: Int
     /// How many were listed before, whose volumes' sections this answer leaves out where none of the members after them is theirs.
@@ -93,8 +99,9 @@ actor ClustersReading {
     let reading: SemanticMapReading
     let provider: ServedIndexProvider
     let resources: ServerResources
-    /// The last few regions' members, in volume order, by region id: the largest holds 37,899.
-    private var members: [(id: Int, keys: [String])] = []
+    /// The last few regions' members, in volume order, by region id, the latest asked first: the largest holds 37,899.
+    /// Each is the scan that finds them, so that two first asks of a region wait for one scan.
+    private var members: [(id: Int, scan: Task<[String], any Error>)] = []
 
     init(reading: SemanticMapReading, provider: ServedIndexProvider, resources: ServerResources) {
         self.reading = reading
@@ -137,14 +144,26 @@ actor ClustersReading {
     /// Every member of `cluster`, `"volumeId/documentId"`, in row order, which is volume order: the kit's membership
     /// (`membershipRows`) keyed by the vectors' index (`documentKeys`), kept for the last few regions asked.
     func members(of cluster: SemanticMapArtifacts.Cluster, plane: SemanticMapReading.Plane) async throws -> [String] {
-        if let kept = members.first(where: { $0.id == cluster.id }) { return kept.keys }
-        let keys = try await Blocking.run {
-            ClustersAxis.documentKeys(rows: ClustersAxis.membershipRows(in: plane.map.vectors, clusterId: cluster.id).rows,
-                                      index: plane.index)
+        let id = cluster.id
+        let scan: Task<[String], any Error>
+        if let at = members.firstIndex(where: { $0.id == id }) {
+            scan = members.remove(at: at).scan
+        } else {
+            scan = Task {
+                try await Blocking.run {
+                    ClustersAxis.documentKeys(rows: ClustersAxis.membershipRows(in: plane.map.vectors, clusterId: id).rows,
+                                              index: plane.index)
+                }
+            }
         }
-        members.insert((cluster.id, keys), at: 0)
+        members.insert((id, scan), at: 0)
         if members.count > 4 { members.removeLast() }
-        return keys
+        do {
+            return try await scan.value
+        } catch {
+            members.removeAll { $0.id == id }
+            throw error
+        }
     }
 
     /// A region's documents: its card's facts, what the served index holds of its members, and the sections of the first
@@ -153,9 +172,13 @@ actor ClustersReading {
         let plane = try await plane()
         let cluster = try cluster(id, layout: try query.single("layout"), plane: plane)
         let keys = try await members(of: cluster, plane: plane)
-        let asked = try query.integer("shown", in: 1...ClustersRoutes.shownLimit, default: ClustersRoutes.pageSize)
-        let shown = min(asked, keys.count)
         let after = try query.integer("after", in: 0...ClustersRoutes.shownLimit, default: 0)
+        let asked = try query.integer("shown", in: 1...ClustersRoutes.shownLimit, default: after + ClustersRoutes.pageSize)
+        // A page, as "Show more" adds one: never more than 500 members past those listed before.
+        guard asked <= after + ClustersRoutes.pageSize else {
+            throw APIProblem.invalidParameter("shown", "lists at most \(ClustersRoutes.pageSize) members past after, \(after), not \(asked)")
+        }
+        let shown = min(asked, keys.count)
         guard after < max(shown, 1) else {
             throw APIProblem.invalidParameter("after", "must be fewer than the \(shown) members listed, not \(after)")
         }
@@ -169,7 +192,7 @@ actor ClustersReading {
             eraRows: SemanticMapRegionRows.eraRows(cluster, locale: SearchItem.locale).map { .init(label: $0.label, count: $0.count) },
             total: keys.count,
             coverage: served.map { CorpusCoverage(WorkingCorpusResolver(indexedVolumeIds: $0.indexedVolumeIds).resolve(documentKeys: keys)) },
-            shown: shown, after: after, sections: sections)
+            indexedVolumes: served?.indexedVolumeIds.count, shown: shown, after: after, sections: sections)
     }
 
     /// Save as Working Corpus, as the app's drill saves its cluster (`saveAsWorkingCorpus`): the kit's capture of every
@@ -180,6 +203,10 @@ actor ClustersReading {
         let cluster = try cluster(id, layout: layout, plane: plane)
         let keys = try await members(of: cluster, plane: plane)
         let capture = ClustersAxis.capture(keys: keys, cluster: cluster)
+        // The app's Save waits for a member (`.disabled(keys.isEmpty)`), and a search's capture refuses an empty set.
+        guard !capture.documentKeys.isEmpty else {
+            throw APIProblem(.badRequest, code: "NOTHING_TO_CAPTURE", detail: "Cluster \(id) has no documents to save as a working corpus.")
+        }
         let name = SemanticMapCapture.corpusName(
             regionNames: capture.regionNames,
             stamp: SemanticMapCapture.stamp(for: time, locale: SearchItem.locale, timeZone: timeZone))
@@ -200,7 +227,7 @@ actor ClustersReading {
 enum ClustersRoutes {
     /// How many members the app's drill lists first and adds at each "Show more" (`ClusterDocumentsView.pageSize`).
     static let pageSize = 500
-    /// The most a page may list: more than any region holds.
+    /// The most members a page may name: more than any region holds.
     static let shownLimit = 1_000_000
 
     struct Save: Decodable {

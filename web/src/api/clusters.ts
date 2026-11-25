@@ -51,7 +51,9 @@ export interface ClusterDocuments {
   total: number;
   /** What the served index holds of the members; absent while no index is served. */
   coverage?: CorpusCoverage;
-  /** How many members, in volume order, the page lists; and how many the pages before it listed. */
+  /** How many volumes the served index held when the page was listed, absent while none is served. */
+  indexedVolumes?: number;
+  /** How many members, in volume order, the page lists, at most 500 more than the pages before it listed. */
   shown: number;
   after: number;
   /** The listed members' sections: every one, or after the first page, those of the volumes with a member it added. */
@@ -68,17 +70,21 @@ export const clustersIndexQuery = queryOptions({
   retry: false,
 });
 
-/** A page of a region's documents: the members listed, and those listed by the pages before. */
+/**
+ * A page of a region's documents: the members listed, those listed by the pages before, and after the first page the
+ * layout the first was listed in, so that every page is of one layout's region.
+ */
 interface ClusterPageParam {
   shown: number;
   after: number;
+  layout?: string;
 }
 
 /**
  * A region's documents, 500 more at each page, as the app's "Show more" adds them, by the id its address names, in the
- * layout `layout` names: every section of the first page, and after it the sections a page changed, which
- * `clusterSections` merges. Kept for half an hour, so that a document opened from deep in the list comes back to the
- * list as it was.
+ * layout `layout` names, or, without one, the layout the first page was listed in: every section of the first page, and
+ * after it the sections a page changed, which `clusterSections` merges. Kept for half an hour, so that a document opened
+ * from deep in the list comes back to the list as it was, and listed again after five minutes.
  */
 export function clusterDocumentsQuery(id: string, layout: string | undefined) {
   return infiniteQueryOptions({
@@ -86,13 +92,14 @@ export function clusterDocumentsQuery(id: string, layout: string | undefined) {
     queryFn: ({ signal, pageParam }: { signal: AbortSignal; pageParam: ClusterPageParam }) => {
       const params = new URLSearchParams({ shown: String(pageParam.shown) });
       if (pageParam.after > 0) params.set('after', String(pageParam.after));
-      if (layout) params.set('layout', layout);
+      const pinned = pageParam.layout ?? layout;
+      if (pinned) params.set('layout', pinned);
       return getJSON<ClusterDocuments>(`/api/v1/clusters/${encodeURIComponent(id)}`, params, signal);
     },
     initialPageParam: { shown: clusterPage, after: 0 } as ClusterPageParam,
     getNextPageParam: (last: ClusterDocuments): ClusterPageParam | undefined =>
-      last.shown < last.total ? { shown: Math.min(last.shown + clusterPage, last.total), after: last.shown } : undefined,
-    staleTime: 60_000,
+      last.shown < last.total ? { shown: Math.min(last.shown + clusterPage, last.total), after: last.shown, layout: last.layoutIdentity } : undefined,
+    staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
     refetchOnWindowFocus: false,
     retry: false,

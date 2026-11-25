@@ -6,7 +6,7 @@ import { clusterSections } from '../api/clusters';
 import type { WorkingCorpus } from '../api/searchSets';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { sent } from '../test/notes';
-import { barHeight } from './ClustersScreen';
+import { barHeight, firstNewlyListed } from './ClustersScreen';
 
 afterEach(() => {
   cleanup();
@@ -64,7 +64,7 @@ const served: Section = {
 };
 
 /** A region of 1,100 members: three pages, the second finishing the volume the first page's boundary split. */
-function page(shown: number, after: number): ClusterDocuments {
+function page(shown: number, after: number, indexedVolumes = 3): ClusterDocuments {
   const sections =
     after === 0
       ? [named('frus1952-54v01', ['d1', 'd2']), served]
@@ -83,6 +83,7 @@ function page(shown: number, after: number): ClusterDocuments {
     ],
     total: 1_100,
     coverage: { indexedCount: 79, totalCount: 1_100, missingVolumeIds: ['frus1952-54v01'], isComplete: false },
+    indexedVolumes,
     shown,
     after,
     sections,
@@ -204,11 +205,12 @@ describe('A cluster’s documents', () => {
     ]);
     expect(screen.getByRole('button', { name: 'Show more' })).toBe(more);
     expect(more.hasAttribute('disabled')).toBe(false);
-    // The last page takes the button away: the keyboard goes to the first section it listed.
+    // The last page takes the button away: the keyboard goes to the first document it listed.
     more.focus();
     await userEvent.keyboard('{Enter}');
-    const last = await screen.findByRole('heading', { level: 2, name: 'Volume frus1964-68v12' });
-    await waitFor(() => expect(document.activeElement).toBe(last));
+    await screen.findByRole('heading', { level: 2, name: 'Volume frus1964-68v12' });
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('frus1964-68v12 · d3Not indexed on this server'));
+    expect(document.activeElement?.tagName).toBe('LI');
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
     const asked = fetch.mock.calls.map(([url]) => new URL(String(url), 'http://localhost')).filter((url) => url.pathname === '/api/v1/clusters/115');
     expect(asked.map((url) => url.search)).toEqual([
@@ -216,6 +218,42 @@ describe('A cluster’s documents', () => {
       `?shown=1000&after=500&layout=${encodeURIComponent(layout)}`,
       `?shown=1100&after=1000&layout=${encodeURIComponent(layout)}`,
     ]);
+  });
+
+  it('names the first document a page listed: in the volume a boundary split, the first it had not listed', () => {
+    expect(firstNewlyListed([page(500, 0), page(1_000, 500)])).toBe('cluster-document-frus1961-63v06-d40');
+    expect(firstNewlyListed([page(500, 0), page(1_000, 500), page(1_100, 1_000)])).toBe('cluster-document-frus1964-68v12-d3');
+    expect(firstNewlyListed([])).toBeUndefined();
+  });
+
+  it('lists its pages again from the first when one was listed against another state of the served index', async () => {
+    let indexed = 2;
+    const fetch = server({ '/api/v1/clusters/115': (url: URL) => page(Number(url.searchParams.get('shown')), Number(url.searchParams.get('after') ?? '0'), indexed) });
+    renderAt(`/browse/clusters/115?layout=${encodeURIComponent(layout)}`);
+    const more = await screen.findByRole('button', { name: 'Show more' });
+    // The server indexes a volume between the first page and the second.
+    indexed = 3;
+    await userEvent.click(more);
+    await screen.findByText('Showing the first 1,000 of 1,100 documents, in volume order.');
+    await waitFor(() => {
+      const asked = fetch.mock.calls.map(([url]) => new URL(String(url), 'http://localhost')).filter((url) => url.pathname === '/api/v1/clusters/115');
+      expect(asked.map((url) => url.searchParams.get('shown'))).toEqual(['500', '1000', '500', '1000']);
+    });
+  });
+
+  it('says a later page of another layout is no list of this region', async () => {
+    server({
+      '/api/v1/clusters/115': (url: URL) =>
+        url.searchParams.get('after') === '500'
+          ? new ProblemAnswer(409, 'LAYOUT_CHANGED', 'Cluster 115 was named in another layout of the map.')
+          : page(500, 0),
+    });
+    renderAt('/browse/clusters/115');
+    await userEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+    expect((await screen.findByRole('heading', { level: 1, name: 'Clusters Unavailable' })).textContent).toBe('Clusters Unavailable');
+    expect(screen.getByRole('alert').textContent).toBe('This link names a cluster of another release of the semantic map, which this server no longer draws. Clusters');
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+    expect(document.title).toContain('Clusters Unavailable');
   });
 
   it('merges the pages’ sections, a later page’s section replacing an earlier one of its volume where it stands', () => {
