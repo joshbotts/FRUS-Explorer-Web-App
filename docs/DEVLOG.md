@@ -108,6 +108,11 @@ The branch was cut from `main` at `22cccd8`, #190's merge. It changes `Sources/F
 
 **Suites:** `scripts/swift --postgres test` passed 5,581 tests in 21 targets in 7 min 41 s, the build included, apart from the one named skip: #190's 5,580 and this test. `scripts/compose-smoke` passed over this branch's image in 87 s. That run had neither web/e2e nor the parity stage's image, so check 9's two halves and checks 2 and 8 over the Standalone index were skipped; CI runs them all.
 
+**CI's first run** was at `7cd8d5c`, on the merge with `main` at `eaaad25`, S29g's. Paths, web, the image's two builds and compose passed. Swift failed one test: FRUSLightCoreTests' `ImportCoordinatorTests.aResetRemovesNoIndexMadeLiveAfterItWasAskedFor`, `main`'s race between a reset and a start, which #193 fixes.
+- This branch's QueryEncoderTests passed, the new test in 18.1 s. Under the job's load every test of that suite took 18 to 22 s, the stand-in's start included.
+- Running it again would have tested the same merge. Once #193 merged, GitHub reported this pull request conflicting, since both entries had gone directly above #190's. `main` was merged once, at `56bc8b9`, with this entry put above #193's.
+- The same push corrects the new test's failure message: a stop of between 10 and 30 s fails the test without reaching the SIGKILL, which the message had named.
+
 **Install guide.** `docs/INSTALL.md` says the encoder stops three minutes after the last search by meaning and stops with the server, and gives no time for either. Both now happen at the SIGTERM, so it stays true unchanged.
 
 **Left as it was.**
