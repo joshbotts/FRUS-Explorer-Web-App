@@ -8,7 +8,7 @@ Not started: `PLAN.md`'s row S31. The session that does it replaces this line, k
 
 ## Session 29g: the shares chips on Related Documents
 
-25 November 2026 · branch `claude/gifted-noyce-974137` · [#190](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/190) · upstream `efd73ecb`, S27c's, unchanged
+25 November 2026 · branch `claude/gifted-noyce-974137` · [#191](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/191) · upstream `efd73ecb`, S27c's, unchanged
 
 Phase 4's row S29g, in wave 8 beside S28e on the map's track and S30c on the Visits track: Related Documents' shares chips, a row matched by meaning or by wording saying what it shares with the anchor. No upstream pull request, no pin move and no migration, and no change to `Package.swift`, the lockfile, the image or `compose.yaml`. The worktree was cut from `main` at `567d59c`, #189's merge; CI's [#188](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/188) merged during the row, and a trial merge with it was clean, so `main` was not merged (rule 8). It is the S29 group's last row, so the group's shared records are its own (PLAN, How phase 4's sessions run beside each other, rule 4).
 
