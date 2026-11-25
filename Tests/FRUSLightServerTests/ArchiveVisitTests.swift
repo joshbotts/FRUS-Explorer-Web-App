@@ -282,6 +282,11 @@ import Testing
             #expect(up.tiers.map(\.displayName) == ["First morning", "If time allows", "Priority 3"], "a tier's place names an unlabeled one")
             let top = try Self.detail(try await owner.send(.post, "\(path)/tiers/\(third)/move", #"{"by": -5}"#))
             #expect(top.tiers.map(\.displayName) == ["If time allows", "First morning", "Priority 3"] && top.tiers.map(\.order) == [0, 1, 2])
+            // A step past the list moves a tier to its end, however far: the kit's sum is never asked to overflow.
+            let bottom = try Self.detail(try await owner.send(.post, "\(path)/tiers/\(third)/move", #"{"by": 9223372036854775807}"#))
+            #expect(bottom.tiers.map(\.displayName) == ["First morning", "Priority 2", "If time allows"])
+            let back = try Self.detail(try await owner.send(.post, "\(path)/tiers/\(third)/move", #"{"by": -9223372036854775808}"#))
+            #expect(back.tiers.map(\.displayName) == ["If time allows", "First morning", "Priority 3"])
             let cleared = try Self.detail(try await owner.send(.patch, "\(path)/tiers/\(third)", #"{"label": ""}"#))
             #expect(cleared.tiers.first?.label == nil && cleared.tiers.first?.displayName == "Priority 1")
 

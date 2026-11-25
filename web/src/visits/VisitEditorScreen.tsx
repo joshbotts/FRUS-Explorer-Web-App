@@ -9,7 +9,7 @@
 // step and deletes tiers. Every write is the server's, by the kit's rules, and answers the plan as it then stands.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import { type ReactNode, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import {
   addTier,
@@ -25,6 +25,7 @@ import {
   writeSeed,
   writeTarget,
   type VisitPlan,
+  type VisitSection,
   type VisitSeed,
   type VisitStoredTarget,
   type VisitTarget,
@@ -78,8 +79,23 @@ export function VisitEditorScreen() {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const returnFocus = useRef<HTMLElement | null>(null);
+  /** The target whose control a write was chosen from, whose row the answer may move or a filter may hide. */
+  const restore = useRef<{ key: string; control: 'tier' | 'menu' } | null>(null);
   const tabsName = useId();
   const infoId = useId();
+
+  // A write's answer can sort its target elsewhere, which moves its row and drops the focus it held, or hide it under a
+  // filter: focus goes back to the control it was chosen from, wherever the row now sits, else to the filters.
+  useEffect(() => {
+    const wanted = restore.current;
+    if (!wanted || !plan) return;
+    restore.current = null;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const row = [...document.querySelectorAll<HTMLElement>('li[data-target]')].find((item) => item.dataset.target === wanted.key);
+    const control = row?.querySelector<HTMLElement>(wanted.control === 'tier' ? '.visit-tier-menu > button' : '.visit-target-menu > button');
+    (control ?? document.querySelector<HTMLElement>('.visit-filters select') ?? document.querySelector<HTMLElement>('main h1'))?.focus();
+  }, [plan]);
 
   // Filters can go stale between answers: a deleted tier, a repository that no longer derives (the app's reset).
   const fresh = plan ? freshFilters(filters, plan) : filters;
@@ -91,8 +107,15 @@ export function VisitEditorScreen() {
     try {
       await write();
     } catch (error) {
+      restore.current = null;
       setFailure(errorMessage(error));
     }
+  }
+
+  /** A target's write, chosen from its `control`, to which focus goes back once the answer has drawn the list. */
+  function writeTo(key: string, write: { tierId: string | null } | { included: boolean }, control: 'tier' | 'menu') {
+    restore.current = { key, control };
+    return run(() => writeTarget(client, planId, key, write));
   }
 
   function open(next: Dialog) {
@@ -212,7 +235,7 @@ export function VisitEditorScreen() {
               filters={filters}
               onFilters={setFilters}
               tierEntries={tierEntries}
-              onTarget={(key, write) => run(() => writeTarget(client, plan.id, key, write))}
+              onTarget={writeTo}
               onNote={(key, label, note) => open({ kind: 'note', key, label, note })}
               onRemoveStored={(key) => open({ kind: 'removeStored', key })}
             />
@@ -245,12 +268,9 @@ export function VisitEditorScreen() {
             <DeleteVisitDialog
               plan={plan}
               onClose={(deleted) => {
-                if (deleted) {
-                  setDialog(null);
-                  void navigate({ to: '/visits' });
-                } else {
-                  closeDialog();
-                }
+                // The screen goes with the plan: drawn again, it would ask for the plan the delete removed.
+                if (deleted) void navigate({ to: '/visits' });
+                else closeDialog();
               }}
             />
           )}
@@ -332,13 +352,38 @@ function TargetsTab({
   filters: TargetFilters;
   onFilters: (filters: TargetFilters) => void;
   tierEntries: (onTier: (tierId: string | null) => void) => MenuEntry[];
-  onTarget: (key: string, write: { tierId: string | null } | { included: boolean }) => Promise<void>;
+  onTarget: (key: string, write: { tierId: string | null } | { included: boolean }, control: 'tier' | 'menu') => Promise<void>;
   onNote: (key: string, label: string, note: string) => void;
   onRemoveStored: (key: string) => void;
 }) {
   if (!plan.served) return <p className="note">{copy.visits.noIndex}</p>;
   if (plan.documents.length === 0) return <NoSeeds />;
   const sections = visibleSections(plan, filters);
+  return <TargetsList plan={plan} filters={filters} onFilters={onFilters} sections={sections} tierEntries={tierEntries}
+    onTarget={onTarget} onNote={onNote} onRemoveStored={onRemoveStored} />;
+}
+
+/** The Targets list over its sections: the summary and filters, the empty states, the sections and the stored targets. */
+function TargetsList({
+  plan,
+  filters,
+  onFilters,
+  sections,
+  tierEntries,
+  onTarget,
+  onNote,
+  onRemoveStored,
+}: {
+  plan: VisitPlan;
+  filters: TargetFilters;
+  onFilters: (filters: TargetFilters) => void;
+  sections: VisitSection[];
+  tierEntries: (onTier: (tierId: string | null) => void) => MenuEntry[];
+  onTarget: (key: string, write: { tierId: string | null } | { included: boolean }, control: 'tier' | 'menu') => Promise<void>;
+  onNote: (key: string, label: string, note: string) => void;
+  onRemoveStored: (key: string) => void;
+}) {
+  const storedId = useId();
   return (
     <>
       <div className="visit-summary">
@@ -359,44 +404,26 @@ function TargetsTab({
         </div>
       ) : (
         sections.map((section) => (
-          <section key={section.heading} className="visit-section" aria-labelledby={`visit-${slug(section.heading)}`}>
-            <h2 id={`visit-${slug(section.heading)}`}>{section.heading}</h2>
-            {section.links.length > 0 && (
-              <ul className="visit-links">
-                {section.links.map((link) => (
-                  <li key={link.url}>
-                    <a href={link.url} target="_blank" rel="noreferrer">
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <ul className="visit-targets">
-              {section.targets.map((target) => (
-                <TargetRow
-                  key={target.key}
-                  plan={plan}
-                  target={target}
-                  tierEntries={tierEntries((tierId) => void onTarget(target.key, { tierId }))}
-                  onNote={() => onNote(target.key, target.label, target.note ?? '')}
-                  onIncluded={(included) => void onTarget(target.key, { included })}
-                />
-              ))}
-            </ul>
-          </section>
+          <SectionBlock
+            key={section.heading}
+            section={section}
+            plan={plan}
+            tierEntries={tierEntries}
+            onTarget={onTarget}
+            onNote={onNote}
+          />
         ))
       )}
       {sections.length > 0 && plan.storedTargets.length > 0 && (
-        <section className="visit-section visit-stored" aria-labelledby="visit-stored">
-          <h2 id="visit-stored">{copy.visits.storedHeader}</h2>
+        <section className="visit-section visit-stored" aria-labelledby={storedId}>
+          <h2 id={storedId}>{copy.visits.storedHeader}</h2>
           <ul className="visit-targets">
             {plan.storedTargets.map((stored) => (
               <StoredRow
                 key={stored.key}
                 plan={plan}
                 stored={stored}
-                tierEntries={tierEntries((tierId) => void onTarget(stored.key, { tierId }))}
+                tierEntries={tierEntries((tierId) => void onTarget(stored.key, { tierId }, 'tier'))}
                 onNote={() => onNote(stored.key, stored.label, stored.note ?? '')}
                 onRemove={() => onRemoveStored(stored.key)}
               />
@@ -408,9 +435,49 @@ function TargetsTab({
   );
 }
 
-/** A heading's id-safe form. */
-function slug(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+/** A repository's section, or Confirm before you travel: its heading, its verified links and its targets. */
+function SectionBlock({
+  section,
+  plan,
+  tierEntries,
+  onTarget,
+  onNote,
+}: {
+  section: VisitSection;
+  plan: VisitPlan;
+  tierEntries: (onTier: (tierId: string | null) => void) => MenuEntry[];
+  onTarget: (key: string, write: { tierId: string | null } | { included: boolean }, control: 'tier' | 'menu') => Promise<void>;
+  onNote: (key: string, label: string, note: string) => void;
+}) {
+  const headingId = useId();
+  return (
+    <section className="visit-section" aria-labelledby={headingId}>
+      <h2 id={headingId}>{section.heading}</h2>
+      {section.links.length > 0 && (
+        <ul className="visit-links">
+          {section.links.map((link) => (
+            <li key={link.url}>
+              <a href={link.url} target="_blank" rel="noreferrer">
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ul className="visit-targets">
+        {section.targets.map((target) => (
+          <TargetRow
+            key={target.key}
+            plan={plan}
+            target={target}
+            tierEntries={tierEntries((tierId) => void onTarget(target.key, { tierId }, 'tier'))}
+            onNote={() => onNote(target.key, target.label, target.note ?? '')}
+            onIncluded={(included) => void onTarget(target.key, { included }, 'menu')}
+          />
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 function NoSeeds() {
@@ -510,7 +577,7 @@ function TargetRow({
   const seedingsId = useId();
   const tier = tierName(plan, target.tierId);
   return (
-    <li className={target.excluded ? 'visit-target excluded' : 'visit-target'}>
+    <li className={target.excluded ? 'visit-target excluded' : 'visit-target'} data-target={target.key}>
       <div className="visit-target-head">
         <button type="button" className="visit-target-label" aria-expanded={open} aria-controls={seedingsId} onClick={() => setOpen((shown) => !shown)}>
           {target.label}
@@ -631,7 +698,7 @@ function StoredRow({
 }) {
   const tier = tierName(plan, stored.tierId);
   return (
-    <li className="visit-target stored">
+    <li className="visit-target stored" data-target={stored.key}>
       <div className="visit-target-head">
         <span className="visit-target-label">{stored.label}</span>
         <MenuButton
@@ -915,11 +982,32 @@ function TiersDialog({ plan, onClose }: { plan: VisitPlan; onClose: () => void }
   const [renaming, setRenaming] = useState<VisitTier | null>(null);
   const [deleting, setDeleting] = useState<VisitTier | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const list = useRef<HTMLOListElement>(null);
+  /** The tier whose menu a write was chosen from, which a move takes elsewhere in the list, dropping the focus it held. */
+  const moved = useRef<string | null>(null);
   // The plan as its last write left it, which the sheet shows.
   const { data } = useQuery({ ...visitQuery(plan.id), initialData: plan });
   const tiers = data.tiers;
   function close() {
     done.current?.closest('dialog')?.close();
+  }
+  /** The menu button of the tier `id`, wherever it now sits, if the plan still has it. */
+  function tierMenu(id: string): HTMLElement | null {
+    const row = [...(list.current?.querySelectorAll<HTMLElement>('li[data-tier]') ?? [])].find((item) => item.dataset.tier === id);
+    return row?.querySelector<HTMLElement>('.menu-button > button') ?? null;
+  }
+  useEffect(() => {
+    const id = moved.current;
+    if (id === null) return;
+    moved.current = null;
+    tierMenu(id)?.focus();
+  }, [tiers]);
+  /** Back to the tier's menu once a dialog over the sheet closes, else to the tier after it, else to Add. */
+  function backTo(id: string, index: number) {
+    requestAnimationFrame(() => {
+      const after = tiers.filter((tier) => tier.id !== id)[index] ?? tiers.filter((tier) => tier.id !== id)[index - 1];
+      (tierMenu(id) ?? (after ? tierMenu(after.id) : null) ?? add.current)?.focus();
+    });
   }
   async function run(write: () => Promise<unknown>) {
     setFailure(null);
@@ -934,9 +1022,9 @@ function TiersDialog({ plan, onClose }: { plan: VisitPlan; onClose: () => void }
       <h2 id={headingId} tabIndex={-1}>
         {copy.visits.tiersTitle}
       </h2>
-      <ol className="visit-tier-list">
+      <ol ref={list} className="visit-tier-list">
         {tiers.map((tier, index) => (
-          <li key={tier.id}>
+          <li key={tier.id} data-tier={tier.id}>
             <span className="visit-tier-name">{tier.displayName}</span>
             <span className="meta">{copy.visits.members(tier.members)}</span>
             <MenuButton
@@ -944,12 +1032,23 @@ function TiersDialog({ plan, onClose }: { plan: VisitPlan; onClose: () => void }
               accessibleLabel={copy.visits.tierActions(tier.displayName)}
               entries={[
                 { kind: 'item', label: copy.visits.rename, onSelect: () => setRenaming(tier) },
-                { kind: 'item', label: copy.visits.moveUp, disabled: index === 0, onSelect: () => void run(() => moveTier(client, plan.id, tier.id, -1)) },
+                {
+                  kind: 'item',
+                  label: copy.visits.moveUp,
+                  disabled: index === 0,
+                  onSelect: () => {
+                    moved.current = tier.id;
+                    void run(() => moveTier(client, plan.id, tier.id, -1));
+                  },
+                },
                 {
                   kind: 'item',
                   label: copy.visits.moveDown,
                   disabled: index === tiers.length - 1,
-                  onSelect: () => void run(() => moveTier(client, plan.id, tier.id, 1)),
+                  onSelect: () => {
+                    moved.current = tier.id;
+                    void run(() => moveTier(client, plan.id, tier.id, 1));
+                  },
                 },
                 { kind: 'separator' },
                 { kind: 'item', label: copy.visits.delete, destructive: true, onSelect: () => setDeleting(tier) },
@@ -979,8 +1078,9 @@ function TiersDialog({ plan, onClose }: { plan: VisitPlan; onClose: () => void }
           initial={renaming.label ?? ''}
           onSave={(label) => relabelTier(client, plan.id, renaming.id, label)}
           onClose={() => {
+            const { id } = renaming;
             setRenaming(null);
-            add.current?.focus();
+            backTo(id, tiers.findIndex((tier) => tier.id === id));
           }}
         />
       )}
@@ -991,8 +1091,9 @@ function TiersDialog({ plan, onClose }: { plan: VisitPlan; onClose: () => void }
           confirm={copy.visits.deleteTier}
           onConfirm={() => deleteTier(client, plan.id, deleting.id)}
           onClose={() => {
+            const { id } = deleting;
             setDeleting(null);
-            add.current?.focus();
+            backTo(id, tiers.findIndex((tier) => tier.id === id));
           }}
         />
       )}

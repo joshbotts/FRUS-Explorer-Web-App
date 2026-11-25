@@ -367,7 +367,7 @@ import Testing
              "`On this server: ${withReferences.toLocaleString('en-US')} of ${indexed.toLocaleString('en-US')} indexed documents carry such references.`,"),
             (editor, "archiveVisit.editor.noSeeds.detail",
              "Seed this plan from Source Explorer, Archival Neighbors, a collection, or a project — each surface offers Add to Archives Visit.",
-             "noSeedsDetail: 'Seed this plan from its project with Re-seed from Project.',"),
+             "noSeedsDetail: 'A plan made while a project is active can be seeded from it with Re-seed from Project.',"),
             (editor, "archiveVisit.editor.noTargets",
              "No targets derive from these documents on this device — their volumes may not be indexed yet, or their source notes name nothing the app can place.",
              "noTargets: 'No targets derive from these documents on this server — their volumes may not be indexed yet, or their source notes name nothing the server can place.',"),

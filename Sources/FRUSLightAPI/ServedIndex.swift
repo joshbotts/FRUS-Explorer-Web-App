@@ -73,8 +73,9 @@ public final class ServedIndex: Sendable {
     let archivalLibrary = KeptSeries<Int, ArchivalLibraryProfile>(capacity: 1)
     /// The Word Cloud's live counts over this index (PLAN's S29e), each kept by its scope, lens, settings and tagger.
     let wordClouds = WordCloudKeeper()
-    /// The Archives Visits' derivations over this index (PLAN's S30c), each kept by what it reads of a plan (ArchiveVisits.swift).
-    let visits = KeptSeries<VisitDerivationKey, VisitDerivation>(capacity: 64)
+    /// The Archives Visits' derivations over this index (PLAN's S30c), each kept by what it reads of a plan, and the seeds'
+    /// facts, for two minutes at most (ArchiveVisits.swift).
+    let visits = KeptSeries<VisitKeptKey, VisitKept>(capacity: 64)
     /// The volumes the index holds documents of: what a working corpus and a volume scope resolve
     /// against (PLAN's S17e), as the app resolves them against the volumes its device has indexed.
     public let indexedVolumeIds: Set<String>

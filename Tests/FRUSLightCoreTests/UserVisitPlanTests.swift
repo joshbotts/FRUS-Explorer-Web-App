@@ -60,13 +60,14 @@ import Testing
         #expect(try store.visitPlanRows(UUID().uuidString, of: "owner") == nil)
     }
 
-    /// A change writes what differs: a column of the plan, a seed's switch, a target added and one left out; a seed it
-    /// keeps whole is not written. Nothing for a nil change, and nothing when the change throws.
+    /// A change writes what differs: a column of the plan, a seed's switch, a target added and one left out; the seeds it
+    /// keeps keep their rows, in their places among the table's. Nothing for a nil change, and nothing when the change
+    /// throws.
     @Test(arguments: UserStoreKind.available)
     func aChangeWritesWhatDiffersInOneWrite(_ kind: UserStoreKind) async throws {
         let (store, rows, test) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(test) {} }
-        try store.addVisitPlan(Self.change(), for: "owner")
+        let made = try store.addVisitPlan(Self.change(), for: "owner")
         let changed = try #require(try store.changeVisitPlan(Self.planId, for: "owner") { held in
             #expect(held.documents.count == 2)
             return VisitPlanChange(plan: ["id": .text(Self.planId), "name": .text("Berlin")],
@@ -75,6 +76,7 @@ import Testing
         })
         #expect(Self.keys([changed.plan], "name") == ["Berlin"] && Self.keys([changed.plan], "inquiry_text") == ["The letters"])
         #expect(changed.documents.map { $0.values["include_source"]?.integer } == [1, 0])
+        #expect(changed.documents.map(\.position) == made.documents.map(\.position), "each seed kept its row, none deleted and added again")
         #expect(Self.keys(changed.targets, "target_key") == ["r|A note"], "the target left out is gone, the new one names the plan")
         #expect(Self.keys(changed.targets, "plan_id") == [Self.planId])
 

@@ -34,7 +34,27 @@ export function VisitsScreen() {
   const [renaming, setRenaming] = useState<VisitPlanItem | null>(null);
   const [deleting, setDeleting] = useState<VisitPlanItem | null>(null);
   const newButton = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLUListElement>(null);
   const items = visits.data?.items;
+
+  /**
+   * Back to the row's menu once its dialog closes, wherever the row now sits; for a plan deleted, to the row that took its
+   * place, else the one before it, else New Archives Visit.
+   */
+  function backTo(id: string, index: number, deleted: boolean) {
+    requestAnimationFrame(() => {
+      const menus = [...(list.current?.querySelectorAll<HTMLElement>('li[data-plan]') ?? [])].map((row) => ({
+        id: row.dataset.plan,
+        button: row.querySelector<HTMLElement>('.visit-row-menu > button'),
+      }));
+      if (!deleted) {
+        (menus.find((menu) => menu.id === id)?.button ?? newButton.current)?.focus();
+        return;
+      }
+      const rest = menus.filter((menu) => menu.id !== id);
+      (rest[index]?.button ?? rest[index - 1]?.button ?? newButton.current)?.focus();
+    });
+  }
 
   async function create() {
     setFailure(null);
@@ -78,9 +98,9 @@ export function VisitsScreen() {
         </div>
       ) : (
         <>
-          <ul className="visit-list" aria-label={copy.visits.title}>
+          <ul ref={list} className="visit-list" aria-label={copy.visits.title}>
             {items.map((plan) => (
-              <li key={plan.id} className="visit-row">
+              <li key={plan.id} className="visit-row" data-plan={plan.id}>
                 <Link to="/visits/$planId" params={{ planId: plan.id }} className="visit-name">
                   {plan.displayName}
                 </Link>
@@ -116,17 +136,19 @@ export function VisitsScreen() {
         <RenameVisitDialog
           plan={renaming}
           onClose={() => {
+            const { id } = renaming;
             setRenaming(null);
-            newButton.current?.focus();
+            backTo(id, items?.findIndex((plan) => plan.id === id) ?? 0, false);
           }}
         />
       )}
       {deleting && (
         <DeleteVisitDialog
           plan={deleting}
-          onClose={() => {
+          onClose={(deleted) => {
+            const { id } = deleting;
             setDeleting(null);
-            newButton.current?.focus();
+            backTo(id, items?.findIndex((plan) => plan.id === id) ?? 0, deleted);
           }}
         />
       )}

@@ -186,6 +186,7 @@ import Testing
             #expect(answer.documents.allSatisfy { $0.hasSourceNote != nil && $0.referenceCount != nil && $0.header != nil })
             #expect(answer.documents.map(\.key) == documents.map(\.compositeString).sorted())
             #expect(answer.sparsity.map { $0.indexed > 0 && $0.withReferences <= $0.indexed } == true)
+            #expect(answer.createdAt == "2026-11-01T00:00:00.000Z" && answer.lastModified == "2026-11-01T00:00:00.000Z")
 
             // A tier written to the re-spelled target's row: the kit's rule over the overlay of the plan as it stands finds
             // the row through the overlay's stored keys and writes its tier alone, minting none.
@@ -199,7 +200,11 @@ import Testing
             let rows = try await Self.exported(session).first { $0.id == Self.planId }
             #expect(rows?.targets.count == targets.count, "no row minted")
             #expect(rows?.targets.first { $0.targetKey == respelled }?.tierId == Self.firstTier.id)
-            #expect(rows?.targets.first { $0.targetKey == respelled }?.userNote == "Re-spelled", "its other fields as they were")
+            let rewritten = try #require(rows?.targets.first { $0.targetKey == respelled })
+            #expect(rewritten.userNote == "Re-spelled" && rewritten.included && rewritten.createdAt == Self.date("2026-11-02T00:00:00Z"),
+                    "its other fields as they were")
+            #expect((rewritten.lastModified ?? .distantPast) > Self.date("2026-11-03T00:00:00Z"), "the row stamped as changed, now")
+            #expect(rows?.lastModified == Self.made, "a target's own write leaves the plan's date")
             var replanned = plan
             replanned.targets = rows?.targets ?? []
             #expect(Self.lines(after) == Self.lines(try await Self.kit(replanned, over: built)), "the answer, the kit's over the rows written")

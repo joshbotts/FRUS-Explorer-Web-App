@@ -2109,7 +2109,7 @@ export const copy = {
     reseed: 'Re-seed from Project',
     duplicated: (name: string) => `Duplicated as “${name}”`,
     noSeedsTitle: 'No documents seeded',
-    noSeedsDetail: 'Seed this plan from its project with Re-seed from Project.',
+    noSeedsDetail: 'A plan made while a project is active can be seeded from it with Re-seed from Project.',
     allOff:
       'Every document’s contributions are switched off — turn a document’s archival source or unprinted references back on under Documents.',
     noTargets:

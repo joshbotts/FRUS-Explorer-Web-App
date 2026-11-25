@@ -12,8 +12,8 @@
 // (`ModelModificationStamper`): a seed or target whose fields change, and the plan when its own fields change or a seed or
 // target joins or leaves it. The editor's state is the kit's derivation (`ArchiveVisitDerivation.derive`) over the served
 // index's source notes and footnote citations and the six bundled files the packet reads (`TripPacketIndexes`), computed
-// once for what it reads of a plan and kept while the index is served, the stored state read again over it at each answer
-// (`overlay(for:over:)`); its sections, their order and the words the server writes are the app's view's, mirrored and held
+// once for what it reads of a plan and kept while the index is served, for two minutes at most, the stored state read again
+// over it at each answer (`overlay(for:over:)`); its sections, their order and the words the server writes are the app's view's, mirrored and held
 // to its source by `ArchiveVisitMirrorParityTests`. A duplicated plan's targets are created anew, as the app's are, so a
 // target several rows answer for, none under its own key, can show another of them in the copy (FRUS-Explorer#1989).
 
@@ -225,14 +225,32 @@ public struct VisitReseedAnswer: Codable, Equatable, Sendable, ResponseEncodable
 // MARK: - The derivation, kept while its index is served
 
 /// What a plan's derivation reads of it, past its stored state: its seeds with their switches, its topic, and which of
-/// their volumes the index holds. Two plans that read the same derive the same model.
+/// their volumes the index holds; and the window of two minutes it was asked in. Two plans that read the same in one
+/// window derive the same model.
 struct VisitDerivationKey: Hashable, Sendable {
     let seeds: [ArchiveVisitDerivation.InputSignature.Seed: Int]
     let inquiryText: String?
     let indexedSeedVolumes: Set<String>
+    let window: Int
 }
 
-/// A plan's derivation over the served index, with the Documents tab's facts of each seed and the index's sparsity.
+/// What the server keeps of a plan's derivation while its index is served (`ServedIndex.visits`), each for a window of
+/// two minutes at most: the kit's data source answers a read of the index that fails as no rows, so a model or a seed's
+/// facts that a failed read emptied are kept no longer than the window, where the app derives again at its next write.
+enum VisitKeptKey: Hashable, Sendable {
+    /// A plan's model, by what it reads.
+    case model(VisitDerivationKey)
+    /// The Documents tab's facts of the seeds these keys name, and the index's sparsity.
+    case facts(seedKeys: [String], window: Int)
+}
+
+enum VisitKept: Sendable {
+    case model(ArchiveVisitDerivation.Derived)
+    case facts([String: SeedFacts], VisitPlanDetail.Sparsity?)
+}
+
+/// A plan's derivation over the served index, with the Documents tab's facts of each seed and the index's sparsity where
+/// the answer reads them, the editor's, and none for the list's.
 struct VisitDerivation: Sendable {
     let derived: ArchiveVisitDerivation.Derived
     let facts: [String: SeedFacts]
@@ -246,6 +264,9 @@ struct SeedFacts: Equatable, Sendable {
     let hasSourceNote: Bool
     let referenceCount: Int
 }
+
+/// The index's own sparsity read failed: the seeds' facts read beside it are kept for no one.
+struct VisitIndexReadFailed: Error {}
 
 // MARK: - Routes
 
@@ -543,7 +564,10 @@ enum ArchiveVisitRoutes {
             let time = UserStoreDate.rounded(now())
             let rows = try await changed(try context.parameters.require("planId"), for: user.id, in: store, at: time) { plan in
                 guard let index = plan.tiers.firstIndex(where: { $0.id == tier }) else { throw tierNotFound(tier.uuidString) }
-                plan.tiers = ArchiveVisitPlanWrites.movingTier(at: index, by: body.by, in: plan.tiers)
+                // The kit adds the step to the tier's place before it clamps to the list's ends, so a step past the list,
+                // which moves the tier no further, is clamped here first: `Int.max` would overflow the sum.
+                let steps = min(max(body.by, -plan.tiers.count), plan.tiers.count)
+                plan.tiers = ArchiveVisitPlanWrites.movingTier(at: index, by: steps, in: plan.tiers)
             }
             return try await answer(rows, projects: try await projects(of: user.id, in: store), provider: provider, resources: resources)
         }
@@ -644,37 +668,60 @@ enum ArchiveVisitRoutes {
         Dictionary((resources.manifest + resources.localVolumes).map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
+    /// How long a derivation is kept: the window its key names.
+    static let keptSeconds: TimeInterval = 120
+
     /// The plan's derivation over `served`, the kit's: its model kept for what it reads of the plan (`VisitDerivationKey`)
-    /// while the index is served, and the stored state read again over it (`overlay(for:over:)`), which a write of stored
-    /// state alone leaves the model as it was.
-    static func derivation(of plan: ArchiveVisitPlanExport, served: ServedIndex, resources: ServerResources) async throws -> VisitDerivation {
+    /// in a window of two minutes while the index is served, and the stored state read again over it
+    /// (`overlay(for:over:)`), which a write of stored state alone leaves the model as it was; with `facts`, the editor's
+    /// facts of each seed and the index's sparsity, kept apart, by the seeds' keys.
+    static func derivation(of plan: ArchiveVisitPlanExport, served: ServedIndex, resources: ServerResources,
+                           facts wanted: Bool = false) async throws -> VisitDerivation {
+        let window = Int(Date().timeIntervalSince1970 / keptSeconds)
         let signature = ArchiveVisitDerivation.inputSignature(plan: plan, indexedVolumeIds: served.indexedVolumeIds)
-        let key = VisitDerivationKey(seeds: signature.seeds, inquiryText: plan.inquiryText, indexedSeedVolumes: signature.indexedSeedVolumes)
-        let kept = try await served.visits.value(for: key) {
+        let key = VisitDerivationKey(seeds: signature.seeds, inquiryText: plan.inquiryText,
+                                     indexedSeedVolumes: signature.indexedSeedVolumes, window: window)
+        let kept = try await served.visits.value(for: .model(key)) {
             // Decoded off the main actor, the first time, where the derivation runs.
             let (indexes, manifest) = try await Blocking.run { (packetIndexes(resources), manifestMap(resources)) }
-            return await derive(plan, served: served, indexes: indexes, manifest: manifest)
+            return .model(await derive(plan, served: served, indexes: indexes, manifest: manifest))
         }
+        guard case .model(let once) = kept else { preconditionFailure("a model's key keeps a model") }
         let derived = ArchiveVisitDerivation.Derived(
-            model: kept.derived.model, overlay: ArchiveVisitDerivation.overlay(for: plan, over: kept.derived.model),
-            seededDocumentCount: kept.derived.seededDocumentCount, indexedDocumentCount: kept.derived.indexedDocumentCount)
-        return VisitDerivation(derived: derived, facts: kept.facts, sparsity: kept.sparsity)
+            model: once.model, overlay: ArchiveVisitDerivation.overlay(for: plan, over: once.model),
+            seededDocumentCount: once.seededDocumentCount, indexedDocumentCount: once.indexedDocumentCount)
+        guard wanted else { return VisitDerivation(derived: derived, facts: [:], sparsity: nil) }
+        let seedKeys = Set(plan.documents.map(\.documentKey)).sorted()
+        let known = try await served.visits.value(for: .facts(seedKeys: seedKeys, window: window)) {
+            let manifest = try await Blocking.run { manifestMap(resources) }
+            return try await seedFacts(seedKeys, served: served, manifest: manifest)
+        }
+        guard case .facts(let facts, let sparsity) = known else { preconditionFailure("the facts' key keeps facts") }
+        return VisitDerivation(derived: derived, facts: facts, sparsity: sparsity)
     }
 
-    /// `ArchiveVisitDerivation.derive` over the served index and the bundled files, with the editor's facts of each seed
-    /// through the same data source, and the index's sparsity, as the app's editor reads them with each derivation.
+    /// `ArchiveVisitDerivation.derive` over the served index and the bundled files.
     @MainActor
     static func derive(_ plan: ArchiveVisitPlanExport, served: ServedIndex, indexes: TripPacketIndexes,
-                       manifest: [String: VolumeManifestEntry]) async -> VisitDerivation {
+                       manifest: [String: VolumeManifestEntry]) async -> ArchiveVisitDerivation.Derived {
+        await ArchiveVisitDerivation.derive(plan: plan, indexedVolumeIds: served.indexedVolumeIds,
+                                            dataSource: TripPacketDataSource(pipeline: served.pipeline, manifestMap: manifest),
+                                            indexes: indexes)
+    }
+
+    /// The Documents tab's facts of each seed, through the builder's data source and its two batched queries, as the app's
+    /// editor reads them with each derivation, and the index's sparsity, whose read failing keeps nothing.
+    @MainActor
+    static func seedFacts(_ seedKeys: [String], served: ServedIndex,
+                          manifest: [String: VolumeManifestEntry]) async throws -> VisitKept {
         let dataSource = TripPacketDataSource(pipeline: served.pipeline, manifestMap: manifest)
-        let derived = await ArchiveVisitDerivation.derive(plan: plan, indexedVolumeIds: served.indexedVolumeIds,
-                                                          dataSource: dataSource, indexes: indexes)
-        var sparsity: VisitPlanDetail.Sparsity?
-        if let measured = try? await served.pipeline.externalCitationSparsity() {
-            sparsity = .init(withReferences: measured.documentsWithReferences, indexed: measured.indexedDocuments)
+        let measured: (documentsWithReferences: Int, indexedDocuments: Int)
+        do {
+            measured = try await served.pipeline.externalCitationSparsity()
+        } catch {
+            throw VisitIndexReadFailed()
         }
-        // The Documents tab's facts of each seed: which halves exist, through the same two batched queries the builder runs.
-        let seeds = plan.documents.compactMap { ArchiveVisitDerivation.documentTuple(fromKey: $0.documentKey) }
+        let seeds = seedKeys.compactMap { ArchiveVisitDerivation.documentTuple(fromKey: $0) }
         let records = await dataSource.documentSources(for: seeds)
         let noteKeys = Set(records.map { "\($0.volumeId)/\($0.documentId)" })
         let citations = await dataSource.externalCitations(for: seeds)
@@ -686,7 +733,7 @@ enum ArchiveVisitRoutes {
                                    volumeTitle: dataSource.volumeTitle(volumeId: seed.volumeId),
                                    hasSourceNote: noteKeys.contains(key), referenceCount: relevant.count)
         }
-        return VisitDerivation(derived: derived, facts: facts, sparsity: sparsity)
+        return .facts(facts, .init(withReferences: measured.documentsWithReferences, indexed: measured.indexedDocuments))
     }
 
     /// The model the plan derives over the served index, which a target's write reads its overlay over: the editor's,
@@ -803,7 +850,7 @@ enum ArchiveVisitRoutes {
         let plan = try record(rows)
         let served = try await provider.servedIfReady()
         var derivation: VisitDerivation?
-        if let served { derivation = try await self.derivation(of: plan, served: served, resources: resources) }
+        if let served { derivation = try await self.derivation(of: plan, served: served, resources: resources, facts: true) }
         return detail(plan, derivation: derivation, projects: projects)
     }
 
