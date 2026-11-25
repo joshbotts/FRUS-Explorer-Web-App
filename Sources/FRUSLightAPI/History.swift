@@ -188,6 +188,9 @@ enum HistoryRoutes {
         let anchor: SearchAnchor?
         /// The engine it ran through, the app's `SearchMode`: `keywords`, as when it is left out, or `meaning` (PLAN's S27d).
         let mode: String?
+        /// The list it ran inside (PLAN's S27e), as `GET /api/v1/search/within` names it, when it is a layer of Search
+        /// Within These Results, whose engine the list decides.
+        let within: String?
     }
 
     /// How many rows of each table a page holds at first, and how many Show More adds
@@ -249,9 +252,10 @@ enum HistoryRoutes {
         me.post("history/searches") { request, context -> RecordedSearchRun in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let body = try await JSONBody.decode(Search.self, from: request, fields: ["search", "anchor", "mode"])
+            let body = try await JSONBody.decode(Search.self, from: request, fields: ["search", "anchor", "mode", "within"])
             let asked = try SearchRequest(formEncoded: body.search)
             let byMeaning = try isMeaning(body.mode)
+            let within = try body.within.map { try HeldListRequest($0) }
             guard try await PreferenceRoutes.isLogging(user.id, in: store) else {
                 return RecordedSearchRun(outcome: "suppressed", anchor: body.anchor)
             }
@@ -259,6 +263,9 @@ enum HistoryRoutes {
             let ran: Run?
             if queryText.isEmpty {
                 ran = nil
+            } else if let within {
+                ran = try? await ranLayer(asked, within: within, for: user.id, in: store, provider: provider, resources: resources,
+                                          engine: meaning)
             } else if byMeaning {
                 ran = try? await ranMeaning(asked, for: user.id, in: store, provider: provider, resources: resources, engine: meaning)
             } else {
@@ -428,6 +435,23 @@ enum HistoryRoutes {
         return Run(count: count, loaded: count, fetchLimit: SemanticSearchBackend.hitLimit,
                    indexedVolumeCount: served.indexedVolumeIds.count, signature: run.signature,
                    corpus: asked.workingCorpusId.flatMap(UUID.init(uuidString:)), expression: run.renderedExpression)
+    }
+
+    /// The user's layer `asked` inside the list `within` names (PLAN's S27e), recorded as the Mac's window records a layer
+    /// (`recordSearchHistory`, `recordsTheListWhole`): its rows whole, as its count, its loaded rows and its match; the
+    /// ceiling its rows ran under; the kit's layered signature, the route's own with the list's `base=` part
+    /// (`SearchScopeSignature.layered(_:parameters:basePart:)`); and its expression with the list's part. A layer the server
+    /// refuses throws.
+    static func ranLayer(_ asked: SearchRequest, within: HeldListRequest, for user: String, in store: any UserDataStore,
+                         provider: ServedIndexProvider, resources: ServerResources,
+                         engine: MeaningSearchRoutes.MeaningEngine) async throws -> Run {
+        let run = try await SearchWithinRoutes.run(asked, within: within, searcher: .of(user, in: store), provider: provider,
+                                                   resources: resources, engine: engine)
+        let served = try await provider.served()
+        let count = run.rows.count
+        return Run(count: count, loaded: count, fetchLimit: run.fetchLimit, indexedVolumeCount: served.indexedVolumeIds.count,
+                   signature: run.signature, corpus: asked.workingCorpusId.flatMap(UUID.init(uuidString:)),
+                   expression: run.renderedExpression)
     }
 
     /// The user's search `asked`, as the server runs it: its exact count with their half, the rows it

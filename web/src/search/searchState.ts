@@ -5,7 +5,8 @@
 // S17d it holds Search in, the three scopes the Mac's chips choose, and the user's tags it filters by;
 // since S17e the working corpus it runs inside, and the phrase, prefix and excluded terms a recalled
 // saved search can carry, which the Mac's Advanced fields set; since S27d the engine it runs through, Keywords
-// or Meaning, as the Mac's Search by picker chooses it.
+// or Meaning, as the Mac's Search by picker chooses it; and since S27e the list a search runs within, held as Search
+// Within These Results holds one.
 import type { FormValue } from '../api/form';
 import type { ConcordanceOrder, DocumentType, SearchChange, SortOrder } from '../api/types';
 
@@ -48,6 +49,12 @@ export interface SearchState {
    * for Keywords, which a search opens on. Not sent: a search by meaning has a resource of its own.
    */
   by?: 'meaning';
+  /**
+   * The list the search runs within (S27e), held as the app's Search Within These Results holds one: the search that found
+   * it, its fields as the API reads them with its engine (`heldLists.ts`). Absent while no list is held. The field then
+   * runs the other engine inside it. Not sent as a search's field: a layer has a resource of its own.
+   */
+  within?: string;
   /** The reading the results are shown in, as the Mac's Reading picker chooses it; absent for the list. Not sent. */
   reading?: Exclude<Reading, 'list'>;
   /** `list` while the timeline shows its List mode; absent for its chart. Not sent. */
@@ -176,6 +183,7 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     subjectLabel: subject ? single(raw.subjectLabel) || undefined : undefined,
     panel: single(raw.panel) === 'facets' ? 'facets' : undefined,
     by: single(raw.by) === 'meaning' ? 'meaning' : undefined,
+    within: single(raw.within) || undefined,
     reading: reading === 'timeline' || reading === 'concordance' ? reading : undefined,
     timelineMode: single(raw.timelineMode) === 'list' ? 'list' : undefined,
     align: align === 'rightContext' || align === 'date' || align === 'volume' ? align : undefined,
@@ -245,6 +253,8 @@ export function applySearchChange(state: SearchState, change: SearchChange): Sea
     ...validateSearch(raw),
     panel: state.panel,
     by: state.by,
+    // A filter changed while a list is held narrows the search within it, and the list stays held (S27e).
+    within: state.within,
     reading: state.reading,
     timelineMode: state.timelineMode,
     align: state.align,

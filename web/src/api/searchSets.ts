@@ -193,18 +193,21 @@ export function workingCorpusQuery(id: string) {
 
 /**
  * What Save as Working Corpus would capture of the search's rows, less those Checklist Mode hides: a keyword search's
- * results kept, or with `engine` `meaning` a search by meaning's list (S27d).
+ * results kept, or with `engine` `meaning` a search by meaning's list (S27d), or with `within` a layer's rows inside the
+ * list it names (S27e).
  */
 export async function previewCapture(
   client: QueryClient,
   state: SearchState,
   reviewed: readonly string[],
   engine: 'keywords' | 'meaning' = 'keywords',
+  within?: string,
 ): Promise<CorpusCapturePreview> {
   return (await change<CorpusCapturePreview>(client, 'POST', '/api/v1/me/working-corpora/capture', {
     search: searchString(state),
     reviewed,
     ...(engine === 'meaning' ? { mode: engine } : {}),
+    ...(within !== undefined ? { within } : {}),
   }))!;
 }
 
@@ -214,12 +217,14 @@ export async function saveCorpus(
   state: SearchState,
   reviewed: readonly string[],
   engine: 'keywords' | 'meaning' = 'keywords',
+  within?: string,
 ): Promise<WorkingCorpus> {
   const corpus = (await change<WorkingCorpus>(client, 'POST', '/api/v1/me/working-corpora', {
     name,
     search: searchString(state),
     reviewed,
     ...(engine === 'meaning' ? { mode: engine } : {}),
+    ...(within !== undefined ? { within } : {}),
   }))!;
   void client.invalidateQueries({ queryKey: ['workingCorpora'] });
   return corpus;

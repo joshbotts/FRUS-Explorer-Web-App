@@ -162,6 +162,8 @@ struct CorpusCapture {
     /// Whether the rows are a search by meaning's (`ResultSetScope.isMeaningSearch`), whose count is its list's own:
     /// no fetch of it stops short, and its capture is never the whole answer to its question.
     let isMeaning: Bool
+    /// For a layer's rows (PLAN's S27e), `ResultSetScope` for the two layered routes, which says what the capture records.
+    var layer: LayerScope?
 
     /// The Mac's search window's ceiling, `MacSearchViewModel.searchHardLimit`, under which it fetched.
     static let fetchLimit = SearchRequest.retainedLimit
@@ -179,6 +181,19 @@ struct CorpusCapture {
         self.isMeaning = isMeaning
     }
 
+    /// A capture of a layer's rows (PLAN's S27e), as the Mac's sheet saves what Search Within These Results shows: its rows
+    /// less those Checklist Mode hides, its words the corpus's query, what narrowed the list it ran inside, and the app's
+    /// account of the two layered routes (`LayerScope`): words found in a Meaning list, always partial and with no total,
+    /// and a ranking, as whole as its list's fetch, with its list's total.
+    init(layer run: LayerRun, reviewed: Set<String>, narrowing: [String], insideTruncatedCorpus: Bool) {
+        self.init(results: run.rows, total: run.totalMatchCount ?? run.rows.count, reviewed: reviewed, sourceQuery: run.query,
+                  narrowing: narrowing, insideTruncatedCorpus: insideTruncatedCorpus)
+        var scope = LayerScope(run, loaded: loaded, shown: shown, sort: .relevance)
+        scope.narrowing = narrowing
+        scope.insideTruncatedCorpus = insideTruncatedCorpus
+        layer = scope
+    }
+
     /// A capture of a search by meaning's list (PLAN's S27d): its rows less those Checklist Mode hides, counted as its
     /// own length, since a list of the nearest documents is the whole of its ranking.
     init(meaning results: [SearchResult], reviewed: Set<String>, sourceQuery: String?, narrowing: [String]) {
@@ -191,10 +206,10 @@ struct CorpusCapture {
 
     /// `isCapturePartial`, which the corpus records: a search by meaning's list, which is never every matching
     /// document, or a fetch that stopped short, or the corpus it ran inside was itself a capture cut short.
-    var isCapturePartial: Bool { isMeaning || didHitFetchLimit || insideTruncatedCorpus }
+    var isCapturePartial: Bool { layer?.isCapturePartial ?? (isMeaning || didHitFetchLimit || insideTruncatedCorpus) }
 
     /// What the corpus records as the total it was captured from: the search's count, or none for a search by meaning's.
-    var totalMatchCount: Int? { isMeaning ? nil : total }
+    var totalMatchCount: Int? { layer.map(\.totalMatchCount) ?? (isMeaning ? nil : total) }
 
     /// `hiddenByChecklist`.
     var hiddenByChecklist: Int { max(0, loaded - shown) }
@@ -202,6 +217,7 @@ struct CorpusCapture {
     /// `captureTruncationWarning`: never none for a search by meaning's list, which is not every document on its
     /// subject; and the keyword route's.
     var truncationWarning: String? {
+        if let layer { return layer.captureTruncationWarning }
         if isMeaning {
             return shown == 1
                 ? "This document is the closest match a Meaning search found, not every document on your subject. Counts taken inside this corpus are counts inside that set."
@@ -213,6 +229,7 @@ struct CorpusCapture {
 
     /// `captureChecklistWarning`.
     var checklistWarning: String? {
+        if let layer { return layer.captureChecklistWarning }
         guard hiddenByChecklist > 0 else { return nil }
         return hiddenByChecklist == 1
             ? "Checklist mode is hiding 1 reviewed document. It will not be in this corpus."
@@ -223,6 +240,7 @@ struct CorpusCapture {
     /// (`WorkingCorpusProvenance.meaningSearch`), by which a corpus is read back as a Meaning search's; a keyword
     /// search's is "Search results".
     var provenance: String {
+        if let layer { return layer.captureProvenanceDescription }
         var description = "Search results"
         if isMeaning {
             description = loaded == 1 ? "Meaning search — the closest match" : String(format: WorkingCorpusProvenance.meaningSearch, Self.grouped(loaded))
@@ -290,6 +308,8 @@ enum WorkingCorpusRoutes {
         /// The engine the search runs through, the app's `SearchMode`: `keywords`, as when it is left out, or `meaning`,
         /// whose list a capture saves (PLAN's S27d).
         let mode: String?
+        /// The list a layer of Search Within These Results ran inside (PLAN's S27e), whose rows a capture then saves.
+        let within: String?
     }
 
     struct Save: Decodable {
@@ -297,6 +317,7 @@ enum WorkingCorpusRoutes {
         let search: String
         let reviewed: [String]?
         let mode: String?
+        let within: String?
     }
 
     struct Rename: Decodable { let name: String }
@@ -352,8 +373,9 @@ enum WorkingCorpusRoutes {
         captures.post("working-corpora/capture") { request, context -> CorpusCapturePreview in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let body = try await JSONBody.decode(Capture.self, from: request, fields: ["search", "reviewed", "mode"], limit: bodyLimit)
-            let (capture, served) = try await capture(body.search, reviewed: body.reviewed, mode: body.mode, for: user, services: services,
+            let body = try await JSONBody.decode(Capture.self, from: request, fields: ["search", "reviewed", "mode", "within"], limit: bodyLimit)
+            let (capture, served) = try await capture(body.search, reviewed: body.reviewed, mode: body.mode, within: body.within,
+                                                      for: user, services: services,
                                                       provider: provider, resources: resources, meaning: meaning, context: context)
             var preview = capture.preview
             preview.indexedVolumeCount = served.indexedVolumeIds.count
@@ -362,9 +384,10 @@ enum WorkingCorpusRoutes {
         captures.post("working-corpora") { request, context -> EditedResponse<WorkingCorpus> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let body = try await JSONBody.decode(Save.self, from: request, fields: ["name", "search", "reviewed", "mode"], limit: bodyLimit)
+            let body = try await JSONBody.decode(Save.self, from: request, fields: ["name", "search", "reviewed", "mode", "within"], limit: bodyLimit)
             let name = try savedName(body.name)
-            let (capture, served) = try await capture(body.search, reviewed: body.reviewed, mode: body.mode, for: user, services: services,
+            let (capture, served) = try await capture(body.search, reviewed: body.reviewed, mode: body.mode, within: body.within,
+                                                      for: user, services: services,
                                                       provider: provider, resources: resources, meaning: meaning, context: context)
             guard !capture.keys.isEmpty else {
                 throw APIProblem(.badRequest, code: "NOTHING_TO_CAPTURE",
@@ -395,12 +418,19 @@ enum WorkingCorpusRoutes {
 
     /// The capture of the search `query` says, for `user`, less `reviewed`: the search's results kept,
     /// run as the user's search, inside the corpus it names, with its count and what narrowed it; or with
-    /// `mode` `meaning`, a search by meaning's list (PLAN's S27d).
-    static func capture(_ query: String, reviewed: [String]?, mode: String? = nil, for user: RequestUser, services: UserDataServices,
-                        provider: ServedIndexProvider, resources: ServerResources, meaning: MeaningSearchRoutes.MeaningEngine,
+    /// `mode` `meaning`, a search by meaning's list (PLAN's S27d); or with `within`, a layer's rows inside the list it
+    /// names (PLAN's S27e).
+    static func capture(_ query: String, reviewed: [String]?, mode: String? = nil, within: String? = nil, for user: RequestUser,
+                        services: UserDataServices, provider: ServedIndexProvider, resources: ServerResources,
+                        meaning: MeaningSearchRoutes.MeaningEngine,
                         context: APIRequestContext) async throws -> (CorpusCapture, ServedIndex) {
         var search = try SearchRequest(formEncoded: query)
         let hidden = try SearchRequest.reviewed(reviewed ?? [])
+        if let within {
+            return try await layerCapture(search, within: try HeldListRequest(within), hidden: hidden, for: user,
+                                          services: services, provider: provider, resources: resources, meaning: meaning,
+                                          context: context)
+        }
         if try HistoryRoutes.isMeaning(mode) {
             return try await meaningCapture(search, hidden: hidden, for: user, services: services, provider: provider,
                                             resources: resources, meaning: meaning, context: context)
@@ -435,6 +465,32 @@ enum WorkingCorpusRoutes {
         } catch let error as FTS5Error {
             throw SearchRoutes.refusal(error)
         }
+    }
+
+    /// The capture of a layer's rows (PLAN's S27e), as the Mac's sheet saves the rows Search Within These Results shows: the
+    /// layer, as the served index keeps it or as it is made now for `user`, inside the list `within` names and the corpus
+    /// applied now, its rows less those Checklist Mode hides, with what narrowed the list it ran inside, as the app records
+    /// the filters its rows were found under.
+    static func layerCapture(_ search: SearchRequest, within: HeldListRequest, hidden: Set<String>, for user: RequestUser,
+                             services: UserDataServices, provider: ServedIndexProvider, resources: ServerResources,
+                             meaning: MeaningSearchRoutes.MeaningEngine,
+                             context: APIRequestContext) async throws -> (CorpusCapture, ServedIndex) {
+        let store = services.store
+        let run = try await context.whileClientConnected {
+            try await SearchWithinRoutes.run(search, within: within, searcher: .of(user.id, in: store), provider: provider,
+                                             resources: resources, engine: meaning)
+        }
+        let served = try await provider.served()
+        var truncatedCorpus = false
+        if let corpusId = search.workingCorpusId {
+            let corpus = try await corpus(corpusId, of: user.id, in: store)
+            if case .truncated = CorpusCaptureTruncation(wasTruncated: corpus.wasTruncatedAtCapture,
+                                                          totalMatchCount: corpus.totalMatchCountAtCapture) {
+                truncatedCorpus = true
+            }
+        }
+        let narrowing = CorpusCapture.narrowing(ofRowsSignedBy: run.base.filterSignature, resources: resources.indexing)
+        return (CorpusCapture(layer: run, reviewed: hidden, narrowing: narrowing, insideTruncatedCorpus: truncatedCorpus), served)
     }
 
     /// The capture of a search by meaning's list (PLAN's S27d), as the Mac's sheet saves the rows a Meaning run listed:

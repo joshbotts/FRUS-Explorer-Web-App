@@ -28,9 +28,10 @@ enum ServedFixture {
     /// The same with another index the kit built, in rollback-journal mode, and the volumes named
     /// mounted from the repository's fixtures, with the fixture volumes' shards (`fixtures/semantic`) where the
     /// image holds every volume's, or the folder `shards` names (PLAN's S26d); and the encoder's settings `encoder`
-    /// names, the stand-in's, where a test searches by meaning (PLAN's S27d), whose child stops with the server's services.
+    /// names, the stand-in's, where a test searches by meaning (PLAN's S27d), whose child stops with the server's services;
+    /// and the ceiling a keyword list held for a layer is fetched under, which a test lowers to cut the fixtures (S27e).
     static func run<T: Sendable>(index copy: URL, volumes: [String], shards: URL = RepositoryFiles.semanticShards,
-                                 encoder: EncoderSettings? = nil,
+                                 encoder: EncoderSettings? = nil, searchCeiling: Int = SearchRequest.retainedLimit,
                                  _ body: @escaping @Sendable (any TestClientProtocol, DataDirectory) async throws -> T) async throws -> T {
         let directory = try TemporaryDirectory()
         defer { withExtendedLifetime(directory) {} }
@@ -38,7 +39,7 @@ enum ServedFixture {
         try RepositoryFiles.mountTEI(volumes, at: files.volumesDirectory)
         let app = try await buildApplication(configuration: ServerConfiguration(
             dataDirectory: files.root, importPollInterval: .milliseconds(50), resourcesDirectory: resources, semanticShards: shards),
-            encoder: encoder)
+            encoder: encoder, searchCeiling: searchCeiling)
         return try await app.test(.router) { client in
             // Staged outside the drop zone and moved in whole, as `docker compose cp` delivers a
             // file; the import removes what it installs, so it must not be the shared copy.

@@ -28,12 +28,15 @@ export function SaveCorpusDialog({
   state,
   reviewed,
   engine = 'keywords',
+  within,
   onClose,
 }: {
   state: SearchState;
   reviewed: readonly string[];
   /** The engine the rows were found through: a search by meaning's list is saved as its own capture (S27d). */
   engine?: 'keywords' | 'meaning';
+  /** The list a layer's rows ran inside, which the capture saves (S27e). */
+  within?: string;
   onClose: () => void;
 }) {
   const client = useQueryClient();
@@ -44,8 +47,8 @@ export function SaveCorpusDialog({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const preview = useQuery({
-    queryKey: ['capturePreview', filterFields(state), reviewed, engine],
-    queryFn: () => previewCapture(client, state, reviewed, engine),
+    queryKey: ['capturePreview', filterFields(state), reviewed, engine, within],
+    queryFn: () => previewCapture(client, state, reviewed, engine, within),
     staleTime: 0,
     retry: false,
   });
@@ -65,7 +68,7 @@ export function SaveCorpusDialog({
     setBusy(true);
     setFailure(null);
     try {
-      await saveCorpus(client, trimmed, state, reviewed, engine);
+      await saveCorpus(client, trimmed, state, reviewed, engine, within);
       closeAtOnce(close);
     } catch (error) {
       setBusy(false);

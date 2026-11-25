@@ -282,7 +282,8 @@ import Testing
             #"? "Checklist mode is hiding 1 reviewed document. It will not be in this corpus." : "Checklist mode is hiding \(Self.grouped(hiddenByChecklist)) reviewed documents. They will not be in this corpus.""#,
             "var didHitFetchLimit: Bool { loaded >= Self.fetchLimit || total > loaded }",
             // A search by meaning's list is partial too (PLAN's S27d, MeaningSearchParityTests).
-            "var isCapturePartial: Bool { isMeaning || didHitFetchLimit || insideTruncatedCorpus }",
+            // A layer's rows say what they record by the app's layered routes (PLAN's S27e), `SearchWithinParityTests`'.
+            "var isCapturePartial: Bool { layer?.isCapturePartial ?? (isMeaning || didHitFetchLimit || insideTruncatedCorpus) }",
             #"if ["text", "summ", "notes", "front"].allSatisfy({ parts[$0] == "1" }) { phrases.removeFirst() }"#,
             #"phrases.append(volumes == 1 ? "within 1 volume" : "within \(grouped(volumes)) volumes")"#,
             #"phrases.append(documents == 1 ? "within a set of 1 document" : "within a set of \(grouped(documents)) documents")"#,

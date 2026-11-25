@@ -236,8 +236,10 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     try await buildApplication(configuration: configuration, encoder: nil)
 }
 
-/// The application, with the encoder's settings a test gives, the stand-in's (PLAN's S27d), or the configuration's.
-func buildApplication(configuration: ServerConfiguration, encoder: EncoderSettings?) async throws -> some ApplicationProtocol {
+/// The application, with the encoder's settings a test gives, the stand-in's (PLAN's S27d), or the configuration's; and the
+/// ceiling a keyword list held for a layer is fetched under, which a test lowers to cut the fixtures (PLAN's S27e).
+func buildApplication(configuration: ServerConfiguration, encoder: EncoderSettings?,
+                      searchCeiling: Int = SearchRequest.retainedLimit) async throws -> some ApplicationProtocol {
     var logger = Logger(label: "frus-light")
     logger.logLevel = ProcessInfo.processInfo.environment["LOG_LEVEL"].flatMap(Logger.Level.init(rawValue:)) ?? .info
     let components = try await ServerComponents.make(configuration: configuration, encoder: encoder, logger: logger)
@@ -282,7 +284,8 @@ func buildApplication(configuration: ServerConfiguration, encoder: EncoderSettin
                                                        secrets: components.secrets, jobs: components.jobs),
                             leads: components.leads,
                             library: components.library, indexer: components.indexer, teiCheck: components.teiCheck,
-                            encoder: components.encoder, vectors: components.vectors, base: configuration.basePath, logger: logger),
+                            encoder: components.encoder, vectors: components.vectors, base: configuration.basePath,
+                            searchCeiling: searchCeiling, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
