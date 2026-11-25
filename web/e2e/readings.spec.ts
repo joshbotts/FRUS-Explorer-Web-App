@@ -60,7 +60,8 @@ test('the timeline counts the results the search keeps by year, in a chart with 
 test('the concordance lines up each occurrence on the page between its contexts, in each of the kit’s orders', async ({ page }) => {
   await page.goto('search?keywords=negotiating');
   await expect(page.getByRole('list', { name: 'Results' }).getByRole('link')).toHaveCount(2);
-  await tabTo(page, page.getByRole('group', { name: 'Reading' }).getByRole('button', { name: 'Concordance' }));
+  // Past the header, Search by (S27d), the box and the filters: more than tabTo's forty stops.
+  await tabTo(page, page.getByRole('group', { name: 'Reading' }).getByRole('button', { name: 'Concordance' }), 60);
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/[?&]reading=concordance(&|$)/);
   const lines = page.getByRole('list', { name: 'Occurrences' }).getByRole('link');

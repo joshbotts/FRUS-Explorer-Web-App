@@ -125,8 +125,9 @@ struct SearchUsers: Sendable {
 /// `GET /api/v1/me/search/tags`: the user's tags, in the order `GET /me/tags` lists them, each with how
 /// many documents of a search's results carry it, as the Mac's My Tags toggles count them, over the
 /// search that ran, its tag filter included (`SearchService.userTagCounts(parameters:tagIds:documentKeys:)`,
-/// the keyword route). A tag none of them carries counts 0, which is an answer worth showing, as the
-/// Mac's says.
+/// the keyword route); with `mode=meaning`, over the rows a search by meaning listed, the run the served
+/// index keeps, as the Mac counts them over a Meaning list's keys (`UserTagCountScope.resultKeys`, PLAN's
+/// S27d). A tag none of them carries counts 0, which is an answer worth showing, as the Mac's says.
 public struct SearchTagCounts: Codable, Equatable, Sendable {
     public struct Tag: Codable, Equatable, Sendable {
         public var id: String
@@ -142,21 +143,33 @@ extension SearchTagCounts: ResponseEncodable {}
 
 enum SearchTagRoutes {
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, provider: ServedIndexProvider,
-                    resources: ServerResources) {
+                    resources: ServerResources, meaning: MeaningSearchRoutes.MeaningEngine) {
         // A search's fields, and its page and order, which change nothing it counts, so a search's
-        // address can be read as it stands, as /search/inspect reads it.
+        // address can be read as it stands, as /search/inspect reads it; and the engine it ran through.
         me.get("/search/tags") { request, context -> SearchTagCounts in
-            let request = try SearchRequest(formEncoded: request.uri.query)
+            let form = try FormQuery(request.uri.query)
+            let request = try SearchRequest(form: form, alsoTaking: ["mode"])
+            let byMeaning = try HistoryRoutes.isMeaning(try form.single("mode"))
             let user = try context.requireUser()
             let search = try await SearchUsers.user(user.id, searching: request.parameters, in: services.store)
             let store = services.store
             let tags = try await Blocking.run { try store.tags(of: user.id) }
             let served = try await provider.served()
-            let parameters = try await SearchUsers.inside(request.workingCorpusId, request.parameters, for: user.id, in: store,
-                                                         served: served)
             let counts: [String: Int]
             do {
-                counts = try await served.search(for: search).service.userTagCounts(parameters: parameters, tagIds: tags.map(\.id))
+                if byMeaning {
+                    let run = try await context.whileClientConnected {
+                        try await MeaningSearchRoutes.run(request, for: user.id, in: store, provider: provider, resources: resources,
+                                                          engine: meaning)
+                    }
+                    counts = try await served.search(for: search).service.userTagCounts(
+                        parameters: run.parameters, tagIds: tags.map(\.id),
+                        documentKeys: run.outcome.results.map { (volumeId: $0.volumeId, documentId: $0.documentId) })
+                } else {
+                    let parameters = try await SearchUsers.inside(request.workingCorpusId, request.parameters, for: user.id, in: store,
+                                                                 served: served)
+                    counts = try await served.search(for: search).service.userTagCounts(parameters: parameters, tagIds: tags.map(\.id))
+                }
             } catch let error as FTS5Error {
                 throw SearchRoutes.refusal(error)
             }

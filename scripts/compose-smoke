@@ -8,7 +8,8 @@
 # tagger, whose self-test the hardened container runs to the committed digest (S29c), and the
 # catalogue and the reader before any import, imports a synthetic export with docker compose cp, and
 # waits for /readyz to answer 200;
-# then checks the image's labels against the server's status, searches the index, reads a
+# then checks the image's labels against the server's status, searches the index, by keywords and by
+# meaning through the image's encoder and vectors (S27d), reads a
 # document's page, makes and deletes a tag through the API's write guard (PLAN's S14c), and checks
 # the user, the read-only root, the health check and a restart. Then it
 # makes the container again with FRUS_PUBLIC_URL ending in /frus-explorer/ and checks the server
@@ -293,8 +294,8 @@ assert (shards["held"], shards["published"], shards["checked"], shards["verified
 assert shards["heldBytes"] == shards["publishedBytes"] == 162_377_248 and not shards["refused"] and not shards["missing"], shards
 semantic = json.load(open(sys.argv[2], encoding="utf-8"))["semantic"]
 assert semantic == {"vectors": True, "generation": "89481b18", "shardsHeld": 553, "shardsPublished": 553, "map": True,
-                    "encoder": True, "relatedDocuments": True, "searchByMeaning": False}, semantic
-print("   the pane's Vectors: 553 of 553, each checked, none refused; the status: the vectors, the map, the encoder and Related Documents' axis")
+                    "encoder": True, "relatedDocuments": True, "searchByMeaning": True}, semantic
+print("   the pane's Vectors: 553 of 553, each checked, none refused; the status: the vectors, the map, the encoder, Related Documents' axis and search by meaning")
 PY
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp "$FRUS_IMAGE" semantic \
   > "$work/vectors-offline.txt" 2>&1 || fail "frus-light semantic failed with no network: $(tail -5 "$work/vectors-offline.txt")"
@@ -1181,6 +1182,28 @@ done
 version=$(grep -i '^x-frus-rendering-version:' "$work/page.headers" | tr -d '\r' | cut -d' ' -f2)
 [ "${#version}" = 16 ] || fail "the page sends no rendering version: '$version'"
 echo "   2 documents found; frus1961-63v06 d1's page, $(wc -c < "$work/page.html" | tr -d ' ') bytes, with the reader's four scripts and its policy"
+
+echo "== browse and search: a search by meaning through the image's encoder and every vector (PLAN's S27d)"
+# The kit's Meaning engine over the served index, the question embedded by llama-server over the model in the image and
+# ranked by the bundled tier and the image's 553 shards: the hundred nearest of the series, those the import's index holds
+# as rows with the kit's chip, those in volumes it serves but does not hold counted, and the rest apart, titled from the
+# catalogue; no candidate dropped, since the image holds every shard.
+meaning=$(curl -s --max-time 120 "$base/api/v1/search/meaning?keywords=Khrushchev%20congratulates%20Kennedy%20on%20his%20election&limit=100") \
+  || fail "/api/v1/search/meaning did not answer"
+python3 - "$meaning" <<'PY' || fail "the search by meaning is not the hundred nearest over every shard: $(printf '%s' "$meaning" | head -c 600)"
+import json, sys
+answer = json.loads(sys.argv[1])
+meaning, items = answer["meaning"], answer["items"]
+disclosure, beyond = meaning["disclosure"], meaning["beyondLibrary"]
+assert disclosure["unscoredCandidates"] == 0 and not meaning["missingShards"], disclosure
+assert answer["total"] + len(beyond) + disclosure["notIndexedHere"] == 100, (answer["total"], len(beyond), disclosure)
+assert all(item["chip"].startswith("Semantic match · ") and item["semanticScore"] for item in items), items
+assert all(hit["volumeId"] not in ("frus1961-63v06", "frus1894Nicaragua") and hit["volumeTitle"] for hit in beyond), beyond
+assert meaning["renderedExpression"] == "route=semantic; model=embeddinggemma-2-Q8_0; top=100", meaning["renderedExpression"]
+assert meaning["strip"][0].startswith("Meaning search (experimental): ranked by what your question means, across the whole series")
+print(f"   the hundred nearest: {answer['total']} listed, {disclosure['notIndexedHere']} in served volumes the index lacks, "
+      f"{len(beyond)} in volumes this server does not serve; none unscored")
+PY
 
 echo "== research: the user's tags, through the write guard"
 # Sent to the public address's host and from its origin, as the browser app sends them; curl

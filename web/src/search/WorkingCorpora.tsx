@@ -24,7 +24,18 @@ export function corpusName(corpus: Pick<WorkingCorpus, 'name'>): string {
 }
 
 /** The Save Working Corpus sheet, over what the server would capture of the search's rows less `reviewed`. */
-export function SaveCorpusDialog({ state, reviewed, onClose }: { state: SearchState; reviewed: readonly string[]; onClose: () => void }) {
+export function SaveCorpusDialog({
+  state,
+  reviewed,
+  engine = 'keywords',
+  onClose,
+}: {
+  state: SearchState;
+  reviewed: readonly string[];
+  /** The engine the rows were found through: a search by meaning's list is saved as its own capture (S27d). */
+  engine?: 'keywords' | 'meaning';
+  onClose: () => void;
+}) {
   const client = useQueryClient();
   const headingId = useId();
   const field = useRef<HTMLInputElement>(null);
@@ -33,8 +44,8 @@ export function SaveCorpusDialog({ state, reviewed, onClose }: { state: SearchSt
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const preview = useQuery({
-    queryKey: ['capturePreview', filterFields(state), reviewed],
-    queryFn: () => previewCapture(client, state, reviewed),
+    queryKey: ['capturePreview', filterFields(state), reviewed, engine],
+    queryFn: () => previewCapture(client, state, reviewed, engine),
     staleTime: 0,
     retry: false,
   });
@@ -54,7 +65,7 @@ export function SaveCorpusDialog({ state, reviewed, onClose }: { state: SearchSt
     setBusy(true);
     setFailure(null);
     try {
-      await saveCorpus(client, trimmed, state, reviewed);
+      await saveCorpus(client, trimmed, state, reviewed, engine);
       closeAtOnce(close);
     } catch (error) {
       setBusy(false);

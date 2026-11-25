@@ -230,6 +230,9 @@ export interface SearchItem {
   subjectTagIds: string[];
   /** The user's tags on the document, each once, its id in upper case, as the kit reads them; none for no one. */
   userTagIds: string[];
+  /** A row a search by meaning ranked (S27d): its calibrated cosine, and the kit's chip, "Semantic match · 64%". */
+  semanticScore?: number;
+  chip?: string;
 }
 
 /** The kit's SearchSortOrder: relevance, or the date, oldest or most recent first. */
