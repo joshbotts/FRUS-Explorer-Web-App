@@ -71,19 +71,18 @@ export interface SearchState {
 
 /**
  * The ways the results can be read, in the order of the Mac's Reading picker (`ResultReading`): the
- * list, the timeline, and the concordance. Collocates, the Mac's fourth, arrive in phase 4; until then the picker offers
- * them refused, with the reason (S24i).
+ * list, the timeline, the concordance, and since S29f Collocates, which S24i offered refused until the server's tagger.
  */
-export const readings = ['list', 'timeline', 'concordance'] as const;
+export const readings = ['list', 'timeline', 'concordance', 'collocates'] as const;
 export type Reading = (typeof readings)[number];
 
 /**
  * Whether a reading shows one page of the results, and so pages with the pager, as the Mac's
- * `ResultReading.isPaged` has it: the list and the concordance do; the timeline covers every result
+ * `ResultReading.isPaged` has it: the list and the concordance do; the timeline and Collocates cover every result
  * the search keeps.
  */
 export function isPaged(reading: Reading): boolean {
-  return reading !== 'timeline';
+  return reading !== 'timeline' && reading !== 'collocates';
 }
 
 export const pageSizes = [10, 20, 50, 100] as const;
@@ -184,7 +183,7 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     panel: single(raw.panel) === 'facets' ? 'facets' : undefined,
     by: single(raw.by) === 'meaning' ? 'meaning' : undefined,
     within: single(raw.within) || undefined,
-    reading: reading === 'timeline' || reading === 'concordance' ? reading : undefined,
+    reading: reading === 'timeline' || reading === 'concordance' || reading === 'collocates' ? reading : undefined,
     timelineMode: single(raw.timelineMode) === 'list' ? 'list' : undefined,
     align: align === 'rightContext' || align === 'date' || align === 'volume' ? align : undefined,
     sort: sort === 'dateAscending' || sort === 'dateDescending' ? sort : undefined,

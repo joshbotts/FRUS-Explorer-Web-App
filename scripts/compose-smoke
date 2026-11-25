@@ -831,6 +831,33 @@ if [ -n "$e2e" ]; then
     || fail "the graph spec failed; web/playwright-report has its report"
 fi
 
+echo "== the language: Distinctive and Collocates over the Standalone server's index of the three fixture volumes (PLAN's S29f)"
+# frus1961-63v06's own cloud sized by Distinctive: the kit's ranking of the volume's live count against the language
+# family's reference, the image's; and a search's collocates, the kit's words near its matches across every result it
+# keeps, ranked against the same reference, with both of the panel's orders. With --e2e, the language spec sizes the
+# volume's cloud by Distinctive and reads the search's collocates by keyboard, on Chromium with no axe violations.
+curl -s --max-time 60 -H "Host: localhost:8080" -o "$work/distinctive.json" \
+  "$library_base/api/v1/cloud?scope=vol%3Afrus1961-63v06&lens=allTerms&measure=keyness" || fail "the Word Cloud did not answer under Distinctive"
+curl -s --max-time 60 -H "Host: localhost:8080" -o "$work/collocates.json" \
+  "$library_base/api/v1/search/collocates?keywords=Berlin" || fail "Collocates did not answer"
+python3 - "$work/distinctive.json" "$work/collocates.json" <<'PY' || fail "Distinctive or Collocates did not rank: $(head -c 400 "$work/distinctive.json") $(head -c 400 "$work/collocates.json")"
+import json, sys
+cloud = json.load(open(sys.argv[1], encoding="utf-8"))
+reading = cloud["distinctive"]
+assert cloud["source"] == "live" and reading["state"] == "ranked" and reading["wordForm"] == "dictionary", reading.get("reason")
+assert reading["rankedAmongTopFrequent"] and len(reading["scores"]) > 20 and reading["caveat"].startswith("Ranked among this scope’s 1000"), reading["caveat"]
+near = json.load(open(sys.argv[2], encoding="utf-8"))
+assert near["state"] == "ranked" and near["items"] and set(near["orders"]) == {"evidence", "effect"}, near.get("reason")
+assert sorted(near["orders"]["effect"]) == list(range(len(near["items"]))) and near["anchorCount"] > 0, near["orders"]
+print(f"   frus1961-63v06 ranked by Distinctive: {len(reading['scores'])} words, first {[s['term'] for s in reading['scores'][:3]]}; "
+      f"Berlin's collocates: {len(near['items'])} words in {near['documentsScanned']} documents, first {[i['term'] for i in near['items'][:3]]}")
+PY
+if [ -n "$e2e" ]; then
+  echo "   the language spec in Playwright on Chromium: a fixture volume's cloud sized by Distinctive and a search's collocates read, by keyboard"
+  FRUS_E2E_LANGUAGE=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
+    || fail "the language spec failed; web/playwright-report has its report"
+fi
+
 echo "== the reader: Source Explorer over the Standalone server's index of the three fixture volumes, and check 8 (PLAN's S22d)"
 # frus1961-63v06's d3, a lot file the bundled central files resolve: the kit's resolution through the API, with the
 # panels the app's view draws from it. Check 8, frus-parity check-source-explorer from the image of the Dockerfile's

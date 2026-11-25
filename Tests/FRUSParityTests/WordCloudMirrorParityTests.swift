@@ -297,7 +297,7 @@ import Testing
             (Self.view, #"sessionHiddenWords.insert(term.lowercased())"#,
              Self.screen, #"setSession({ scope: drawnScope, words: [...sessionWords, term.toLowerCase()] });"#),
             (Self.view, #"WordCloudMainArea(state: displayState) { if measure == .keyness, case .unavailable(let reason) = keyness ?? .pending {"#,
-             Self.screen, #"detail={answer.message?.detail ?? ''} /> ) : measure === 'keyness' ? ( <Empty title={words.keynessTitle} detail={words.keynessReason} /> )"#),
+             Self.screen, #"<Empty title={distinctive.message?.title ?? words.keynessTitle} detail={distinctive.message?.detail ?? ''} />"#),
             (Self.scope, #"guard !hidden.isEmpty else { return terms } return terms.filter { !hidden.contains($0.term.lowercased()) }"#,
              Self.screen, #"return (answer?.terms ?? []).filter((term) => !hidden.has(term.term.toLowerCase()));"#),
             (Self.view, #"if !hiddenWords.isEmpty || !sessionHiddenWords.isEmpty {"#,

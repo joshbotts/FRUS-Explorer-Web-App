@@ -37,8 +37,11 @@ enum ServedFixture {
         defer { withExtendedLifetime(directory) {} }
         let files = DataDirectory(root: directory.url.appendingPathComponent("data"))
         try RepositoryFiles.mountTEI(volumes, at: files.volumesDirectory)
+        // The language family's folder, the repository's, which the image's path stands for (PLAN's S29f: Distinctive and
+        // Collocates rank against its references, and the corpus's, a subseries' and a volume's clouds are its lists).
         let app = try await buildApplication(configuration: ServerConfiguration(
-            dataDirectory: files.root, importPollInterval: .milliseconds(50), resourcesDirectory: resources, semanticShards: shards),
+            dataDirectory: files.root, importPollInterval: .milliseconds(50), resourcesDirectory: resources,
+            languageDirectory: RepositoryFiles.language, semanticShards: shards),
             encoder: encoder, searchCeiling: searchCeiling)
         return try await app.test(.router) { client in
             // Staged outside the drop zone and moved in whole, as `docker compose cp` delivers a

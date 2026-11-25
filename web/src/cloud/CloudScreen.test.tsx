@@ -73,6 +73,29 @@ function cloud(url: URL): CloudAnswer {
     listed: 50,
     removed: 45,
     analyzeWithin: scope.startsWith('vol:') ? { label: 'Analyze within this volume', volumeIds: [scope.slice(4)], scopeLabel: 'Volume VI' } : undefined,
+    // Under Distinctive (S29f), the server's ranking of the words, less those the request hides.
+    distinctive: url.searchParams.get('measure') === 'keyness' ? ranking(lens.id, url.searchParams.getAll('hidden')) : undefined,
+  };
+}
+
+/** A ranking as the server gives it: three words of the lens, less `hidden`, the last unpriced. */
+function ranking(lens: string, hidden: string[] = []): NonNullable<CloudAnswer['distinctive']> {
+  const scores = [
+    { term: `khrushchev-${lens}`, scopeCount: 412, referenceCount: 9_310, logLikelihood: 3806.44, logRatio: 8.32, fold: 319.5, unpriced: false },
+    { term: `berlin-${lens}`, scopeCount: 1787, referenceCount: 61_002, logLikelihood: 3244.07, logRatio: 2.58, fold: 5.98, unpriced: false },
+    { term: `zorin-${lens}`, scopeCount: 9, referenceCount: 0, logLikelihood: 51.2, logRatio: 10.1, fold: 1097.6, unpriced: true },
+  ].filter((score) => !hidden.includes(score.term.toLowerCase()));
+  return {
+    state: 'ranked',
+    scores,
+    layout: scores.map((score) => ({ term: score.term, count: Math.round(score.logLikelihood * 100) })),
+    countLine: `${scores.length} terms from 393 documents`,
+    caveat: 'Ranked over every word occurring at least 3 times here. Words occurring fewer than 114 times corpus-wide are unpriced and score as if new.',
+    candidateCount: 900,
+    rankedAmongTopFrequent: false,
+    minimumScopeCount: 3,
+    referenceCutoffCount: 114,
+    wordForm: 'dictionary',
   };
 }
 
@@ -146,18 +169,78 @@ describe('the Word Cloud', () => {
     expect(asked.map((url) => url.search)).toEqual(['?scope=corpus&lens=allTerms', '?scope=corpus&lens=sentiment', '?scope=vol%3Afrus1961-63v06&lens=sentiment']);
   });
 
-  it('refuses Distinctive with its reason, and keeps the measure in this browser', async () => {
-    server();
+  it('sizes the cloud by Distinctive, the server’s ranking with its caveat and each word’s keyness, and keeps the measure in this browser', async () => {
+    const fetch = server();
     const user = userEvent.setup();
     renderAt('/cloud');
     const measure = await screen.findByRole('group', { name: 'Size words by' });
+    await screen.findByRole('table', { name: 'Terms by count' });
     await user.click(within(measure).getByRole('radio', { name: 'Distinctive' }));
-    expect(screen.getByRole('heading', { name: 'No Distinctiveness Ranking' })).toBeTruthy();
-    expect(screen.getByText(/which this server does not rank them against yet/)).toBeTruthy();
-    expect(screen.queryByRole('table', { name: 'Terms by count' })).toBeNull();
+    const table = await screen.findByRole('table', { name: 'Terms by distinctiveness' });
+    expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Rank', 'Term', 'Keyness', 'Actions']);
+    const cells = (row: HTMLElement, selector: string) => row.querySelector(selector)?.textContent;
+    expect(
+      within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => [cells(row, '.cloud-rank'), cells(row, '.link-button'), cells(row, '.cloud-keyness-caption'), cells(row, '.cloud-count')]),
+    ).toEqual([
+      ['1', 'khrushchev-allTerms', '320× more often here · 412 here · 9,310 corpus-wide', '3,806.4'],
+      ['2', 'berlin-allTerms', '6.0× more often here · 1,787 here · 61,002 corpus-wide', '3,244.1'],
+      ['3', 'zorin-allTerms', '1,098× more often here · 9 here · fewer than 114 corpus-wide (unpriced)', '51.2'],
+    ]);
+    // A word is read with the app's reading of its row.
+    const word = within(table).getByRole('button', { name: 'khrushchev-allTerms' });
+    expect(document.getElementById(word.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'keyness 3,806.4; 320× more often here; 412 here · 9,310 corpus-wide',
+    );
+    // The header counts the words ranked, and the caveat sits under the measure.
+    expect(screen.getByText('3 terms from 393 documents')).toBeTruthy();
+    expect(screen.getByText(/^Ranked over every word occurring at least 3 times here\./)).toBeTruthy();
+    const asked = fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).filter((url) => url.pathname === '/api/v1/cloud');
+    expect(asked.at(-1)?.search).toBe('?scope=corpus&lens=allTerms&measure=keyness');
     expect(window.localStorage.getItem('frus.wordcloud.measure')).toBe('keyness');
+
     await user.click(within(measure).getByRole('radio', { name: 'Frequency' }));
     expect(await screen.findByRole('table', { name: 'Terms by count' })).toBeTruthy();
+    expect(screen.queryByText(/^Ranked over every word/)).toBeNull();
+  });
+
+  it('asks Distinctive again without a word hidden from this cloud alone, as the app ranks the words it shows', async () => {
+    window.localStorage.setItem('frus.wordcloud.measure', 'keyness');
+    const fetch = server();
+    const user = userEvent.setup();
+    renderAt('/cloud');
+    const table = await screen.findByRole('table', { name: 'Terms by distinctiveness' });
+    await user.click(within(table).getByRole('button', { name: 'More for berlin-allTerms' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Hide in this word cloud' }));
+    await waitFor(() => expect(within(table).queryByRole('button', { name: 'berlin-allTerms' })).toBeNull());
+    await waitFor(() => {
+      const asked = fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).filter((url) => url.pathname === '/api/v1/cloud');
+      expect(asked.at(-1)?.searchParams.getAll('hidden')).toEqual(['berlin-allterms']);
+    });
+    expect(await screen.findByText('2 terms from 393 documents')).toBeTruthy();
+  });
+
+  it('says why a scope has no ranking, in the server’s words', async () => {
+    window.localStorage.setItem('frus.wordcloud.measure', 'keyness');
+    server({
+      '/api/v1/cloud': (url: URL) => ({
+        ...cloud(url),
+        distinctive: {
+          state: 'unavailable',
+          reason: 'configurationMismatch',
+          message: { title: 'No Distinctiveness Ranking', detail: 'Your settings count words differently from the bundled corpus reference, so the two can’t be compared: plural folding differs.' },
+          mismatches: ['foldPlurals'],
+          scores: [],
+          layout: [],
+        },
+      }),
+    });
+    renderAt('/cloud');
+    expect(await screen.findByRole('heading', { name: 'No Distinctiveness Ranking' })).toBeTruthy();
+    expect(screen.getByText(/so the two can’t be compared: plural folding differs\./)).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
   });
 
   it('shows a document’s own cloud from the rail, counted live, with the way back (S29e)', async () => {

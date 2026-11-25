@@ -8,7 +8,10 @@
 // how far it has come. The page draws the cloud as the app does, in a spiral of words sized by count (`WordCloudLayout`),
 // with the ranked list that is the cloud's accessible reading beside it, and a word's menu: Corpus Analytics over the
 // series or over the cloud's own volumes, Search, and the three hides, this cloud alone, this lens, or every cloud. The
-// header's chip says when a thin volume's era stands in for it. Distinctive is refused with its reason until S29f.
+// header's chip says when a thin volume's era stands in for it. Since S29f Size words by: Distinctive draws the server's
+// ranking of the scope's count against the family's reference, the kit's (`KeynessCloud.rank`), the cloud sized by it and
+// the list giving each word's keyness, its multiple and its two counts, with the app's caveat, or the app's reason for
+// none; the words hidden from this cloud alone are sent with it, so the ranking is of the words shown, as the app's is.
 // The web's own: the cloud and its list drawn together, where the app switches between them, the words saying what the
 // reader's settings took out of a family's list, and what a count says of itself.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +24,7 @@ import {
   type CloudJob,
   cloudJobQuery,
   cloudQuery,
+  type CloudScore,
   type CloudTerm,
   hideWord,
   pendingCriteriaChanges,
@@ -76,7 +80,15 @@ export function CloudScreen() {
   const lenses = context.data?.lenses ?? [];
   const lens = lenses.some((each) => each.id === search.lens) ? search.lens! : (lenses[0]?.id ?? 'allTerms');
   const token = settingsToken(keepsUserData ? preferences : undefined);
-  const cloud = useQuery({ ...cloudQuery(scope, lens, token), enabled: context.isSuccess && settingsKnown });
+  const [measure, setMeasure] = useState<Measure>(storedMeasure);
+  // The words hidden from this open cloud alone (#233), which go when another scope's cloud is drawn, as the app's view
+  // is made again; Distinctive is asked without them (S29f), as the app ranks the terms its cloud shows.
+  const [session, setSession] = useState<{ scope: string; words: string[] }>({ scope, words: [] });
+  const ranked = measure === 'keyness';
+  const cloud = useQuery({
+    ...cloudQuery(scope, lens, token, measure, ranked && session.scope === scope ? session.words : []),
+    enabled: context.isSuccess && settingsKnown,
+  });
   const answer = cloud.data;
   // The job a count runs as (S29e), followed until it ends: its end asks the cloud again, which the server has kept.
   const jobId = answer?.state === 'counting' && !cloud.isPlaceholderData ? answer.job?.id : undefined;
@@ -101,10 +113,6 @@ export function CloudScreen() {
   const asked = cloud.isPlaceholderData;
   const drawnScope = answer?.scope.signature ?? scope;
   const drawnLens = answer?.lens.id ?? lens;
-  const [measure, setMeasure] = useState<Measure>(storedMeasure);
-  // The words hidden from this open cloud alone (#233), which go when another scope's cloud is drawn, as the app's view
-  // is made again.
-  const [session, setSession] = useState<{ scope: string; words: string[] }>({ scope, words: [] });
   if (session.scope !== drawnScope) setSession({ scope: drawnScope, words: [] });
   const sessionWords = session.words;
   // A word hidden in a list of the reader's leaves the cloud at once, before the cloud is asked again.
@@ -121,6 +129,16 @@ export function CloudScreen() {
     const hidden = new Set([...session.words, ...(leaving.answer === answer ? leaving.words : [])]);
     return (answer?.terms ?? []).filter((term) => !hidden.has(term.term.toLowerCase()));
   }, [answer, session, leaving]);
+  // Distinctive's ranking and its layout, less the words hidden while the ranking without them is asked for.
+  const distinctive = ranked && answer?.state === 'terms' ? answer.distinctive : undefined;
+  const ranking = useMemo(() => {
+    if (distinctive?.state !== 'ranked') return undefined;
+    const hidden = new Set([...session.words, ...(leaving.answer === answer ? leaving.words : [])]);
+    return {
+      scores: distinctive.scores.filter((score) => !hidden.has(score.term.toLowerCase())),
+      layout: distinctive.layout.filter((term) => !hidden.has(term.term.toLowerCase())),
+    };
+  }, [distinctive, answer, session, leaving]);
 
   function change(fields: { scope?: string; lens?: string }) {
     setFailure(undefined);
@@ -192,6 +210,8 @@ export function CloudScreen() {
               keepMeasure(next as Measure);
             }}
           />
+          {/* What Distinctive's ranking can and cannot see, under the measure, as the app's caveat sits under its picker. */}
+          {distinctive?.state === 'ranked' && distinctive.caveat && <p className="analytics-caption cloud-caveat">{distinctive.caveat}</p>}
           {keepsUserData && preferences && (
             <div className="cloud-options">
               <label>
@@ -236,7 +256,7 @@ export function CloudScreen() {
             </p>
           ) : (
             <section className="analytics-result" aria-labelledby="cloud-scope-title" aria-busy={asked || undefined}>
-              <Header answer={answer} shownCount={shown.length} />
+              <Header answer={answer} shownCount={ranking ? ranking.scores.length : shown.length} distinctive={distinctive} />
               {answer.lens.colorsBySentiment && (
                 <p className="cloud-legend">
                   <span data-color="positive">{words.positive}</span> <span data-color="negative">{words.negative}</span>
@@ -255,7 +275,30 @@ export function CloudScreen() {
               ) : answer.state !== 'terms' ? (
                 <Empty title={answer.message?.title ?? words.errorTitle} detail={answer.message?.detail ?? ''} />
               ) : measure === 'keyness' ? (
-                <Empty title={words.keynessTitle} detail={words.keynessReason} />
+                // The state first, then the ranking or why there is none, as the app's main area draws them; while the
+                // ranking comes, the cloud last drawn is set aside.
+                !distinctive ? (
+                  <p className="analytics-loading" role="status">
+                    {words.loading}
+                  </p>
+                ) : !ranking ? (
+                  <Empty title={distinctive.message?.title ?? words.keynessTitle} detail={distinctive.message?.detail ?? ''} />
+                ) : (
+                  <>
+                    <Canvas answer={answer} terms={ranking.layout} keyness />
+                    <TermList
+                      answer={answer}
+                      terms={shown}
+                      scores={ranking.scores}
+                      cutoff={distinctive.referenceCutoffCount ?? 1}
+                      headingId={listHeading}
+                      keepsUserData={keepsUserData}
+                      onHideHere={hideInThisCloud}
+                      onHideInLens={(term) => void hideInList(term, true)}
+                      onHideEverywhere={(term) => void hideInList(term, false)}
+                    />
+                  </>
+                )
               ) : (
                 <>
                   <Canvas answer={answer} terms={shown} />
@@ -474,20 +517,27 @@ function DateRangeFields({ range, onApply }: { range: { from: string; to: string
   );
 }
 
-/** The scope header: the cloud's title, its count line, the chip, and what the reader's settings took out or cannot show. */
-function Header({ answer, shownCount }: { answer: CloudAnswer; shownCount: number }) {
+/**
+ * The scope header: the cloud's title, its count line, the chip, and what the reader's settings took out or cannot show.
+ * Under Distinctive the count line counts the words ranked, as the app's counts what is shown, with the line a ranking of
+ * printed forms says.
+ */
+function Header({ answer, shownCount, distinctive }: { answer: CloudAnswer; shownCount: number; distinctive?: CloudAnswer['distinctive'] }) {
+  const listed = distinctive?.state === 'ranked' ? distinctive.scores.length : answer.terms.length;
+  const line = distinctive?.state === 'ranked' ? distinctive.countLine : answer.countLine;
   return (
     <div className="cloud-header">
       <h2 id="cloud-scope-title">{answer.scope.title.replace(/\s+/g, ' ')}</h2>
       {answer.state === 'terms' && (
         <p className="analytics-caption">
-          {shownCount === answer.terms.length
-            ? answer.countLine
+          {shownCount === listed
+            ? line
             : answer.documentCount !== undefined
               ? words.countFrom(shownCount, answer.documentCount)
               : words.countLine(shownCount)}
         </p>
       )}
+      {distinctive?.state === 'ranked' && distinctive.comparedAsPrinted && <p className="analytics-note">{distinctive.comparedAsPrinted}</p>}
       <p className="cloud-chip" data-era={answer.fallbackSubseries ? 'true' : undefined}>
         {answer.chip}
       </p>
@@ -502,7 +552,7 @@ function Header({ answer, shownCount }: { answer: CloudAnswer; shownCount: numbe
  * and density for this device. A word's click charts it in Corpus Analytics, as the app's tap does; the list below is
  * its reading for a keyboard and a screen reader, as the app's list is its accessibility representation.
  */
-function Canvas({ answer, terms }: { answer: CloudAnswer; terms: CloudTerm[] }) {
+function Canvas({ answer, terms, keyness = false }: { answer: CloudAnswer; terms: CloudTerm[]; keyness?: boolean }) {
   const navigate = useNavigate();
   const frame = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -527,7 +577,13 @@ function Canvas({ answer, terms }: { answer: CloudAnswer; terms: CloudTerm[] }) 
   return (
     <div ref={frame} className={`cloud-canvas cloud-font-${design}`}>
       {width > 0 && (
-        <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label={words.canvasLabel(placed.length, terms.length)}>
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          width={width}
+          height={height}
+          role="img"
+          aria-label={keyness ? words.keynessCanvasLabel(placed.length, terms.length) : words.canvasLabel(placed.length, terms.length)}
+        >
           {placed.map((word) => (
             <text
               key={word.term}
@@ -541,7 +597,8 @@ function Canvas({ answer, terms }: { answer: CloudAnswer; terms: CloudTerm[] }) 
               aria-hidden="true"
               onClick={() => void navigate({ to: '/analytics/corpus', search: { term: word.term } })}
             >
-              <title>{words.wordTitle(word.term, word.count)}</title>
+              {/* Under Distinctive a word's size is a scaled score, never a count to show (`KeynessCloud.layoutTerms`). */}
+              <title>{keyness ? word.term : words.wordTitle(word.term, word.count)}</title>
               {word.term}
             </text>
           ))}
@@ -553,11 +610,15 @@ function Canvas({ answer, terms }: { answer: CloudAnswer; terms: CloudTerm[] }) 
 
 /**
  * The ranked list (`rankedList`): each word, its bar against the first and its count, the word charting itself in Corpus
- * Analytics, and its menu, the app's word menu.
+ * Analytics, and its menu, the app's word menu. Under Distinctive (S29f) it is the app's keyness list (`keynessList`):
+ * each word with its multiple and its two counts beneath it, unpriced said plainly, its bar against the first's G² and its
+ * G² to one place, read aloud with the word as the app's row is, and the same menu.
  */
 function TermList({
   answer,
   terms,
+  scores,
+  cutoff = 1,
   headingId,
   keepsUserData,
   onHideHere,
@@ -566,6 +627,10 @@ function TermList({
 }: {
   answer: CloudAnswer;
   terms: CloudTerm[];
+  /** Distinctive's ranking, which the list gives in the counts' place. */
+  scores?: CloudScore[];
+  /** The reference's cut, below which a word is unpriced. */
+  cutoff?: number;
   headingId: string;
   keepsUserData: boolean;
   onHideHere: (term: string) => void;
@@ -576,6 +641,10 @@ function TermList({
   const heading = useRef<HTMLHeadingElement>(null);
   const body = useRef<HTMLTableSectionElement>(null);
   const maxCount = terms[0]?.count ?? 1;
+  const maxScore = scores?.[0]?.logLikelihood ?? 1;
+  const rows: { term: string; polarity?: number; count: number; score?: CloudScore }[] = scores
+    ? scores.map((score) => ({ term: score.term, polarity: score.polarity, count: score.scopeCount, score }))
+    : terms.map((term) => ({ term: term.term, polarity: term.polarity, count: term.count }));
 
   /**
    * Hides a word, and gives the keyboard to the word that takes its place, or the one before it, or the list's heading:
@@ -588,7 +657,7 @@ function TermList({
     next?.focus();
   }
 
-  function entries(term: CloudTerm, index: number): MenuEntry[] {
+  function entries(term: { term: string }, index: number): MenuEntry[] {
     const within = answer.analyzeWithin;
     return [
       { kind: 'item', label: words.analyze, onSelect: () => void navigate({ to: '/analytics/corpus', search: { term: term.term } }) },
@@ -610,7 +679,7 @@ function TermList({
   return (
     <div className="cloud-list">
       <h3 id={headingId} ref={heading} tabIndex={-1}>
-        {words.listTitle}
+        {scores ? words.keynessListTitle : words.listTitle}
       </h3>
       <table aria-labelledby={headingId}>
         <thead>
@@ -618,14 +687,14 @@ function TermList({
             <th scope="col">{words.rank}</th>
             <th scope="col">{words.term}</th>
             {answer.lens.colorsBySentiment && <th scope="col">{words.polarity}</th>}
-            <th scope="col">{words.count}</th>
+            <th scope="col">{scores ? words.keyness : words.count}</th>
             <th scope="col">
               <span className="visually-hidden">{words.actions}</span>
             </th>
           </tr>
         </thead>
         <tbody ref={body}>
-          {terms.map((term, index) => (
+          {rows.map((term, index) => (
             <tr key={term.term}>
               <td className="cloud-rank">{index + 1}</td>
               <td>
@@ -633,17 +702,30 @@ function TermList({
                   type="button"
                   className="link-button"
                   title={words.tapHint}
+                  aria-describedby={term.score ? `${headingId}-${index}` : undefined}
                   data-color={answer.lens.colorsBySentiment ? wordColor(index, term.polarity, true) : undefined}
                   onClick={() => void navigate({ to: '/analytics/corpus', search: { term: term.term } })}
                 >
                   {term.term}
                 </button>
+                {term.score && <KeynessCaption score={term.score} cutoff={cutoff} id={`${headingId}-${index}`} />}
               </td>
               {answer.lens.colorsBySentiment && <td>{term.polarity === 1 ? words.positive : term.polarity === -1 ? words.negative : words.neither}</td>}
-              <td className="cloud-count">
-                <span className="cloud-bar" aria-hidden="true" style={{ width: `${Math.round((60 * term.count) / maxCount)}px` }} />
-                {term.count.toLocaleString('en-US')}
-              </td>
+              {term.score ? (
+                <td className="cloud-count">
+                  <span
+                    className="cloud-bar"
+                    aria-hidden="true"
+                    style={{ width: `${Math.round(60 * Math.max(0, Math.min(1, term.score.logLikelihood / maxScore)))}px` }}
+                  />
+                  {words.keynessValue(term.score.logLikelihood)}
+                </td>
+              ) : (
+                <td className="cloud-count">
+                  <span className="cloud-bar" aria-hidden="true" style={{ width: `${Math.round((60 * term.count) / maxCount)}px` }} />
+                  {term.count.toLocaleString('en-US')}
+                </td>
+              )}
               <td>
                 <MenuButton label={words.more} accessibleLabel={words.moreFor(term.term)} entries={entries(term, index)} className="cloud-word-menu">
                   {words.more}
@@ -654,5 +736,25 @@ function TermList({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * A Distinctive row's line under its word, the app's: its multiple, then its two counts, with "unpriced" said plainly for a
+ * word rarer corpus-wide than the reference prices; and, for a screen reader, the app's reading of the row's numbers.
+ */
+function KeynessCaption({ score, cutoff, id }: { score: CloudScore; cutoff: number; id: string }) {
+  const multiple = copy.collocates.multiple(score.fold);
+  const fold = Number.isFinite(score.fold) && score.fold > 0 ? words.foldPhrase(multiple) : '';
+  const counts = score.unpriced && cutoff > 1 ? words.keynessCountsUnpriced(score.scopeCount, cutoff) : words.keynessCounts(score.scopeCount, score.referenceCount);
+  return (
+    <>
+      <span className="cloud-keyness-caption" aria-hidden="true">
+        {fold ? `${fold} · ${counts}` : counts}
+      </span>
+      <span id={id} className="visually-hidden">
+        {words.keynessA11y(words.keynessValue(score.logLikelihood), fold, counts)}
+      </span>
+    </>
   );
 }

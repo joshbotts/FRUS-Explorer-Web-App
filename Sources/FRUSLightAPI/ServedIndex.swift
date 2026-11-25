@@ -129,6 +129,12 @@ public final class ServedIndex: Sendable {
         return ServedSearch(service: SearchService(fts5Store: fts5, pipeline: pipeline, userSource: .attachedStore(userId: user.id)),
                             key: user.key)
     }
+
+    /// A search as ``search(for:)`` gives it, on a service of its own even for no one (PLAN's S29f): Collocates' scan
+    /// tags on its service's actor for a second or more, which the corpus's shared service must not be held by.
+    func ownSearch(for user: SearchUser?) throws -> ServedSearch {
+        user == nil ? ServedSearch(service: SearchService(fts5Store: fts5, pipeline: pipeline), key: "") : try search(for: user)
+    }
 }
 
 /// A search over the served index as one user makes it (PLAN's S17d): the kit's service with that

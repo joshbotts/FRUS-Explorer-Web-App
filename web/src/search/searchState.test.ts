@@ -183,11 +183,14 @@ describe('the order', () => {
 });
 
 describe('the reading', () => {
-  it('keeps the timeline or the concordance, leaves the list out as the default, and never sends it', () => {
+  it('keeps the timeline, the concordance or Collocates, leaves the list out as the default, and never sends it', () => {
     expect(validateSearch({ reading: 'timeline' }).reading).toBe('timeline');
     expect(validateSearch({ reading: 'concordance' }).reading).toBe('concordance');
     expect(validateSearch({ reading: 'list' }).reading).toBeUndefined();
-    expect(validateSearch({ reading: 'collocates' }).reading).toBeUndefined();
+    // From S29f, the Mac's fourth, which pages nothing: it reads every result the search keeps.
+    expect(validateSearch({ reading: 'collocates' }).reading).toBe('collocates');
+    expect(isPaged('collocates')).toBe(false);
+    expect(validateSearch({ reading: 'cloud' }).reading).toBeUndefined();
     expect('reading' in searchFields({ keywords: 'x', reading: 'concordance' })).toBe(false);
     // A narrowing keeps the reading as it is shown, as the Mac's window keeps it from search to search.
     expect(applySearchChange({ keywords: 'x', reading: 'timeline', timelineMode: 'list' }, { personRollupId: ['1'] })).toMatchObject({

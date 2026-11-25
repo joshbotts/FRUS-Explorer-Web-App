@@ -76,6 +76,47 @@ export interface CloudAnswer {
   account?: string;
   /** The job counting the scope, while it is `counting`. */
   job?: CloudJob;
+  /** Under Distinctive (S29f), for a scope with words to draw: the kit's ranking of them, or why there is none. */
+  distinctive?: CloudDistinctive;
+}
+
+/** A word of a Distinctive ranking: the kit's `KeynessScore`, with the multiple the app's row says. */
+export interface CloudScore {
+  term: string;
+  /** Occurrences here, and in the corpus reference. */
+  scopeCount: number;
+  referenceCount: number;
+  /** Signed G², which the list is ranked on. */
+  logLikelihood: number;
+  logRatio: number;
+  /** How many times more often here than corpus-wide. */
+  fold: number;
+  /** Rarer corpus-wide than the reference prices: its corpus count is unknown, not zero. */
+  unpriced: boolean;
+  polarity?: number;
+}
+
+/** A cloud's Distinctive reading (S29f): the server ranks, the page draws. */
+export interface CloudDistinctive {
+  state: 'ranked' | 'unavailable';
+  /** The kit's reason, or the web's `noCount` for a scope whose text the served index does not hold. */
+  reason?: string;
+  message?: { title: string; detail: string };
+  mismatches?: string[];
+  scores: CloudScore[];
+  /** The cloud's layout input: each score scaled to a size, never a count to show. */
+  layout: CloudTerm[];
+  /** The header's count line under Distinctive: the words ranked, from the documents counted. */
+  countLine?: string;
+  /** What the ranking can and cannot see, under the measure bar. */
+  caveat?: string;
+  /** The line a ranking of printed forms says. */
+  comparedAsPrinted?: string;
+  candidateCount?: number;
+  rankedAmongTopFrequent?: boolean;
+  minimumScopeCount?: number;
+  referenceCutoffCount?: number;
+  wordForm?: string;
 }
 
 export interface CloudSample {
@@ -97,12 +138,18 @@ export const cloudContextQuery = queryOptions({
 
 /**
  * A scope's cloud under a lens. `settings` names the reader's settings it was asked under, so the cloud is asked
- * again whenever they change; the server reads them itself.
+ * again whenever they change; the server reads them itself. Under Distinctive (S29f) the server ranks the count, less
+ * `hidden`, the words hidden from this cloud alone, as the app ranks the terms its cloud shows.
  */
-export function cloudQuery(scope: string, lens: string, settings: string) {
+export function cloudQuery(scope: string, lens: string, settings: string, measure: 'frequency' | 'keyness' = 'frequency', hidden: readonly string[] = []) {
   const params = new URLSearchParams({ scope, lens });
+  const ranked = measure === 'keyness';
+  if (ranked) {
+    params.set('measure', measure);
+    for (const word of hidden) params.append('hidden', word);
+  }
   return queryOptions({
-    queryKey: ['cloud', scope, lens, settings],
+    queryKey: ranked ? ['cloud', scope, lens, settings, measure, [...hidden].sort()] : ['cloud', scope, lens, settings],
     queryFn: ({ signal }) => getJSON<CloudAnswer>('/api/v1/cloud', params, signal),
     // A count's job is asked about again whenever the page comes back to it, never answered from what was kept.
     staleTime: (query) => (query.state.data?.state === 'counting' ? 0 : 5 * 60_000),
