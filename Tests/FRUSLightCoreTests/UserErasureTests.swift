@@ -14,7 +14,7 @@ import Testing
     static let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
 
     /// Research of several kinds for `user`: a tag on a document, a note that makes the document
-    /// findable, a project they work in, their preferences and a stored key.
+    /// findable, a project they work in, their preferences, a stored key and a verdict on a semantic match (S26d).
     static func research(_ store: RelationalUserStore, _ rows: UserStoreRows, for user: String) throws {
         let tag = try store.createTag(named: "Kept", for: user, at: Self.created)
         try store.setTags([tag.id], of: Self.d1, for: user, at: Self.created)
@@ -25,6 +25,9 @@ import Testing
         try store.setPreferences(["citation_style_raw": .text("chicago")], initial: UserTrailTests.initialPreferences, for: user,
                                  at: Self.created)
         try store.setSecret([1, 2, 3], keyID: "k", named: "zotero", of: .user(user), at: Self.created)
+        try store.recordSemanticFeedback(SemanticFeedbackEntry(recordedAt: Self.created, anchor: "frus1961-63v06/d1",
+                                                               neighbour: "frus1961-63v06/d2", verdict: .helpful, cosine: 0.7,
+                                                               era: "2", sameVolume: true, provenanceDigest: nil), for: user)
     }
 
     /// What `user` holds, table by table, but the tables they hold nothing in.
@@ -46,8 +49,8 @@ import Testing
                               lastUsedAt: Self.created, expiresAt: Self.created.addingTimeInterval(3_600))
         try store.startSession(session)
         let holdings = try store.researchHoldings(of: "erin")
-        #expect(Set(holdings.keys) == Set(UserStoreSchema.erased.map(\.name) + ["secrets"]))
-        let expected = ["tags": 1, "tag_assignments": 1, "notes": 1, "projects": 1, "preferences": 1, "secrets": 1]
+        #expect(Set(holdings.keys) == Set(UserStoreSchema.erased.map(\.name) + ["secrets", "semantic_feedback"]))
+        let expected = ["tags": 1, "tag_assignments": 1, "notes": 1, "projects": 1, "preferences": 1, "secrets": 1, "semantic_feedback": 1]
         #expect(try Self.held(store, "erin") == expected)
         let frankBefore = try store.researchHoldings(of: "frank")
         let mark = try store.searchMark()

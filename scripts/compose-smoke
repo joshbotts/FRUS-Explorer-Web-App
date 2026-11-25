@@ -293,8 +293,8 @@ assert (shards["held"], shards["published"], shards["checked"], shards["verified
 assert shards["heldBytes"] == shards["publishedBytes"] == 162_377_248 and not shards["refused"] and not shards["missing"], shards
 semantic = json.load(open(sys.argv[2], encoding="utf-8"))["semantic"]
 assert semantic == {"vectors": True, "generation": "89481b18", "shardsHeld": 553, "shardsPublished": 553, "map": True,
-                    "encoder": True, "relatedDocuments": False, "searchByMeaning": False}, semantic
-print("   the pane's Vectors: 553 of 553, each checked, none refused; the status: the vectors, the map and the encoder")
+                    "encoder": True, "relatedDocuments": True, "searchByMeaning": False}, semantic
+print("   the pane's Vectors: 553 of 553, each checked, none refused; the status: the vectors, the map, the encoder and Related Documents' axis")
 PY
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp "$FRUS_IMAGE" semantic \
   > "$work/vectors-offline.txt" 2>&1 || fail "frus-light semantic failed with no network: $(tail -5 "$work/vectors-offline.txt")"

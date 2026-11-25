@@ -68,7 +68,9 @@ struct ServerComponents: Sendable {
         // With user data on, each stack attaches the user store's search database, for each user's half of a search (S17d).
         let provider = ServedIndexProvider(state: state, resources: resources, volumesDirectory: files.volumesDirectory,
                                            userStore: configuration.userData ? userStore.searchDatabase : nil)
-        let leads = ProjectLeadsQueue(store: userStore, jobs: jobs, provider: provider, resources: resources)
+        // The semantic vectors (PLAN's S26c), which Suggested Next's rankings read too (S26d).
+        let vectors = SemanticVectors(configuration: configuration)
+        let leads = ProjectLeadsQueue(store: userStore, jobs: jobs, provider: provider, resources: resources, vectors: vectors)
         let library = VolumeLibrary.make(configuration: configuration, files: files, store: userStore, jobs: jobs,
                                          catalogue: resources.manifest, log: { logger.info("\($0)") })
         try library.prepare()
@@ -124,7 +126,7 @@ struct ServerComponents: Sendable {
             indexer: indexer,
             teiCheck: teiCheck,
             encoder: encoder,
-            vectors: SemanticVectors(configuration: configuration))
+            vectors: vectors)
     }
 
     /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data

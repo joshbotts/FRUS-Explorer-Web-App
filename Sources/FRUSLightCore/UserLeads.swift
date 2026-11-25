@@ -3,12 +3,13 @@
 // `ProjectLeadEntry` records. `applyLeads`: the leads still ranked keep their rows, each one not dismissed
 // taking its new score, seeds and record; a lead ranked for the first time is added with the time it
 // surfaced, which Project Home's NEW reads; and a lead no longer ranked is removed. A dismissed lead is
-// kept even then, the web's own, where the app removes it: the server ranks with fewer axes than a Mac
-// whose export brought the dismissals, and a dismissal removed would come back as a new lead once the
-// ranking reached it again. And `clearVisibleLeads`: a project with nothing to rank from loses its leads
-// but its dismissed ones, which would otherwise come back as new once it has. Each is one transaction, written once for both stores,
-// and reads the project's leads as they stand when it writes, so that a lead dismissed while the ranking
-// ran stays dismissed.
+// kept even then, the web's own, where the app removes it: the server ranks over the index it serves, which
+// need not hold the library of the Mac whose export brought the dismissals (and until PLAN's S26d ranked with
+// fewer axes), and a dismissal removed would come back as a new lead once the ranking reached it again.
+// And `clearVisibleLeads`: a project with nothing to rank from loses its leads but its dismissed ones,
+// which would otherwise come back as new once it has. Each is one transaction, written once for both
+// stores, and reads the project's leads as they stand when it writes, so that a lead dismissed while the
+// ranking ran stays dismissed.
 
 import Foundation
 

@@ -16,6 +16,7 @@ type Item = { label: string; onSelect: () => void; disabled?: boolean; hint?: st
 export function MenuButton({
   label,
   accessibleLabel,
+  describedBy,
   entries,
   className,
   children,
@@ -24,6 +25,8 @@ export function MenuButton({
   label: string;
   /** Its name for assistive technology, when the text is not enough. */
   accessibleLabel?: string;
+  /** The id of what describes the button, as a choice it shows beside it. */
+  describedBy?: string;
   entries: MenuEntry[];
   className?: string;
   /** What the button shows, its text by default. */
@@ -106,6 +109,7 @@ export function MenuButton({
         aria-expanded={open !== null}
         aria-controls={open ? menuId : undefined}
         aria-label={accessibleLabel}
+        aria-describedby={describedBy}
         onClick={() => setOpen(open ? null : 'first')}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown') {

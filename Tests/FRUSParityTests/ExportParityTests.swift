@@ -201,6 +201,7 @@ import Testing
         "jobs": "the server's jobs (S20d), each its kind, its state and the server's own lines, and who asked",
         "library_volumes": "the volumes a Standalone server downloaded (S21c), each its state, its file's hash and size, and who asked",
         "correction_log": "the log of the corrections curators made to the index everyone shares (S21g), an admin's audit of who made each and when",
+        "semantic_feedback": "each user's verdicts on Related Documents' semantic matches (S26d), whose file is the app's own, frus-semantic-feedback.json, as the app's export carries none of them",
         "user_search": "made again from the notes and summaries by every write and import (S15d, S16c), with FTS5's own tables",
     ]
 

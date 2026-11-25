@@ -6,7 +6,8 @@
 // as the pane opens, as Contents' counts are. From S16c it also imports a Mac JSON export and shows
 // its report (ImportSection). From S17f, after the notes, the app's method appendix, Export Query Log as
 // a Method Appendix, the kit's Markdown table and CSV of every search the trail holds, each its own
-// link, since a browser saves one file at a time; or the app's line while no search is recorded.
+// link, since a browser saves one file at a time; or the app's line while no search is recorded. From S26d, after
+// it, the app's Semantic Match Feedback, the verdicts on Related Documents' semantic matches (SemanticFeedbackSection).
 import { useQuery } from '@tanstack/react-query';
 import { errorMessage } from '../api/client';
 import { servedPath } from '../api/base';
@@ -17,6 +18,7 @@ import { useHeadingReady } from '../shell/headingFocus';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { ExportSection } from './ExportSection';
 import { ImportSection } from './ImportSection';
+import { SemanticFeedbackSection } from './SemanticFeedbackSection';
 import { SettingsPanes } from './SettingsPanes';
 
 export function DataSettingsScreen() {
@@ -59,6 +61,7 @@ export function DataSettingsScreen() {
         )}
         <p className="note">{copy.dataSettings.footer}</p>
         <MethodAppendix searches={contents.data?.types.find((type) => type.type === 'SearchHistoryEntry')?.count} />
+        {keepsUserData && <SemanticFeedbackSection />}
         {keepsUserData && <ImportSection />}
       </>
     );

@@ -4,9 +4,10 @@
 // their editor (FocusSubjects.tsx, PLAN's S25c); its focus tags, once the reader has tags, with their
 // editor; Suggested Next, the leads the server finds (S23d) or an import brought, each with the opening
 // of its document's text, where the served index holds it, and Dismiss, with Refresh, which has the
-// server find them again, and "Finding leads…" while it does; Recent Activity; and the quick ways to
-// Research and Search. The app's Collections section and Plan a Visit wait for the rows that bring them,
-// its weighting for a row of its own, and Beyond your library for phase 4.
+// server find them again, and "Finding leads…" while it does; under them Beyond your library, the volumes the
+// project reaches that the server does not serve (ProjectReach.tsx, PLAN's S26d); Recent Activity; and the quick ways
+// to Research and Search. The app's Collections section and Plan a Visit wait for the rows that bring them, and its
+// weighting for a row of its own.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
@@ -18,6 +19,7 @@ import { useHeadingReady } from '../shell/headingFocus';
 import { Modal } from '../shell/Modal';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { FocusSubjects } from './FocusSubjects';
+import { ProjectReach } from './ProjectReach';
 import { dateFocusText, leadContext, trimmedQuestion } from './projectRules';
 
 const route = getRouteApi('/projects/$projectId');
@@ -105,6 +107,7 @@ function Workspace({ home, onFailure }: { home: ProjectHome; onFailure: () => vo
       {home.focusSubjects && <FocusSubjects home={home} />}
       {home.hasTags && <FocusTags home={home} />}
       <Leads home={home} onFailure={onFailure} />
+      <ProjectReach home={home} />
       <Recent home={home} />
       <nav className="quick-actions" aria-label={copy.projectHome.title}>
         <Link to="/research">{copy.projectHome.actionResearch}</Link>

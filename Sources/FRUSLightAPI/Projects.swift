@@ -235,6 +235,8 @@ enum ProjectRoutes {
         ProjectHomeRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
         ProjectFocusRoutes.add(to: me, resources: resources)
         ProjectLeadsRoutes.add(to: me, services: services, leads: leads)
+        // Beyond your library at the project's grain, under Suggested Next (PLAN's S26d).
+        ProjectReachRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
     }
 
     static var table: UserStoreSchema.Table {

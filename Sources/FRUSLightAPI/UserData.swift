@@ -207,6 +207,7 @@ final class CSRFTokens: Sendable {
 
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ProjectLeadStore & ResearchImportStore
+    & SemanticFeedbackStore
     & AnnotationReviewStore
     & CorrectionStore & CorrectionLogStore
     & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
@@ -462,10 +463,10 @@ public struct Me: Codable, Equatable, Sendable, ResponseEncodable {
 enum UserDataRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, resources: ServerResources,
                     reader: ReaderService, provider: ServedIndexProvider, leads: ProjectLeadsQueue? = nil,
-                    reviews: UpdateReviewSources? = nil) {
+                    reviews: UpdateReviewSources? = nil, vectors: SemanticVectors) {
         // Suggested Next's computations (PLAN's S23d): the server's, or one over these routes' stores.
         let leads = leads ?? ProjectLeadsQueue(store: services.store, jobs: services.jobs, provider: provider, resources: resources,
-                                               now: services.now)
+                                               vectors: vectors, now: services.now)
         let me = router.group("/api/v1/me").add(middleware: UserDataGuard(services: services))
         me.get { request, context -> EditedResponse<Me> in
             try FormQuery(request.uri.query).refuseUnknown([])
@@ -482,6 +483,8 @@ enum UserDataRoutes {
         // A curator's corrections of the index everyone shares, a classification and the people (PLAN's S21g).
         CorrectionRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider, indexer: reviews?.indexer)
         SummaryRoutes.add(to: me, services: services, resources: resources)
+        // The verdicts on Related Documents' semantic matches (PLAN's S26d).
+        SemanticFeedbackRoutes.add(to: me, services: services, resources: resources, provider: provider, vectors: vectors)
         ProjectRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
         HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
         ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider,
