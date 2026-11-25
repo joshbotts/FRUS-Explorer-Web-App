@@ -38,7 +38,15 @@ import Testing
         let fixture = make(named)
         // Live, so that the server's services run, and its end stops the encoder's child.
         let result = try await app.test(.live) { client in
-            await EmbedCheck.run(fixture: fixture) { path in
+            // The server's first semantic report reads the bundled vectors and checks every published shard, once, through
+            // the blocking pool, which the target's other suites can hold past the live client's fixed 20 s wait for an
+            // answer, as on CI's runner after #179, where the check then read a timeout as its refusal. So the report is
+            // asked for until it answers, the load going on in the server meanwhile, and the check reads it after. The
+            // client takes its answers in the order it asked, so one that comes after its ask gave up is that ask's.
+            for _ in 0..<6 {
+                if let answer = try? await client.execute(uri: "/api/v1/admin/semantic", method: .get), answer.status == .ok { break }
+            }
+            return await EmbedCheck.run(fixture: fixture) { path in
                 let response = try await client.execute(uri: path, method: .get)
                 return (Int(response.status.code), Data(buffer: response.body))
             }

@@ -126,6 +126,8 @@ Phase 4's row S27c, in wave 5 beside S26d on the semantic track: the pin moves f
 
 It also noted that the 738 kit tests new to the web have run on arm64 alone until CI's x86_64 runs them.
 
+**The encoder check's suite, hardened** (the fifth commit, on the owner's word of 24 November, asked once `main`'s red was found): `main`'s swift job had failed since #179 on two of `EmbedCheckTests`' tests, S27b's, whose first read of the server's semantic report ran past HummingbirdTesting's fixed 20 s live-client wait on CI's runner, while the server read the bundled vectors and checked every published shard through the blocking pool under the target's other suites, and the check read the timeout as its refusal. The suite now asks for the report up to six times before the check reads it, the server's one-time load going on between asks; the client takes its answers in the order it asked, so a late answer is its own ask's. It is taken here because it would hold this move's CI too. On this Mac the suite passes alone and with its whole target, 373 tests; CI's runner is what it is for. S26d's #181 met the same wait in its own suite, and reads its server's one-time loads before its server starts.
+
 **Records**
 - `DEVLOG.md`: this entry, and the Session 27a, 28a, 29b, 30b and 26b follow-up entries' headers, merged, each with a "Since merged" note.
 - `PLAN.md`: where the plan stands, with the pin; S27c's paragraph; a "Since merged" paragraph after #1983's, S27a's, S28a's, S29b's and S30b's; and the owner checkpoints' Mac checks 38–41, done, with #1983's Mac check 42, and golden files.
