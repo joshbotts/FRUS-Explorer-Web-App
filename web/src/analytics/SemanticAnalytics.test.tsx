@@ -610,6 +610,84 @@ describe('the map’s tools (S28e)', () => {
     expect(screen.queryByRole('region', { name: 'Lasso' })).toBeNull();
   });
 
+  it('says why a slice the address names could not be drawn, and draws the map', async () => {
+    drawing();
+    serve({
+      '/api/v1/semantic/map/slice': slice,
+      '/api/v1/semantic/map/slice/points': new ProblemAnswer(503, 'SEMANTIC_MAP_UNAVAILABLE', 'The semantic map could not be read: a test.'),
+    });
+    renderAt('/analytics/semantic?from=frus1961-63v06&to=frus1969-76v12');
+    const axis = await screen.findByRole('region', { name: 'Axis' });
+    expect(await within(axis).findByText('The semantic map could not be read: a test.')).toBeTruthy();
+    expect(within(axis).queryByText(/^Select a document in a different volume/)).toBeNull();
+    expect(document.querySelector('.semantic-map-frame')?.getAttribute('data-layout')).toBe('map');
+  });
+
+  it('never draws a slice again once the map has been, while the next slice comes', async () => {
+    drawing();
+    const other: SemanticMapSlice = { ...slice, from: 'frus1969-76v12', to: 'frus1961-63v06' };
+    serve({
+      '/api/v1/semantic/map/request': reveals,
+      '/api/v1/semantic/map/nearest': nearest,
+      '/api/v1/semantic/map/slice': (url: URL) => (url.searchParams.get('from') === 'frus1961-63v06' ? slice : other),
+      // The second slice's points never come.
+      '/api/v1/semantic/map/slice/points': (url: URL) => (url.searchParams.get('from') === 'frus1961-63v06' ? slicePoints() : new Promise(() => undefined)),
+    });
+    const { router } = renderAt('/analytics/semantic?document=frus1961-63v06%2Fd1&from=frus1961-63v06&to=frus1969-76v12');
+    const map = await waitFor(() => {
+      const frame = document.querySelector('.semantic-map-frame');
+      expect(frame?.getAttribute('data-layout')).toBe('slice:frus1961-63v06|frus1969-76v12');
+      return frame;
+    });
+    const axis = await screen.findByRole('region', { name: 'Axis' });
+    expect(within(axis).getByRole('status').textContent).toBe('Laid out from frus1961-63v06 to frus1969-76v12.');
+    expect(within(axis).getByText('Up the side, the years 1862 to 1988.')).toBeTruthy();
+    fireEvent.click(within(axis).getByRole('button', { name: 'Back to the map' }));
+    await waitFor(() => expect(map?.getAttribute('data-layout')).toBe('map'));
+    // The next slice, laid out but its points on their way: the map stays drawn, and the card says it is coming.
+    await router.navigate({ to: '/analytics/semantic', search: { document: 'frus1961-63v06/d1', from: 'frus1969-76v12', to: 'frus1961-63v06' } });
+    const coming = await screen.findByRole('region', { name: 'Axis' });
+    await waitFor(() => expect(within(coming).getByRole('status').textContent).toBe('Laying out the slice…'));
+    expect(map?.getAttribute('data-layout')).toBe('map');
+  });
+
+  it('drops a lasso’s answer still on its way when Lasso is turned off, and says why a lasso could not be read', async () => {
+    drawing();
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', { value: () => undefined, configurable: true, writable: true });
+    let answer: (value: SemanticMapLassoAnswer) => void = () => undefined;
+    let fail = false;
+    serve({
+      'POST /api/v1/semantic/map/lasso': () =>
+        fail
+          ? new ProblemAnswer(400, 'INVALID_PARAMETER', 'polygon: each point is two finite numbers on the map’s grid')
+          : new Promise<SemanticMapLassoAnswer>((resolve) => {
+              answer = resolve;
+            }),
+    });
+    renderAt('/analytics/semantic');
+    await screen.findByRole('listbox', { name: 'Semantic map' });
+    const lasso = screen.getByRole('button', { name: 'Lasso' });
+    const frame = document.querySelector('.semantic-map-frame') as HTMLElement;
+    const draw = () => {
+      fireEvent.pointerDown(frame, { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1, clientX: 10, clientY: 10 });
+      for (const [x, y] of [[60, 10], [60, 60], [10, 60]]) fireEvent.pointerMove(frame, { pointerId: 1, pointerType: 'mouse', buttons: 1, clientX: x, clientY: y });
+      fireEvent.pointerUp(frame, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 10, clientY: 60 });
+    };
+    fireEvent.click(lasso);
+    draw();
+    await waitFor(() => expect(screen.getAllByRole('status').some((status) => status.textContent === 'Gathering what the lasso enclosed…')).toBe(true));
+    fireEvent.click(lasso);
+    answer({ scoped: false, capture: { total: 3, kept: 3, regionNames: ['berlin soviet'] } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole('region', { name: 'Lasso' })).toBeNull();
+    // A lasso the server refuses says why, as an alert.
+    fail = true;
+    fireEvent.click(lasso);
+    draw();
+    expect(await screen.findByText('polygon: each point is two finite numbers on the map’s grid')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toMatch(/^The lasso could not be read\./);
+  });
+
   it('exports the regions’ CSV under the scope with the lens drawn', async () => {
     drawing();
     const server = serve({

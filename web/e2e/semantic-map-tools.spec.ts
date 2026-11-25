@@ -74,9 +74,10 @@ test('sets the axis’s two poles from points’ cards and resets them, by keybo
   await expect(axis.getByText(/^Select a document in a different volume and choose “…to here”\./)).toBeVisible();
   await axeCheck(page);
 
-  // The largest region's first document, of another volume, from its card by keyboard.
+  // The largest region's first document, of another volume, from its card by keyboard: the map's list box is above the
+  // cards.
   const keys = page.getByRole('listbox', { name: 'Semantic map' });
-  await tabTo(page, keys);
+  await backTabTo(page, keys);
   await page.keyboard.press('Home');
   await page.keyboard.press('Enter');
   const region = page.getByRole('region', { name: 'Region', exact: true });
@@ -153,7 +154,7 @@ test('draws a lasso by pointer around a document, saves what it caught, and expo
   try {
     // The regions' CSV with the kit's method block, and the figure as PNG, drawn here, by keyboard.
     const exportMenu = page.getByRole('button', { name: 'Export map data' });
-    await tabTo(page, exportMenu);
+    await backTabTo(page, exportMenu);
     await page.keyboard.press('Enter');
     await expect(page.getByRole('menuitem', { name: 'Chart data (CSV)…' })).toBeFocused();
     const csvSaving = page.waitForEvent('download');
@@ -175,6 +176,26 @@ test('draws a lasso by pointer around a document, saves what it caught, and expo
     expect([...bytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     // Twice the plate's 1,144 points wide, and more with the band's margins.
     expect(bytes.readUInt32BE(16)).toBeGreaterThanOrEqual(2 * 1_144);
+    // The plate holds the points drawn: the figure's middle row, across the plate, has colours no caption's grey has.
+    const coloured = await page.evaluate(async (base64) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${base64}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      if (!context) return 0;
+      context.drawImage(image, 0, 0);
+      const row = context.getImageData(0, Math.floor(image.height / 2), image.width, 1).data;
+      let count = 0;
+      for (let at = 0; at < row.length; at += 4) {
+        const [r, g, b] = [row[at] ?? 0, row[at + 1] ?? 0, row[at + 2] ?? 0];
+        if (Math.max(r, g, b) - Math.min(r, g, b) > 24) count += 1;
+      }
+      return count;
+    }, bytes.toString('base64'));
+    expect(coloured).toBeGreaterThan(20);
     await expect(page.getByRole('alert')).toHaveCount(0);
   } finally {
     await forget(page, [name]);

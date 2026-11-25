@@ -14,6 +14,7 @@ import {
   gridPoint,
   isFitted,
   labelAt,
+  lassoPointLimit,
   lassoStep,
   magnification,
   onGround,
@@ -22,6 +23,7 @@ import {
   pointAt,
   steppedCamera,
   swatchColour,
+  thinnedLasso,
   validateSemanticSearch,
   viewPoint,
   wheelZoom,
@@ -185,6 +187,18 @@ describe('the map’s tools (S28e)', () => {
     expect(path).toEqual([[10, 10], [14, 11], [14, 7]]);
     expect(extendedLasso([], [1, 2])).toEqual([[1, 2]]);
     expect(lassoStep).toBe(4);
+  });
+
+  it('thins a stroke longer than the server takes evenly to its bound, keeping its first point', () => {
+    const long = Array.from({ length: 5_000 }, (_, at) => [at, 2 * at] as const);
+    const thinned = thinnedLasso(long, lassoPointLimit);
+    expect(thinned).toHaveLength(2_000);
+    expect(thinned[0]).toEqual([0, 0]);
+    expect(thinned[1]).toEqual([2, 4]);
+    expect(thinned[1_999]).toEqual([4_997, 9_994]);
+    const short = long.slice(0, 10);
+    expect(thinnedLasso(short, lassoPointLimit)).toEqual(short);
+    expect(lassoPointLimit).toBe(2_000);
   });
 
   it('reads a point’s place from a points answer, six bytes a point', () => {

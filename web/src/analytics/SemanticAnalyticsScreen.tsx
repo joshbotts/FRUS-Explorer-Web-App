@@ -19,7 +19,7 @@
 // nearest in language; and Export writes the regions' CSV with the kit's method block, or draws the figure as PNG with
 // the kit's caption band, as the analytics' are. On a slice, a pick, a lasso and a document shown find their points
 // among the slice's.
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import type { AnalyticsContext } from '../api/analytics';
@@ -64,7 +64,7 @@ import { DataTable } from './PersonAnalyticsScreen';
 import { type MapFocus, SemanticMap, type SliceScale } from './SemanticMap';
 import { AxisCard, LassoCard, NotOnMap, PointCard, RegionCard } from './SemanticMapCards';
 import { supportsWebGL2 } from './semanticMapRenderer';
-import { cameraFrom, type MapCamera, pointAt, type Rgba, type SemanticSearch, swatchColour } from './semanticMapRules';
+import { cameraFrom, lassoPointLimit, type MapCamera, pointAt, type Rgba, type SemanticSearch, swatchColour, thinnedLasso } from './semanticMapRules';
 
 const route = getRouteApi('/analytics/semantic');
 const words = copy.semanticAnalytics;
@@ -176,28 +176,24 @@ export function SemanticAnalyticsScreen() {
   const sliceFor = named && sliceAnswer.data?.from === named.from && sliceAnswer.data.to === named.to ? sliceAnswer.data : undefined;
   const addressRefusal = sliceFor?.refusal;
   const laid = sliceFor && !sliceFor.refusal ? sliceFor : undefined;
-  // The last slice drawn stays until the next one's points have come, as the app's re-layout never shows the plane between
-  // two slices; none once the address names none.
-  const slicePoints = useQuery({
-    ...semanticMapSlicePointsQuery(named ?? { from: '', to: '' }),
-    enabled: laid !== undefined && whole,
-    placeholderData: keepPreviousData,
-  });
-  const sliceData = named ? slicePoints.data : undefined;
-  const sliceDrawnAnswer =
-    sliceData && laid && sliceData.poles.from === laid.from && sliceData.poles.to === laid.to
-      ? laid
-      : sliceData
-        ? client.getQueryData(semanticMapSliceQuery(sliceData.poles).queryKey)
-        : undefined;
-  const sliced =
-    sliceData && sliceDrawnAnswer && !sliceDrawnAnswer.refusal && answer && sliceData.points.byteLength === answer.documentCount * bytesPerPoint
-      ? { poles: sliceData.poles, answer: sliceDrawnAnswer, points: sliceData.points }
+  const slicePoints = useQuery({ ...semanticMapSlicePointsQuery(named ?? { from: '', to: '' }), enabled: laid !== undefined && whole });
+  const sliceData = slicePoints.data;
+  // The named slice, once its answer and its points have come.
+  const ready =
+    named && laid && sliceData && sliceData.poles.from === named.from && sliceData.poles.to === named.to && answer &&
+    sliceData.points.byteLength === answer.documentCount * bytesPerPoint
+      ? { poles: named, answer: laid, points: sliceData.points }
       : undefined;
+  // A slice the address names that could not be laid out or read, which the axis's card says.
+  const sliceFailure = named && !addressRefusal ? (sliceAnswer.error ?? slicePoints.error ?? undefined) : undefined;
   // The slice the address names is still being laid out, or its points are on their way.
-  const laying =
-    named !== undefined && !addressRefusal && !sliceAnswer.isError && !slicePoints.isError &&
-    (sliced?.poles.from !== named.from || sliced.poles.to !== named.to);
+  const laying = named !== undefined && !addressRefusal && !sliceFailure && !ready;
+  // The last slice drawn stays while the next one comes, as the app's re-layout never shows the plane between two slices;
+  // it goes with the address's slice, and is never drawn again once the map has been.
+  const [kept, setKept] = useState<typeof ready>(undefined);
+  if (ready && (ready.points !== kept?.points || ready.answer !== kept?.answer)) setKept(ready);
+  if (!named && kept) setKept(undefined);
+  const sliced = ready ?? (laying ? kept : undefined);
   // What is drawn: the slice's points and grid, or the map's.
   const drawnPoints = sliced?.points ?? points.data;
   const layoutKey = sliced ? `slice:${sliced.poles.from}|${sliced.poles.to}` : 'map';
@@ -235,6 +231,8 @@ export function SemanticAnalyticsScreen() {
   const [cards, setCards] = useState<Cards>({});
   const [lasso, setLasso] = useState<Lassoed | undefined>(undefined);
   const [lassoing, setLassoing] = useState(false);
+  // A lasso's answer on its way, or why it did not come.
+  const [gathering, setGathering] = useState<{ serial: number; failure?: string } | undefined>(undefined);
   // A scope drops the point's card and the notice, which may name a document it ghosts, as the app's `setScope` drops its
   // selection, and the lasso's capture, whose count a redraw under the scope would no longer give; the region's card
   // stays, its counts the scope's. The cards adjusted as the page draws, not after.
@@ -243,6 +241,7 @@ export function SemanticAnalyticsScreen() {
     setCardsScope(chosen);
     setCards((current) => ({ region: current.region }));
     setLasso(undefined);
+    setGathering(undefined);
   }
   const point = cards.point;
 
@@ -436,17 +435,22 @@ export function SemanticAnalyticsScreen() {
   }
 
   /** What a lasso drawn on the grid encloses, among the points drawn, under the scope: its card, or none. */
-  async function lassoed(path: [number, number][]) {
+  async function lassoed(drawnPath: [number, number][]) {
     const serial = ++lassoSerial.current;
     const asked = chosen;
     const askedLayout = layoutKey;
     const askedPoles = sliced?.poles;
+    // A stroke longer than the server takes is thinned evenly to its length, which keeps its shape.
+    const path = thinnedLasso(drawnPath, lassoPointLimit);
+    setGathering({ serial });
     try {
       const found = await semanticMapLasso(path, scope, askedPoles);
       if (serial !== lassoSerial.current || asked !== latestScope.current || askedLayout !== latestLayout.current) return;
+      setGathering(undefined);
       setLasso(found.capture ? { serial, path, poles: askedPoles, capture: found.capture } : undefined);
     } catch (error) {
-      console.warn(`Semantic map: ${errorMessage(error)}`);
+      if (serial !== lassoSerial.current) return;
+      setGathering({ serial, failure: errorMessage(error) });
     }
   }
 
@@ -522,6 +526,8 @@ export function SemanticAnalyticsScreen() {
   const keyEntries = drawnLens ? (drawnLens.namesEveryColour ? drawnLens.legend : drawnLens.legend.slice(0, 1)) : [];
   const marker = point && drawnPoints ? (pointAt(drawnPoints, point.row) ?? [point.x, point.y]) : undefined;
   const axisShown = named !== undefined || poles.negative !== undefined || notice !== undefined;
+  // What the axis's card says while a slice is drawn, laid out or refused.
+  const axisNotice = notice ?? (sliceFailure ? errorMessage(sliceFailure) : undefined);
 
   return (
     <div className="analytics-page semantic-analytics">
@@ -571,8 +577,12 @@ export function SemanticAnalyticsScreen() {
               <div className="analytics-field semantic-map-tools">
                 <button type="button" aria-pressed={lassoing} title={words.lasso.help}
                         onClick={() => {
+                          // Off or on, the last lasso goes, and an answer still on its way with it, as the app's toggle
+                          // clears its lasso at once.
+                          lassoSerial.current += 1;
                           setLassoing((on) => !on);
                           setLasso(undefined);
+                          setGathering(undefined);
                         }}>
                   {words.lasso.toggle}
                 </button>
@@ -590,6 +600,15 @@ export function SemanticAnalyticsScreen() {
           {exportFailure && (
             <div className="analytics-alert" role="alert">
               <strong>{words.export.failed}</strong> {exportFailure}
+            </div>
+          )}
+          {/* Said while a lasso's answer comes, in a region there before it; a failure is an alert. */}
+          <p className="visually-hidden" role="status">
+            {gathering && !gathering.failure ? words.lasso.gathering : ''}
+          </p>
+          {gathering?.failure && (
+            <div className="analytics-alert" role="alert">
+              <strong>{words.lasso.failed}</strong> {gathering.failure}
             </div>
           )}
           {facts.data?.summary && (
@@ -652,8 +671,9 @@ export function SemanticAnalyticsScreen() {
                   {axisShown && (
                     <AxisCard
                       slice={sliced?.poles}
-                      pole={sliced || laying ? undefined : (poles.negative ?? poles.positive)}
-                      notice={notice}
+                      scale={sliced?.answer.scale}
+                      pole={sliced || laying || (named && !addressRefusal) ? undefined : (poles.negative ?? poles.positive)}
+                      notice={axisNotice}
                       laying={laying}
                       onClear={clearSlice}
                     />

@@ -303,16 +303,20 @@ function Nearest({ point, onShow }: { point: SemanticMapPoint; onShow: (key: str
 
 /**
  * The axis's card (`sliceCard`): the two volumes the slice runs between, with the way back to the map; or the one pole
- * set so far, with what the second costs; and a refusal's notice, said when it comes.
+ * set so far, with what the second costs; and a refusal's notice, said when it comes. The slice's scale, drawn over its
+ * points, is said here too, for a screen reader, which the canvas and its overlay are hidden from.
  */
 export function AxisCard({
   slice,
+  scale,
   pole,
   notice,
   laying,
   onClear,
 }: {
   slice?: { from: string; to: string };
+  /** The slice's years and its undated documents. */
+  scale?: { minYear: number; maxYear: number; undatedCount: number };
   pole?: string;
   notice?: string;
   /** Whether the slice is being laid out. */
@@ -331,6 +335,7 @@ export function AxisCard({
       {slice ? (
         <>
           <p className="semantic-card-ids">{words.axis.poles(slice.from, slice.to)}</p>
+          {scale && <p className="visually-hidden">{words.axis.scale(scale.minYear, scale.maxYear, scale.undatedCount)}</p>}
           <button type="button" onClick={onClear}>
             {words.axis.back}
           </button>
@@ -345,7 +350,7 @@ export function AxisCard({
       )}
       {/* There before its words, so that a refusal, or the slice's coming, is said when it comes. */}
       <p className={notice ? 'semantic-card-absent' : 'semantic-card-note'} role="status">
-        {notice ?? (laying ? words.axis.laying : '')}
+        {notice ?? (laying ? words.axis.laying : slice ? words.axis.laid(slice.from, slice.to) : '')}
       </p>
     </section>
   );

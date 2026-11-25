@@ -168,7 +168,8 @@ export function SemanticMap({
   const [keysFocused, setKeysFocused] = useState(false);
   // The lasso being drawn, in the view's CSS pixels, closed as it is drawn; empty when none is.
   const [lassoPath, setLassoPath] = useState<(readonly [number, number])[]>([]);
-  const drawing = useRef<(readonly [number, number])[] | null>(null);
+  // The stroke under way, with the layout it began on: one the layout or the setting has changed under is let go.
+  const drawing = useRef<{ layout: string; points: (readonly [number, number])[] } | null>(null);
 
   // A new layout, the map's or a slice's, is fitted whole, and its names are asked for again, as the app frames the map
   // or the slice it has laid out (`frameAll(extent:)`); a lasso half drawn on the last one is let go.
@@ -444,8 +445,8 @@ export function SemanticMap({
     // With Lasso on, one pointer draws; a second lets the stroke go and pinches.
     if (lassoing && pointers.current.size === 1) {
       const at = within(event);
-      drawing.current = [[at.x, at.y]];
-      setLassoPath(drawing.current);
+      drawing.current = { layout: layoutKey, points: [[at.x, at.y]] };
+      setLassoPath(drawing.current.points);
     } else {
       drawing.current = null;
       setLassoPath([]);
@@ -466,10 +467,15 @@ export function SemanticMap({
     const view = size.current;
     if (held.size === 1 && drawing.current) {
       held.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (!lassoing || drawing.current.layout !== layoutKey) {
+        drawing.current = null;
+        setLassoPath([]);
+        return;
+      }
       const at = within(event);
-      const next = extendedLasso(drawing.current, [at.x, at.y]);
-      if (next.length !== drawing.current.length) {
-        drawing.current = next;
+      const next = extendedLasso(drawing.current.points, [at.x, at.y]);
+      if (next.length !== drawing.current.points.length) {
+        drawing.current = { layout: layoutKey, points: next };
         setLassoPath(next);
       }
       return;
@@ -500,10 +506,12 @@ export function SemanticMap({
     drawing.current = null;
     if (!stroke) return;
     setLassoPath([]);
-    // A press that did not move is a click, which picks; a stroke closes on its first point, as the app's does.
-    if (event.type !== 'pointerup' || press.current?.moved !== true || stroke.length < 3) return;
+    // A press that did not move is a click, which picks; a stroke closes on its first point, as the app's does; and one
+    // begun on another layout, or before Lasso was turned off, is let go.
+    if (event.type !== 'pointerup' || press.current?.moved !== true || stroke.points.length < 3) return;
+    if (!lassoing || stroke.layout !== layoutKey) return;
     const view = size.current;
-    onLasso?.(stroke.map(([x, y]) => gridPoint(latest.current, view, x, y)));
+    onLasso?.(stroke.points.map(([x, y]) => gridPoint(latest.current, view, x, y)));
   }
 
   // A press that did not move: a click on a drawn name opens its region, and anywhere else picks the point nearest it.

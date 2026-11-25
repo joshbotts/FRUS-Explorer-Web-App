@@ -127,7 +127,7 @@ public struct SemanticMapFigure: Codable, Equatable, Sendable, ResponseEncodable
 
 // MARK: - The tools
 
-/// The map's tools, over the map's reading, with the last few slices kept.
+/// The map's tools, over the map's reading, with the last few slices kept, laid out one at a time.
 actor SemanticMapTools {
     /// Two poles' slice: its layout, and its points as the answer sends them.
     struct Slice: Sendable {
@@ -150,6 +150,11 @@ actor SemanticMapTools {
     let provider: ServedIndexProvider
     let resources: ServerResources
     private var slices: [(key: String, task: Task<Result<Poles, APIProblem>, Never>)] = []
+    /// The last layout begun, which the next waits for, so that asks of many pairs, which no sign-in bounds, lay them out
+    /// one after another.
+    private var lastLayout: Task<Result<Poles, APIProblem>, Never>?
+    /// How many layouts were begun, for the tests.
+    private(set) var layoutsBegun = 0
 
     init(reading: SemanticMapReading, vectors: SemanticVectors, provider: ServedIndexProvider, resources: ServerResources) {
         self.reading = reading
@@ -160,8 +165,9 @@ actor SemanticMapTools {
 
     // MARK: The slice
 
-    /// The slice two poles draw, laid out on the first ask and kept for the last few pairs asked; two first asks of a
-    /// pair wait for one layout.
+    /// The slice two poles draw, laid out on the first ask and kept for the last few pairs asked. The layout's task is
+    /// kept before anything is awaited, so that a second first ask of a pair waits for it, and it waits for the layout
+    /// begun before it.
     func poles(from: String, to: String) async throws -> Poles {
         let key = "\(from)|\(to)"
         if let at = slices.firstIndex(where: { $0.key == key }) {
@@ -169,12 +175,18 @@ actor SemanticMapTools {
             slices.insert(kept, at: 0)
             return try await kept.task.value.get()
         }
-        let plane = try await reading.plane()
-        guard case .success(let tiers) = await vectors.tiers() else {
-            throw SemanticMapFiles.malformed("the bundled vectors are refused")
-        }
-        let resources = resources
+        let (reading, vectors, resources, previous) = (reading, vectors, resources, lastLayout)
         let task = Task<Result<Poles, APIProblem>, Never> {
+            _ = await previous?.value
+            let plane: SemanticMapReading.Plane
+            do {
+                plane = try await reading.plane()
+            } catch {
+                return .failure(error as? APIProblem ?? SemanticMapFiles.malformed("\(error)"))
+            }
+            guard case .success(let tiers) = await vectors.tiers() else {
+                return .failure(SemanticMapFiles.malformed("the bundled vectors are refused"))
+            }
             do {
                 return try await Blocking.run {
                     Self.laidOut(from: from, to: to, plane: plane, corpus: tiers.corpus,
@@ -184,6 +196,8 @@ actor SemanticMapTools {
                 return .failure(SemanticMapFiles.malformed("\(error)"))
             }
         }
+        lastLayout = task
+        layoutsBegun += 1
         slices.insert((key, task), at: 0)
         if slices.count > Self.keptSlices { slices.removeLast() }
         return try await task.value.get()

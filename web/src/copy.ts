@@ -2824,6 +2824,7 @@ export const copy = {
       save: 'Save as Working Corpus',
       saved: (name: string) => `Saved as ${name}`,
       gathering: 'Gathering what the lasso enclosed…',
+      failed: 'The lasso could not be read.',
     },
     regionSave: {
       save: 'Save as Working Corpus',
@@ -2845,6 +2846,9 @@ export const copy = {
       high: (volume: string) => `${volume} →`,
       gutter: (count: number) => `undated (${count.toLocaleString('en-US')})`,
       laying: 'Laying out the slice…',
+      laid: (from: string, to: string) => `Laid out from ${from} to ${to}.`,
+      scale: (minYear: number, maxYear: number, undated: number) =>
+        `Up the side, the years ${minYear} to ${maxYear}${undated > 0 ? `, and ${undated.toLocaleString('en-US')} ${undated === 1 ? 'document' : 'documents'} of undated volumes below them` : ''}.`,
     },
     nearest: {
       loading: 'Finding nearest documents…',

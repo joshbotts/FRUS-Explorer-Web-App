@@ -292,6 +292,15 @@ export function extendedLasso(path: readonly (readonly [number, number])[], poin
   return [...path, point];
 }
 
+/** The most points a lasso's path may hold, the server's bound (`SemanticMapToolsRoutes.polygonLimit`). The web's own. */
+export const lassoPointLimit = 2_000;
+
+/** A path of more than `limit` points thinned evenly to `limit`, keeping its first point and its shape; a shorter one whole. */
+export function thinnedLasso<T>(path: readonly T[], limit: number): T[] {
+  if (path.length <= limit || limit < 3) return [...path];
+  return Array.from({ length: limit }, (_, at) => path[Math.floor((at * path.length) / limit)] as T);
+}
+
 /** A point's place in a points answer, six bytes a point, int16 x and y little-endian: the map's or a slice's. */
 export function pointAt(points: ArrayBuffer, row: number): [number, number] | undefined {
   const offset = row * 6;

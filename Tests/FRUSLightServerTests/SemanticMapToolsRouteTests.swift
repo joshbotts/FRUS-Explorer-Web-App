@@ -131,6 +131,24 @@ import Testing
         }
     }
 
+    @Test func twoFirstAsksOfASliceWaitForOneLayout() async throws {
+        let fixture = try await ServerFixture()
+        let vectors = SemanticVectors(resources: fixture.resources.directory, shards: fixture.state.configuration.semanticShards)
+        let provider = ServedIndexProvider(state: fixture.state, resources: fixture.resources,
+                                           volumesDirectory: fixture.reader.volumesDirectory, userStore: nil)
+        let reading = SemanticMapReading(files: SemanticMapFiles(vectors: vectors), provider: provider, resources: fixture.resources)
+        let tools = SemanticMapTools(reading: reading, vectors: vectors, provider: provider, resources: fixture.resources)
+        async let first = tools.slice(from: "frus1961-63v06", to: "frus1969-76ve09p1")
+        async let second = tools.slice(from: "frus1961-63v06", to: "frus1969-76ve09p1")
+        async let other = tools.slice(from: "frus1969-76ve09p1", to: "frus1961-63v06")
+        let (one, two, three) = try await (first, second, other)
+        #expect(one == two && one.refusal == nil && three.refusal == nil && three.from == "frus1969-76ve09p1")
+        #expect(await tools.layoutsBegun == 2, "the pair asked twice at once was laid out once")
+        // Kept: asked again, it is not laid out again.
+        _ = try await tools.slice(from: "frus1961-63v06", to: "frus1969-76ve09p1")
+        #expect(await tools.layoutsBegun == 2)
+    }
+
     /// The map's files as the server keeps them, from the kit's read of them.
     static func files(_ map: SemanticBundledMap) throws -> SemanticMapFiles.Map {
         let empty = ByteBuffer()
