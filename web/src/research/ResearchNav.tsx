@@ -16,6 +16,10 @@ export function ResearchNav() {
       <Link to="/research/history" activeProps={{ 'aria-current': 'page' }}>
         {copy.history.title}
       </Link>
+      {/* From S30c, the Archives Visits, which the iPhone's Research sidebar lists beside Project Home. */}
+      <Link to="/visits" activeProps={{ 'aria-current': 'page' }}>
+        {copy.visits.title}
+      </Link>
     </nav>
   );
 }

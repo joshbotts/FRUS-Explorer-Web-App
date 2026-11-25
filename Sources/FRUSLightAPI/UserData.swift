@@ -212,6 +212,7 @@ typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & Su
     & CorrectionStore & CorrectionLogStore
     & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
     & AccountStore & SessionStore & ResearchErasureStore & SecretStore
+    & VisitPlanStore
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
@@ -501,6 +502,8 @@ enum UserDataRoutes {
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources, meaning: meaning)
         SavedSearchRoutes.add(to: me, services: services, provider: provider)
         VolumeScopeRoutes.add(to: me, services: services, provider: provider, resources: resources)
+        // The Archives Visits, their list and their editor (PLAN's S30c).
+        ArchiveVisitRoutes.add(to: me, services: services, resources: resources, provider: provider)
         // A working corpus's capture carries the results Checklist Mode hides, so its two routes have
         // a group of their own, with its larger limit (S17e).
         let captures = router.group("/api/v1/me")

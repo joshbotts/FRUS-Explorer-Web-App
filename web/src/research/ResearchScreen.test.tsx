@@ -111,6 +111,8 @@ describe('the Research page', () => {
       .getAllByRole('listitem')
       .map((item) => item.textContent);
     expect(rows).toEqual([
+      // Since S30c, the Archives Visits, pinned above the categories as the iPhone's sidebar pins them.
+      'Archives Visits, Plans for consulting the records behind your documents',
       'All Research Documents, 1,204',
       'Contains Notes, 2',
       'All Notes, 3',
@@ -308,6 +310,7 @@ describe('the Research page', () => {
       ['Research', '/research', null],
       ['All Notes', '/research/notes', 'page'],
       ['History', '/research/history', null],
+      ['Archives Visits', '/visits', null],
     ]);
   });
 });

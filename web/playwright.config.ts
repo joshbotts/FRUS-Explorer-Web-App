@@ -39,6 +39,10 @@ const correcting = !!process.env.FRUS_E2E_PEOPLE;
 // collocates, on the smoke test's Standalone server, whose index holds the three fixture volumes' text.
 const language = /distinctive-collocates\.spec\.ts$/;
 const ranking = !!process.env.FRUS_E2E_LANGUAGE;
+// Archives Visits (PLAN's S30c): its spec's Standalone test, a plan seeded from a project's notes over the smoke test's
+// Standalone server's index of the three fixture volumes, whose source notes derive its targets.
+const visits = /visits\.spec\.ts$/;
+const planning = !!process.env.FRUS_E2E_VISITS;
 
 export default defineConfig({
   testDir: './e2e',
@@ -60,7 +64,9 @@ export default defineConfig({
                   ? { testMatch: people }
                   : ranking
                     ? { testMatch: language }
-                    : { testIgnore: [signIn, accounts, updateReview] }),
+                    : planning
+                      ? { testMatch: visits }
+                      : { testIgnore: [signIn, accounts, updateReview] }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

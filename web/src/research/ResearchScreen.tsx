@@ -215,6 +215,16 @@ function Categories({
   );
   return (
     <>
+      {/* From S30c, the Archives Visits, pinned above the categories as the iPhone's Research sidebar pins them. */}
+      <ul className="research-categories-list">
+        <li>
+          <Link to="/visits" className="research-category">
+            <span className="research-category-name">{copy.visits.title}</span>
+            <span className="visually-hidden">, </span>
+            <span className="research-category-detail">{copy.visits.caption}</span>
+          </Link>
+        </li>
+      </ul>
       <ul className="research-categories-list">
         {category('allAnnotated', copy.researchPage.allAnnotated, page.allAnnotated)}
         {category('hasNotes', copy.researchPage.hasNotes, page.hasNotes)}

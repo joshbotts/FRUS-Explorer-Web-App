@@ -2054,6 +2054,144 @@ export const copy = {
     loading: 'Loading your research…',
   },
 
+  // ─── Archives Visits ──────────────────────────────────────────────────────
+  /**
+   * Archives Visits (PLAN's S30c), in the app's words (`ArchiveVisitListView`, `ArchiveVisitEditorView`,
+   * `ArchiveVisitTierSheet`), each held to its key by ArchiveVisitMirrorParityTests. Where the app speaks of a device, its
+   * sync or its index, the web speaks of this server; and until S30d brings Add to Archives Visit, a plan's empty
+   * state names the way in the web has, Re-seed from Project.
+   */
+  visits: {
+    title: 'Archives Visits',
+    caption: 'Plans for consulting the records behind your documents',
+    emptyTitle: 'No Archives Visits',
+    emptyDetail:
+      'An Archives Visit uses information drawn from documents’ source notes to generate a draft research-trip plan. Seed one from a project — or start empty below.',
+    footer:
+      'An Archives Visit is an initial draft of a plan for consulting the records behind these documents — what to see, in what order, at which repository. The whole plan is kept on this server.',
+    new: 'New Archives Visit',
+    untitled: 'Untitled Archives Visit',
+    loading: 'Loading your Archives Visits…',
+    documents: (count: number) => (count === 1 ? '1 document' : `${count.toLocaleString('en-US')} documents`),
+    modified: (date: string) => `Modified ${date}`,
+    coverage: (indexed: number, documents: string) => `${indexed.toLocaleString('en-US')} of ${documents} indexed on this server`,
+    rowMenu: (name: string) => `Actions for ${name}`,
+    rename: 'Rename',
+    renameTitle: 'Rename Archives Visit',
+    renamePlaceholder: 'Name',
+    duplicate: 'Duplicate',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    save: 'Save',
+    done: 'Done',
+    deleteTitle: 'Delete this Archives Visit?',
+    deleteMessage: 'This deletes the plan, its priority tiers, and its per-target notes. Documents and volumes are untouched.',
+    gone: 'This Archives Visit no longer exists.',
+    backToList: 'Archives Visits',
+
+    // The editor.
+    editorTitle: 'Archives Visit',
+    nameA11y: 'Archive visit name',
+    tab: 'View',
+    tabTargets: 'Targets',
+    tabDocuments: 'Documents',
+    deriving: 'Deriving research targets from the plan’s documents…',
+    about: 'About research targets',
+    aboutHelp: 'What a research target is, what Drawn from and Pointed at mean, and why their counts are never added',
+    infoBody:
+      'A target is one archival unit under one claim. Drawn from: the document was published from this file — its own source note. Pointed at: the document’s footnotes cite this, unprinted. One document can seed several targets, each prioritized on its own; the two counts are never added because they answer different questions. A row is stored only once you give it a tier, a note, or an exclusion — the rest derives from the document seeds each time, so it always reflects the index this server serves.',
+    infoSparsity:
+      'Footnote references to unprinted material exist on only about 4% of documents corpus-wide (measured over the full index: 13,750 of 316,839), so a thin pointed-at list is expected — sparse data, not a failed scan.',
+    measuredSparsity: (withReferences: number, indexed: number) =>
+      `On this server: ${withReferences.toLocaleString('en-US')} of ${indexed.toLocaleString('en-US')} indexed documents carry such references.`,
+    more: 'More',
+    tiers: 'Priority Tiers…',
+    reseed: 'Re-seed from Project',
+    duplicated: (name: string) => `Duplicated as “${name}”`,
+    noSeedsTitle: 'No documents seeded',
+    noSeedsDetail: 'Seed this plan from its project with Re-seed from Project.',
+    allOff:
+      'Every document’s contributions are switched off — turn a document’s archival source or unprinted references back on under Documents.',
+    noTargets:
+      'No targets derive from these documents on this server — their volumes may not be indexed yet, or their source notes name nothing the server can place.',
+    noIndex: 'This server serves no index yet, so no target derives from these documents.',
+    noMatches: 'No targets match the current filters.',
+    clearFilters: 'Clear Filters',
+    seeding: (count: number) => (count === 1 ? '1 seeding document' : `${count.toLocaleString('en-US')} seeding documents`),
+    editorCoverage: (indexed: number, seeding: string) =>
+      `${indexed.toLocaleString('en-US')} of ${seeding} indexed on this server — targets from unindexed documents may be missing below.`,
+    filters: 'Filters',
+    repository: 'Repository',
+    tier: 'Tier',
+    claim: 'Claim',
+    all: 'All',
+    includedOnly: 'Included only',
+    drawnFrom: 'Drawn from',
+    pointedAt: 'Pointed at',
+    unprioritized: 'Unprioritized',
+    setTier: 'Set tier',
+    tierOf: (target: string) => `Tier of ${target}`,
+    targetMenu: (target: string) => `Actions for ${target}`,
+    substitute: '⇄ Part of this record is digitized or filmed — read it that way instead of pulling.',
+    excluded: 'Excluded from the exported packet',
+    editNote: 'Edit Note…',
+    include: 'Include in Packet',
+    exclude: 'Exclude from Packet',
+    removeStored: 'Remove Stored State',
+    drawnFromCount: (count: number) => (count === 1 ? 'drawn from 1 document' : `drawn from ${count.toLocaleString('en-US')} documents`),
+    pointedAtCount: (count: number) =>
+      count === 1 ? 'pointed at by 1 footnote' : `pointed at by ${count.toLocaleString('en-US')} footnotes`,
+    drawnFromHeader: (count: number) => `Drawn from — ${count} documents`,
+    pointedAtHeader: (count: number) => `Pointed at — ${count} footnotes`,
+    seedingsMore: (count: number) => `…and ${count} more — the export carries the same capped list.`,
+    quoted: (text: string) => `“${text}”`,
+    inherited: 'Cited as “Ibid.” — inherited from the preceding footnote’s citation.',
+    storedHeader: 'Stored targets',
+    orphanCaption:
+      'Stored target — no longer derives from this plan’s current seeds. Kept with your tier and notes; it never deletes itself.',
+    supersededCaption: (target: string) =>
+      `Stored target — now part of “${target}”, which shows another stored row’s tier, note and exclusion. Kept with your tier and notes; it never deletes itself.`,
+    supersededExcluded: 'Excluded from the packet when it was a target of its own.',
+    removeStoredTitle: 'Remove this stored target?',
+    removeStoredMessage: 'Its tier and note are deleted. Nothing else in the plan changes.',
+    noteTitle: 'Target Note',
+    notePlaceholder: 'Note',
+    topicTitle: 'Replace the inquiry topic?',
+    topicReplace: 'Replace Topic',
+    topicKeep: 'Keep Current Topic',
+    topicNow: 'The project’s research question now reads:',
+    topicDrafts: 'This plan’s inquiry drafts include:',
+    topicAsk: 'Replace the topic with the question?',
+    topicFilled: 'The inquiry topic now reads the project’s research question.',
+
+    // The Documents tab.
+    nothing: 'Contributes nothing to this plan',
+    source: 'Archival source',
+    noSource: 'This document carries no source note',
+    noRefs: 'No unprinted references in this document’s footnotes',
+    refsCounted: (count: number) => `Unprinted references · ${count}`,
+    refs: 'Unprinted references',
+    open: 'Open Document',
+    remove: 'Remove',
+    removeSeed: (title: string) => `Remove ${title}`,
+    documentsFooter:
+      'Each document contributes through two switches: its own source note (drawn from) and its footnotes’ citations to unprinted material (pointed at). References beyond FRUS exist on only about 4% of documents — where a half is absent, the control acts as a caption instead of a dead switch.',
+
+    // The tiers' sheet.
+    tiersTitle: 'Priority Tiers',
+    addTier: 'Add a priority tier',
+    tiersFooter: 'Targets without a tier stay in Unprioritized, always listed last. An unlabeled tier reads “Priority 1”.',
+    members: (count: number) => `${count} targets`,
+    renameTier: 'Rename Tier',
+    tierLabel: 'Label',
+    moveUp: 'Move Up',
+    moveDown: 'Move Down',
+    tierActions: (tier: string) => `Actions for ${tier}`,
+    deleteTier: 'Delete Tier',
+    deleteTierTitle: (tier: string) => `Delete “${tier}”?`,
+    deleteTierMessage: (count: number) => `Its ${count} targets move to Unprioritized. Nothing is removed from the plan.`,
+  },
+
   // ─── Collections ──────────────────────────────────────────────────────────
   /**
    * Collections (PLAN's S18d), in the app's words: the Collections tab's list, its project scope and its

@@ -43,6 +43,9 @@ import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './researc
 import { HistoryScreen } from './research/HistoryScreen';
 import { ProjectHomeScreen } from './research/ProjectHomeScreen';
 import { ResearchScreen, type ResearchSearch, validateResearchSearch } from './research/ResearchScreen';
+// From S30c, the Archives Visits, their list and their editor.
+import { VisitEditorScreen } from './visits/VisitEditorScreen';
+import { VisitsScreen } from './visits/VisitsScreen';
 // ─── Collections ────────────────────────────────────────────────────────────
 import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
 import { CollectionsScreen } from './collections/CollectionsScreen';
@@ -364,6 +367,19 @@ const projectHomeRoute = createRoute({
   component: ProjectHomeScreen,
 });
 
+// The Archives Visits (S30c), which the iPhone's Research sidebar lists beside Project Home, and a plan's editor.
+const visitsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/visits',
+  component: VisitsScreen,
+});
+
+const visitRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/visits/$planId',
+  component: VisitEditorScreen,
+});
+
 // ─── Collections ────────────────────────────────────────────────────────────
 // The Collections tab (S18d), between Research and Settings, as the app's tabs order them, and a
 // collection's editor, which the tab pushes.
@@ -607,6 +623,8 @@ export const routeTree = rootRoute.addChildren([
   researchNotesRoute,
   researchHistoryRoute,
   projectHomeRoute,
+  visitsRoute,
+  visitRoute,
   // ─── Collections ──────────────────────────────────────────────────────────
   collectionsRoute,
   collectionRoute,
