@@ -25,7 +25,10 @@ import WordCloudKit
 
 @testable import FRUSLightAPI
 
-@Suite struct WordCloudLiveParityTests {
+/// Serialized, since each test counts the fixture volumes' words in a debug build: the suite's counts run one after
+/// another rather than beside each other and beside the target's live servers, whose clients wait 20 s for an answer
+/// (S27c's warning for CI's runner).
+@Suite(.serialized) struct WordCloudLiveParityTests {
     /// The fixture index served as a server serves it, and the data files a server reads, opened once for the suite.
     struct Fixture: @unchecked Sendable {
         let served: ServedIndex
@@ -138,7 +141,8 @@ import WordCloudKit
                                                                services: nil, resources: fixture.resources)
             let keys = try await WordCloudLive.keys(resolution, served: fixture.served, services: nil)
             #expect(keys == rows, "\(volume): the resolver reads the volume's rows, as the app's `keys(forVolume:)`")
-            for lens in [WordCloudLens.allTerms, .topics] {
+            // All terms, the lens every word passes through: the others are held over the family's documents above.
+            for lens in [WordCloudLens.allTerms] {
                 let live = try await WordCloudLive.count(keys, lens: lens, settings: settings, served: fixture.served, resources: fixture.resources)
                 let kits = try await Self.kitsCount(rows, lens: lens, hidden: hidden, pipeline: fixture.pipeline)
                 #expect(Self.lines(live.terms) == Self.lines(kits.terms) && live.documentCount == kits.documentCount

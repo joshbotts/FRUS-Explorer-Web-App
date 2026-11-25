@@ -246,7 +246,8 @@ test('Chronology opens its range’s cloud, and Search offers Collocates refused
     await page.goto('search?keywords=negotiating+OR+canal');
     await expect(page.getByRole('list', { name: 'Results' }).getByRole('link')).toHaveCount(3);
     const collocates = page.getByRole('group', { name: 'Reading' }).getByRole('button', { name: 'Collocates' });
-    await tabTo(page, collocates, 60);
+    // Past the header, Search by (S27d), the box, the filters and the readings before it: more than sixty stops.
+    await tabTo(page, collocates, 80);
     await expect(collocates).toHaveAttribute('aria-disabled', 'true');
     await expect(collocates).toHaveAccessibleDescription(/this server’s language analysis cannot do yet/);
     await page.keyboard.press('Enter');
