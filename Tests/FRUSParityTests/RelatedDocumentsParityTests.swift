@@ -548,16 +548,23 @@ enum TwoVolumeIndex {
         let texts = try await host.pipeline.documentBodyTextsByKey(
             forKeys: documents.map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) })
         #expect(texts.count > 300, "the fixture documents' bodies: \(texts.count)")
-        func walk(_ tagger: some WordCloudTagger, _ text: String, _ reading: WordCloudTagReading) -> [String] {
-            var words: [String] = []
+        /// A word of a walk: its range as UTF-8 offsets, its lemma and its class where the walk reads classes.
+        struct Step: Equatable {
+            let start: Int
+            let end: Int
+            let lemma: String?
+            let lexicalClass: WordCloudLexicalClass?
+        }
+        func walk(_ tagger: some WordCloudTagger, _ text: String, _ reading: WordCloudTagReading) -> [Step] {
+            var steps: [Step] = []
+            let utf8 = text.utf8
             tagger.enumerateWords(in: text, reading: reading) { range, lemma, lexicalClass in
-                let utf8 = text.utf8
-                let place = "\(utf8.distance(from: utf8.startIndex, to: range.lowerBound))..\(utf8.distance(from: utf8.startIndex, to: range.upperBound))"
-                let kind = reading.contains(.lexicalClasses) ? lexicalClass().map { "\($0)" } ?? "-" : ""
-                words.append("\(place) \(text[range]) \(lemma ?? "-") \(kind)")
+                steps.append(Step(start: utf8.distance(from: utf8.startIndex, to: range.lowerBound),
+                                  end: utf8.distance(from: utf8.startIndex, to: range.upperBound), lemma: lemma,
+                                  lexicalClass: reading.contains(.lexicalClasses) ? lexicalClass() : nil))
                 return true
             }
-            return words
+            return steps
         }
         let tagger = FRUSWordCloudTagger()
         let kept = KeptWalks(tagger, wordLimit: 1_000_000)

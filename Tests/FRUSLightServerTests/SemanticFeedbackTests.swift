@@ -83,8 +83,8 @@ import Testing
             #expect(list.axes.allSatisfy { $0.available }, "every axis ranks, the semantic and the lexical among them")
             #expect(list.missingShards.isEmpty, "both served volumes' shards are held")
             let row = try #require(list.rows.first { $0.semanticScore != nil }, "a row the semantic axis scored: \(list.rows.map(\.documentId))")
-            #expect(row.chips.contains { $0.axis == "semanticSimilarity" && $0.text.contains("Semantic match · ") },
-                    "its chip, the kit's label: \(row.chips)")
+            #expect(row.chips.contains { $0.axis == "semanticSimilarity" && $0.text.hasPrefix("shares: ") },
+                    "its chip, the kit's: the words it shares with the anchor since S29g, or its match: \(row.chips)")
             #expect(row.verdict == nil)
             #expect(list.rows.filter { $0.semanticScore == nil }.allSatisfy { !$0.chips.contains { $0.axis == "semanticSimilarity" } })
             let neighbour = "\(row.volumeId)/\(row.documentId)"

@@ -56,9 +56,11 @@ import WordCloudKit
     }
 
     /// The export's first document, "The ambassador was negotiating treaties with the minister.", and its second,
-    /// "Negotiating began in May, and after many long weeks of talks the treaties came.", share two words that no stop
-    /// list holds; the first prints neither in its dictionary form, so the chip names each as the tagger reduces it, the
-    /// rarer across the corpus first. The lexical axis, raised, scores the second too, and its chip names the same words.
+    /// "Negotiating began in May, and after many long weeks of talks the treaties came.", share one word that no stop
+    /// list holds, as the tagger reduces them: "treaty", which the first prints as "treaties", so the chip names it in its
+    /// dictionary form. The tagger reads the first's "negotiating" as a verb, "negotiate", and the second's, opening its
+    /// sentence, as a noun it gives no lemma, so the two forms differ. The lexical axis, raised, scores the second too, and
+    /// its chip names the same word.
     @Test func aRowMatchedByMeaningOrByWordingSaysWhatItShares() async throws {
         let fixture = try await UserDataFixture(indexed: true)
         defer { withExtendedLifetime(fixture) {} }
@@ -67,7 +69,7 @@ import WordCloudKit
             let list = try decode(RelatedDocuments.self, try await client.execute(uri: base, method: .get))
             let second = try #require(list.rows.first { $0.volumeId == Self.volume && $0.documentId == "d2" })
             let meaning = try #require(second.chips.first { $0.axis == "semanticSimilarity" })
-            #expect(["shares: negotiate, treaty", "shares: treaty, negotiate"].contains(meaning.text), "\(meaning.text)")
+            #expect(meaning.text == "shares: treaty", "\(meaning.text)")
             #expect(second.semanticScore != nil && !second.chips.contains { $0.axis == "lexicalSimilarity" },
                     "the semantic axis scored it, and the lexical axis ships at 0")
             // Nicaragua's first document, "The canal concession and the Mosquito Reservation.", shares only "the", a stop

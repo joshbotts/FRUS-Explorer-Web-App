@@ -7,8 +7,8 @@
 // server finds them. The test removes its project, its note and the trail, and forgets the tuning.
 // S26d's: the semantic axis's weight is raised by keyboard, a row it scored is marked helpful from its menu, by
 // keyboard, Beyond your library follows the rows, and Settings ▸ Data lists the verdict, over the image's shards;
-// the test clears its verdicts. S29g's: the keyboard reaches a row matched by meaning and reads its chip, the words it
-// shares with the document, and, with the lexical axis raised by keyboard, the same words under it.
+// the test clears its verdicts. S29g's: the keyboard reaches a row matched by meaning and reads its chip, the word it
+// shares with the document, and, with the lexical axis raised by keyboard, the same word under it.
 import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -215,16 +215,14 @@ test('reads by keyboard what a row matched by meaning, and then by wording, shar
     await expect(page.locator('ol.related-list')).toBeVisible();
     await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
 
-    // The export's second document is matched by meaning, and shares two words with the first that are no stop words,
-    // "negotiating" and "treaties", which its chip names in their dictionary forms, the rarer first, since the first
-    // prints neither in that form (S29g). The keyboard reaches the row's link, which its chips describe.
+    // The export's second document is matched by meaning, and shares one word with the first that no stop list holds,
+    // as the server's tagger reduces them, "treaty", which the first prints as "treaties", so the chip names it in its
+    // dictionary form (S29g). The keyboard reaches the row's link, which its chips describe.
     const title = '2. Memorandum of Conversation';
     const row = page.locator('ol.related-list > li').filter({ has: page.getByRole('link', { name: title, exact: true }) });
     const link = row.getByRole('link', { name: title, exact: true });
-    const words = /shares: (negotiate, treaty|treaty, negotiate)$/;
-    await expect(row.locator('li.axis-semanticSimilarity')).toHaveText(/^Semantically similar \(experimental\) shares: /);
-    await expect(row.locator('li.axis-semanticSimilarity')).toHaveText(words);
-    const shared = (await row.locator('li.axis-semanticSimilarity').textContent())!.replace(/^.*shares: /, '');
+    const shared = 'treaty';
+    await expect(row.locator('li.axis-semanticSimilarity')).toHaveText(`Semantically similar (experimental) shares: ${shared}`);
     await tabTo(page, link);
     await expect(link).toBeFocused();
     await expect(link).toHaveAccessibleDescription(new RegExp(`Semantically similar \\(experimental\\) shares: ${shared}`));
@@ -241,7 +239,7 @@ test('reads by keyboard what a row matched by meaning, and then by wording, shar
     await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
     await expect(wording).toBeFocused();
 
-    // The row's wording is its chip's too: the same words, the one pass naming them under both axes, as the app's does.
+    // The row's wording is its chip's too: the same word, the one pass naming it under both axes, as the app's does.
     await expect(row.locator('li.axis-lexicalSimilarity')).toHaveText(`Similar wording (experimental) shares: ${shared}`);
     await tabTo(page, link);
     await expect(link).toBeFocused();
