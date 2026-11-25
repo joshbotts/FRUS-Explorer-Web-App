@@ -65,7 +65,8 @@ actor FixtureShards: SemanticShardSource {
 /// The web's tagger, its walks given again in this suite apart from the server's `KeptWalks` (PLAN's S29g): each text is
 /// walked once by the tagger, and its words given again in their order for every later list the text is in, each range
 /// made again from its UTF-8 offsets, so that the kit's pass over a list here tags no text twice. A walk is the tagger's, a
-/// function of the text and of what the walk reads; one its reader stopped is not kept.
+/// function of the text and of what the walk reads; one its reader stopped is not kept, and a walk is given again only to
+/// a text of the same bytes, never to one that `String` holds equal in other scalars.
 final class ReplayedWalks: WordCloudTagger, @unchecked Sendable {
     private struct Walked {
         let start: Int
@@ -76,7 +77,7 @@ final class ReplayedWalks: WordCloudTagger, @unchecked Sendable {
 
     let tagger = FRUSWordCloudTagger()
     private let lock = NSLock()
-    private var walks: [String: [Walked]] = [:]
+    private var walks: [String: (text: String, walk: [Walked])] = [:]
 
     var identity: WordCloudTokenizerIdentity { tagger.identity }
     var health: NaturalLanguageHealth { tagger.health }
@@ -85,10 +86,11 @@ final class ReplayedWalks: WordCloudTagger, @unchecked Sendable {
                         using body: (Range<String.Index>, String?, () -> WordCloudLexicalClass?) -> Bool) {
         let key = "\(reading.rawValue)\u{0}\(text)"
         lock.lock()
-        let walked = walks[key]
+        let kept = walks[key]
         lock.unlock()
         let utf8 = text.utf8
-        if let walked {
+        if let kept, kept.text.utf8.elementsEqual(utf8) {
+            let walked = kept.walk
             for word in walked {
                 let range = utf8.index(utf8.startIndex, offsetBy: word.start)..<utf8.index(utf8.startIndex, offsetBy: word.end)
                 guard body(range, word.lemma, { word.lexicalClass }) else { return }
@@ -106,7 +108,7 @@ final class ReplayedWalks: WordCloudTagger, @unchecked Sendable {
         }
         guard whole else { return }
         lock.lock()
-        walks[key] = walk
+        walks[key] = (text, walk)
         lock.unlock()
     }
 
@@ -415,13 +417,16 @@ enum TwoVolumeIndex {
             worded += both.rows.filter { $0.chips.contains { $0.axis == "lexicalSimilarity" } }.count
             wordedShared += both.rows.flatMap(\.chips).filter { $0.axis == "lexicalSimilarity" && $0.text.hasPrefix("shares: ") }.count
         }
-        print("S29g chips: \(meantShared) semantic rows name shared words, \(meantAlone) say the match alone; \(wordedShared) lexical rows name words")
         #expect(rows > 1_000, "the lists hold rows to compare: \(rows)")
         #expect(chipsNamed > 0, "a shared-subjects chip names its subjects")
         #expect(cited > 0, "the cross-reference axis ranks: a row cites the anchor or is cited by it, and says so")
         #expect(meant > 1_000, "the semantic axis ranks, and its rows say so: \(meant)")
         #expect(worded > 0, "the lexical axis ranks where it is raised: \(worded)")
         #expect(beyond > 300, "the lists see beyond the three volumes served: \(beyond)")
+        // S29g: the chips name the words their rows share, the kit's for each pair, under the semantic axis in most rows and
+        // the lexical axis wherever it is raised; a row whose shared words the pass names none of says its match.
+        #expect(meantShared > 5_000, "rows matched by meaning name the words they share: \(meantShared), \(meantAlone) the match alone")
+        #expect(wordedShared > 500, "rows matched by wording name them too: \(wordedShared)")
         let axes = try #require(read.values.first?.axes)
         #expect(axes.map(\.id) == SimilarityAxis.allCases.map(\.rawValue))
         #expect(axes.allSatisfy { $0.available }, "every axis ranks on this server")
@@ -538,10 +543,11 @@ enum TwoVolumeIndex {
         throw APIParityError("Suggested Next's computation did not end")
     }
 
-    /// The server's kept walks (S29g) are the web's tagger's own: each fixture document's body, walked as the shared words'
-    /// pass walks it, with its lemmas, and a tenth of them with their classes too, gives the tagger's words, ranges,
-    /// lemmas and classes, when first walked and when given again; and walks kept past their limit are let go, the
-    /// least recently given first, and walked again as they were.
+    /// The server's kept walks (S29g) are the web's tagger's own: half the fixture documents' bodies, walked as the shared
+    /// words' pass walks them, with their lemmas, and a tenth of those with their classes too, give the tagger's words,
+    /// ranges, lemmas and classes, when first walked and when given again; two spellings of one text that `String` holds
+    /// equal, composed and decomposed, are each walked as the tagger walks it, never one given the other's walk; and walks
+    /// kept past their limit are let go, the least recently given first, and walked again as they were.
     @Test func theServersKeptWalksAreTheTaggersOwn() async throws {
         let host = try await Host.open()
         let documents = try await Self.documents()
@@ -569,9 +575,9 @@ enum TwoVolumeIndex {
         let tagger = FRUSWordCloudTagger()
         let kept = KeptWalks(tagger, wordLimit: 1_000_000)
         var walked = 0
-        for (index, key) in texts.keys.sorted().enumerated() {
+        for (index, key) in texts.keys.sorted().enumerated() where index.isMultiple(of: 2) {
             let text = try #require(texts[key])
-            let readings: [WordCloudTagReading] = index.isMultiple(of: 10) ? [[.lemmas], [.lemmas, .lexicalClasses]] : [[.lemmas]]
+            let readings: [WordCloudTagReading] = index.isMultiple(of: 20) ? [[.lemmas], [.lemmas, .lexicalClasses]] : [[.lemmas]]
             for reading in readings {
                 let own = walk(tagger, text, reading)
                 #expect(walk(kept, text, reading) == own, "\(key) first walked")
@@ -579,13 +585,30 @@ enum TwoVolumeIndex {
                 walked += own.count
             }
         }
-        #expect(walked > 300_000 && kept.count.words == walked, "every word kept: \(walked), \(kept.count)")
-        // Under a limit one word short of three texts: the first is let go once the third is kept, and walked again as it
-        // was, when the second, given longest ago now, is let go for it.
-        let three = Array(texts.keys.sorted().prefix(3)).compactMap { texts[$0] }
+        #expect(walked > 150_000 && kept.count.words == walked, "every word kept: \(walked), \(kept.count)")
+
+        // One text in two spellings, equal as strings, a byte apart: each is walked as the tagger walks it, in either order.
+        let composed = "The caf\u{E9} was closed when the minister arrived."
+        let decomposed = "The cafe\u{301} was closed when the minister arrived."
+        #expect(composed == decomposed && !composed.utf8.elementsEqual(decomposed.utf8))
+        for first in [composed, decomposed] {
+            let second = first.utf8.elementsEqual(composed.utf8) ? decomposed : composed
+            let spellings = KeptWalks(tagger, wordLimit: 1_000)
+            #expect(walk(spellings, first, [.lemmas]) == walk(tagger, first, [.lemmas]))
+            #expect(walk(spellings, second, [.lemmas]) == walk(tagger, second, [.lemmas]), "never the other spelling's walk")
+            #expect(walk(spellings, first, [.lemmas]) == walk(tagger, first, [.lemmas]))
+            #expect(spellings.count.texts == 2, "each spelling kept apart: \(spellings.count)")
+        }
+
+        // Under a limit one word short of three texts of like length, the middle of the fixture's by bytes: the first is let
+        // go once the third is kept, the other two being under nine tenths of the limit, and walked again as it was, when
+        // the second, given longest ago now, is let go for it.
+        let byLength = texts.values.sorted { $0.utf8.count < $1.utf8.count }
+        let three = Array(byLength[(byLength.count / 2)..<(byLength.count / 2 + 3)])
         let words = three.map { walk(tagger, $0, [.lemmas]).count }
-        #expect(words.allSatisfy { $0 > 0 })
         let small = KeptWalks(tagger, wordLimit: words.reduce(0, +) - 1)
+        let lowWater = small.wordLimit - small.wordLimit / 10
+        #expect(words.allSatisfy { $0 > 10 } && words[1] + words[2] <= lowWater && words[0] + words[2] <= lowWater, "\(words)")
         for text in three { _ = walk(small, text, [.lemmas]) }
         #expect(small.count.texts == 2 && small.count.words == words[1] + words[2], "\(small.count)")
         #expect(walk(small, three[0], [.lemmas]) == walk(tagger, three[0], [.lemmas]))

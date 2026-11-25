@@ -1,6 +1,6 @@
 // The shares chips on Related Documents (PLAN's S29g), through the router over the synthetic export, whose vectors are the
 // fixture shards: a row matched by meaning names the words it shares with the anchor in the kit's chip, and, with the
-// lexical axis raised, the same words under that axis; a row that shares no word but stop words keeps the semantic match's
+// lexical axis raised, the same words under that axis; a row that shares only stop words keeps the semantic match's
 // percentage; and the pass, as the route runs it, tags on the queue it prefers, its words the kit's pass's. Every fixture
 // pair's chips are held to the kit's over the fixture index in `RelatedDocumentsParityTests`.
 
@@ -72,16 +72,28 @@ import WordCloudKit
             #expect(meaning.text == "shares: treaty", "\(meaning.text)")
             #expect(second.semanticScore != nil && !second.chips.contains { $0.axis == "lexicalSimilarity" },
                     "the semantic axis scored it, and the lexical axis ships at 0")
-            // Nicaragua's first document, "The canal concession and the Mosquito Reservation.", shares only "the", a stop
-            // word: its chip says the match alone, the generator's label in the kit's arm for shared words.
-            if let nicaragua = list.rows.first(where: { $0.volumeId == Self.nicaragua.volumeId }) {
-                let chip = try #require(nicaragua.chips.first { $0.axis == "semanticSimilarity" })
-                #expect(chip.text.hasPrefix("shares: Semantic match · ") && chip.text.hasSuffix("%"), "\(chip.text)")
-            }
             let raised = try decode(RelatedDocuments.self, try await client.execute(uri: "\(base)?weights=lexicalSimilarity:1.0", method: .get))
             let worded = try #require(raised.rows.first { $0.volumeId == Self.volume && $0.documentId == "d2" })
             #expect(worded.chips.first { $0.axis == "lexicalSimilarity" }?.text == meaning.text, "\(worded.chips)")
             #expect(worded.chips.first { $0.axis == "semanticSimilarity" }?.text == meaning.text)
+        }
+    }
+
+    /// With the second document's text one that shares only stop words with the first's, "The minister and the ambassador
+    /// met.", the pass names no word for it, and its chip says the match alone, the generator's label in the kit's arm for
+    /// shared words, as the app's does.
+    @Test func aRowThatSharesOnlyStopWordsSaysItsMatch() async throws {
+        let fixture = try await UserDataFixture(indexed: true, edits: """
+            UPDATE document_cache SET body_text = 'The minister and the ambassador met.'
+            WHERE volume_id = 'frus1961-63v06' AND document_id = 'd2';
+            """)
+        defer { withExtendedLifetime(fixture) {} }
+        try await SemanticFeedbackTests.app(fixture).test(.router) { client in
+            let list = try decode(RelatedDocuments.self, try await client.execute(
+                uri: "/api/v1/volumes/\(Self.volume)/documents/d1/related", method: .get))
+            let second = try #require(list.rows.first { $0.volumeId == Self.volume && $0.documentId == "d2" })
+            let chip = try #require(second.chips.first { $0.axis == "semanticSimilarity" })
+            #expect(chip.text.hasPrefix("shares: Semantic match · ") && chip.text.hasSuffix("%"), "\(chip.text)")
         }
     }
 

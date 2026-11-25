@@ -858,6 +858,28 @@ if [ -n "$e2e" ]; then
     || fail "the language spec failed; web/playwright-report has its report"
 fi
 
+echo "== the language: Related Documents' shares chips over the Standalone server's index of the three fixture volumes (PLAN's S29g)"
+# frus1961-63v06's d1's list, ranked by the kit's engine over every vector in the image: each row matched by meaning names
+# the words it shares with the anchor, the kit's pass over the two bodies with the language family's reference and the
+# web's tagger, in the kit's chip, and a row that shares none says its match; asked again, the same chips, from the walks
+# the server kept. The browser suite reads a chip by keyboard over the synthetic export.
+related_first=$(curl -s --max-time 60 -H "Host: localhost:8080" -o "$work/related.json" -w '%{time_total}' \
+  "$library_base/api/v1/volumes/frus1961-63v06/documents/d1/related") || fail "Related Documents did not answer"
+related_again=$(curl -s --max-time 60 -H "Host: localhost:8080" -o "$work/related-again.json" -w '%{time_total}' \
+  "$library_base/api/v1/volumes/frus1961-63v06/documents/d1/related") || fail "Related Documents did not answer again"
+python3 - "$work/related.json" "$work/related-again.json" "$related_first" "$related_again" <<'PY' || fail "Related Documents' rows matched by meaning name no shared word: $(head -c 600 "$work/related.json")"
+import json, sys
+related = json.load(open(sys.argv[1], encoding="utf-8"))
+again = json.load(open(sys.argv[2], encoding="utf-8"))
+semantic = [chip["text"] for row in related["rows"] for chip in row["chips"] if chip["axis"] == "semanticSimilarity"]
+named = [text for text in semantic if not text.startswith("shares: Semantic match · ")]
+assert semantic and all(text.startswith("shares: ") for text in semantic), semantic
+assert named and all(len(text[len("shares: "):].split(", ")) <= 3 for text in named), named
+assert [row["chips"] for row in again["rows"]] == [row["chips"] for row in related["rows"]], "the same chips asked again"
+print(f"   frus1961-63v06 d1: {len(related['rows'])} rows, {len(named)} of the {len(semantic)} matched by meaning naming shared words, "
+      f"first {named[:2]}; answered in {float(sys.argv[3]):.2f} s, and again in {float(sys.argv[4]):.2f} s")
+PY
+
 echo "== the reader: Source Explorer over the Standalone server's index of the three fixture volumes, and check 8 (PLAN's S22d)"
 # frus1961-63v06's d3, a lot file the bundled central files resolve: the kit's resolution through the API, with the
 # panels the app's view draws from it. Check 8, frus-parity check-source-explorer from the image of the Dockerfile's

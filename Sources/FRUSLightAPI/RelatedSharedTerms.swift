@@ -9,11 +9,12 @@
 // kit's chip splits them, and the kit's `whyRelatedChips` reads them as "shares: …"; a row it names none for keeps its
 // generator's label, so that the semantic axis's chip says "shares: Semantic match · 71%", as the app's does.
 //
-// The pass tags, so it runs in a turn of the word counts' gate (S29e) and on a serial queue of its own that the task
-// prefers (S29f's `CollocationExecutor`), off the main actor the ranking runs on and off Swift's cooperative pool. The web's
-// own: the server keeps the walks of the texts it tagged last (`KeptWalks`), since a document recurs, in its neighbours'
-// lists and in every list a reader ranks again as they tune it, where the app's view tags each row again at each reload;
-// and the list comes with its words, where the app's shows its rows first and fills the words in when its pass lands.
+// The pass tags, so it runs in a turn of a gate of its own, bounded as the word counts' is (S29e), so that a list never
+// waits for a count or a scan of Collocates, and on a serial queue of its own that the task prefers (S29f's
+// `CollocationExecutor`), off the main actor the ranking runs on and off Swift's cooperative pool. The web's own: the server
+// keeps the walks of the texts it tagged last (`KeptWalks`), since a document recurs, in its neighbours' lists and in every
+// list a reader ranks again as they tune it, where the app's view tags each row again at each reload; and the list comes
+// with its words, where the app's shows its rows first and fills the words in when its pass lands.
 // The kit's note on words compared as printed (`Evidence.printedFormsNote`) is never said here, since the tagger's words
 // are never printed forms.
 
@@ -34,6 +35,11 @@ extension RelatedDocumentsRoutes {
     /// The tagger the pass walks with: the web's, keeping the walks of the last 500,000 words it walked.
     static let sharedTermsTagger = KeptWalks(WordCloudLive.tagger, wordLimit: 500_000)
 
+    /// The pass's turns, half the processors from one to four, as the word counts' gate gives theirs: a gate of its own, so
+    /// that a list waits for no count of a cloud or scan of Collocates, which hold their turns for seconds, where the app's
+    /// list never waits for its pass.
+    static let sharedTermsGate = CountGate(limit: min(4, ProcessInfo.processInfo.activeProcessorCount / 2))
+
     /// The shared words' lists: the app's stop lists, which the pass's tokenizer reads with the diplomatic one, and the
     /// language family's references as the kit reads them, which price its words; each decoded once, on first use, as
     /// Distinctive and Collocates read them.
@@ -47,8 +53,8 @@ extension RelatedDocumentsRoutes {
     /// the family's references, at the verdict of the web's tagger, and the tagger, its words joined as the kit's chip
     /// splits them and written under each of the two axes that scored the row. A row it names no word for keeps its
     /// generator's label: the semantic axis's, "Semantic match · 71%", which the kit's chip reads as "shares: Semantic
-    /// match · 71%", the app's chip too, and the lexical axis's percentage. A cancellation, the client's going, leaves the
-    /// rows as they are.
+    /// match · 71%", the app's chip too, and the lexical axis's percentage. A task cancelled before its turn of the pass
+    /// leaves the rows as they are.
     static func namingSharedTerms(_ rows: [RelatedDocumentRow], anchor: DocumentKey, pipeline: IndexingPipeline,
                                   resources: ServerResources) async -> [RelatedDocumentRow] {
         let vocabularyAxes = Self.vocabularyAxes
@@ -71,16 +77,18 @@ extension RelatedDocumentsRoutes {
         return rows
     }
 
-    /// The kit's pass as the route runs it: in a turn of the word counts' gate, on a serial queue of its own that the
-    /// task prefers and moves onto first, isolated to nothing so that it runs there, with `tagger` at its own verdict,
-    /// which reads the reference in its form. A cancellation, its client's going, throws.
+    /// The kit's pass as the route runs it: in a turn of its own gate, on a serial queue of its own that the task prefers
+    /// and moves onto first, isolated to nothing so that it runs there, with `tagger` at its own verdict, which reads the
+    /// reference in its form. A task cancelled before the pass begins throws, and once it has begun the pass runs to its
+    /// end, as the kit's has no point at which it stops.
     static func sharedTerms<Tagger: WordCloudTagger & Sendable>(
         anchor: DocumentKey, candidates: [DocumentKey], pipeline: IndexingPipeline,
         lists: (stopwords: WordCloudStopwordSet, references: KeynessReferences), tagger: Tagger
     ) async throws -> SemanticSharedTerms.Evidence {
-        try await WordCloudLive.gate.run {
+        try await sharedTermsGate.run {
             try await CollocationExecutor.run(label: sharedTermsQueue) {
-                await SemanticSharedTerms.sharedTerms(
+                try Task.checkCancellation()
+                return await SemanticSharedTerms.sharedTerms(
                     anchor: anchor, candidates: candidates, pipeline: pipeline, references: lists.references,
                     languageAnalysis: tagger.health, stopwords: lists.stopwords, tagger: tagger, isolation: nil)
             }
@@ -92,12 +100,14 @@ extension RelatedDocumentsRoutes {
 /// S29g), the web's own: Related Documents' pass tags the anchor's body and each row's, and a document recurs, in the next
 /// list of a neighbour and in every list a reader ranks again as they tune it.
 ///
-/// A walk is the tagger's alone, a function of the text and of what the walk reads, so a text's walk is kept by the text
-/// and the reading: each word's range, as UTF-8 offsets into the text, its lemma, and its lexical class, read as the walk
-/// is made when the walk reads classes. A kept walk is given in the same order, each range made again in the text it is
-/// given for, which holds the same bytes; so the words a tokenizer counts from a kept walk are the words it counts from
-/// the tagger's own. A walk its reader stopped is not kept. The walks kept hold at most `wordLimit` words, the least
-/// recently given let go first; a text longer than that is walked and not kept.
+/// A walk is the tagger's alone, a function of the text and of what the walk reads, so a text's walk is kept by the
+/// text's UTF-8 bytes, never by `String`'s equality, which holds two canonically equivalent texts spelt in other scalars
+/// equal, and by the reading: each word's range, as UTF-8 offsets into the text, its lemma, and its lexical class, read as
+/// the walk is made when the walk reads classes. A kept walk is given in the same order, each range made again in the text
+/// it is given for, which holds the same bytes; so the words a tokenizer counts from a kept walk are the words it counts
+/// from the tagger's own. A walk its reader stopped is not kept. The walks kept hold at most `wordLimit` words: past it,
+/// the least recently given are let go until they hold nine tenths of it, so that a text kept past the limit lets go of
+/// several at once; a text of more words than the limit is walked and not kept.
 final class KeptWalks<Inner: WordCloudTagger & Sendable>: WordCloudTagger, @unchecked Sendable {
     /// One word of a walk.
     struct Word: Sendable {
@@ -108,9 +118,37 @@ final class KeptWalks<Inner: WordCloudTagger & Sendable>: WordCloudTagger, @unch
         let lexicalClass: WordCloudLexicalClass?
     }
 
+    /// A walk's key: its reading, and its text, compared and hashed by its UTF-8 bytes.
     private struct Key: Hashable {
         let reading: Int
         let text: String
+
+        init(reading: Int, text: String) {
+            var text = text
+            text.makeContiguousUTF8()
+            self.reading = reading
+            self.text = text
+        }
+
+        static func == (left: Key, right: Key) -> Bool {
+            guard left.reading == right.reading, left.text.utf8.count == right.text.utf8.count else { return false }
+            if let compared = left.text.utf8.withContiguousStorageIfAvailable({ leftBytes in
+                right.text.utf8.withContiguousStorageIfAvailable { rightBytes in
+                    leftBytes.elementsEqual(rightBytes)
+                }
+            }), let same = compared {
+                return same
+            }
+            return left.text.utf8.elementsEqual(right.text.utf8)
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(reading)
+            hasher.combine(text.utf8.count)
+            if text.utf8.withContiguousStorageIfAvailable({ hasher.combine(bytes: UnsafeRawBufferPointer($0)) }) == nil {
+                for byte in text.utf8 { hasher.combine(byte) }
+            }
+        }
     }
 
     private struct Kept {
@@ -168,7 +206,8 @@ final class KeptWalks<Inner: WordCloudTagger & Sendable>: WordCloudTagger, @unch
             }
             return true
         }
-        if whole { keep(words, under: key) }
+        // Kept at its own length, with no room to grow, which a walk built word by word holds.
+        if whole { keep(words.withUnsafeBufferPointer(Array.init), under: key) }
     }
 
     /// Names are not kept: the pass reads none.
@@ -188,7 +227,8 @@ final class KeptWalks<Inner: WordCloudTagger & Sendable>: WordCloudTagger, @unch
         return found.words
     }
 
-    /// Keeps `words` under `key`, letting the least recently given walks go while the words kept pass the limit.
+    /// Keeps `words` under `key`; once the words kept pass the limit, lets the least recently given walks go until they
+    /// hold nine tenths of it.
     private func keep(_ words: [Word], under key: Key) {
         guard words.count <= wordLimit else { return }
         lock.lock()
@@ -199,8 +239,9 @@ final class KeptWalks<Inner: WordCloudTagger & Sendable>: WordCloudTagger, @unch
         }
         keptWords += words.count
         guard keptWords > wordLimit else { return }
+        let lowWater = wordLimit - wordLimit / 10
         for (oldest, walk) in kept.sorted(by: { $0.value.given < $1.value.given }) {
-            guard keptWords > wordLimit else { break }
+            guard keptWords > lowWater, oldest != key else { break }
             kept[oldest] = nil
             keptWords -= walk.words.count
         }
