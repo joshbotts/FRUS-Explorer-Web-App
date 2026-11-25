@@ -1,5 +1,7 @@
 // What the server and the browser app mirror of the app's Word Cloud (PLAN's S24i), held to the app's source at the pin,
-// line beside line: `BundledCloudVectors`' reading of a scope's list and `LensChip`'s words; the tokenizer the app
+// line beside line, and since S27c's pin move to the kit's files where FRUS-Explorer#1987 moved the tokenizer's assembly,
+// the scope's signatures and keyness (`FRUSCoreKit/Analytics/WordCloud`), until S29e's rows call them:
+// `BundledCloudVectors`' reading of a scope's list and `LensChip`'s words; the tokenizer the app
 // assembles (`WordCloudTokenizer.configured`) and its settings bench (`WordCloudBench`); `WordCloudSettings`' lists and
 // their JSON as `SettingsSyncCoordinator` syncs it; `WordCloudDisplayState`'s states and count line; the scope menu
 // (`WordCloudScopeBar`), the scope's title (`WordCloudScopeResolver`) and the scoped hand-off; the generator's layer; the
@@ -14,16 +16,17 @@ import Testing
 @Suite struct WordCloudMirrorParityTests {
     static let bundled = "Analytics/WordCloud/BundledCloudVectors.swift"
     static let backdrop = "Analytics/WordCloud/WordCloudBackdropView.swift"
-    static let configured = "Analytics/WordCloud/WordCloudTokenizer+App.swift"
+    static let configured = "kit:FRUSCoreKit/Analytics/WordCloud/WordCloudTokenizer+Configured.swift"
     static let bench = "Analytics/WordCloud/WordCloudBench.swift"
     static let settings = "Analytics/WordCloud/WordCloudSettings.swift"
     static let sync = "Settings/SettingsSyncCoordinator.swift"
     static let view = "Analytics/WordCloud/WordCloudView.swift"
     static let resolver = "Analytics/WordCloud/WordCloudScopeResolver.swift"
     static let lensUI = "Analytics/WordCloud/WordCloudLens+UI.swift"
-    static let keyness = "Analytics/WordCloud/KeynessCloud.swift"
+    static let keyness = "kit:FRUSCoreKit/Analytics/WordCloud/KeynessCloud.swift"
     static let layout = "Analytics/WordCloud/WordCloudLayout.swift"
     static let models = "Analytics/WordCloud/WordCloudModels.swift"
+    static let scope = "kit:FRUSCoreKit/Analytics/WordCloud/WordCloudScope.swift"
     static let lexicons = "Analytics/WordCloud/WordCloudLexicons.swift"
     static let pane = "Settings/WordCloudSettingsView.swift"
     static let rail = "DocumentView/ResearchRailView.swift"
@@ -66,9 +69,9 @@ import Testing
 
     @Test func theReadersSettingsAreReadAndKeptAsTheAppsAre() throws {
         try ArchivalAndSeriesMirrorParityTests.expect([
-            (Self.configured, #"stopwords: WordCloudStopwords.active(includeDiplomatic: includeDiplomatic) .union(extraStopwords),"#,
+            (Self.configured, #"stopwords: stopwords.active(includeDiplomatic: includeDiplomatic) .union(extraStopwords),"#,
              Self.server, #"stopwords: stopwords.active(includeDiplomatic: includeDiplomatic) .union(extraStopwords(for: lens)),"#),
-            (Self.configured, #"minimumLength: tuning.minimumLength, foldPlurals: tuning.foldPlurals, lens: lens, lexicon: WordCloudLexicons.filter(for: lens), markings: tuning.filterMarkings ? WordCloudStopwords.markings : [],"#,
+            (Self.configured, #"minimumLength: tuning.minimumLength, foldPlurals: tuning.foldPlurals, lens: lens, lexicon: lexicons.filter(for: lens), markings: tuning.filterMarkings ? stopwords.markings : [],"#,
              Self.server, #"minimumLength: tuning.minimumLength, foldPlurals: tuning.foldPlurals, lens: lens, lexicon: lexicons.filter(for: lens), markings: tuning.filterMarkings ? stopwords.markings : [],"#),
             (Self.bench, #"let kept = sample.filter { $0.count >= tuning.minimumCount && tokenizer.accepts($0.term.lowercased()) }"#,
              Self.server, #"return sample.filter { $0.count >= tuning.minimumCount && tokenizer.accepts($0.term.lowercased()) }"#),
@@ -131,15 +134,15 @@ import Testing
              Self.server, #"let volumeIds = resources.manifest .filter { $0.subseries == subseriesId } .map(\.volumeId) guard !volumeIds.isEmpty else { return nil }"#),
             (Self.view, #"case .corpus, .document, .collection, .userTag, .savedSearch, .dateRange: return nil"#,
              Self.server, #"case .corpus: return nil"#),
-            (Self.models, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
+            (Self.scope, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
              Self.server, #"static let liveSignatures: Set<String> = ["doc", "col", "tag", "search", "scope", "subject", "daterange"]"#),
-            (Self.models, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
+            (Self.scope, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
              Self.server, #"case "doc": guard value.firstIndex(of: "/") != nil else { return false } return true"#),
-            (Self.models, #"case "col": guard let uuid = UUID(uuidString: value) else { return nil } self = .collection(id: uuid) case "tag": guard let uuid = UUID(uuidString: value) else { return nil } self = .userTag(id: uuid) case "search": guard let uuid = UUID(uuidString: value) else { return nil } self = .savedSearch(id: uuid) case "scope": guard let uuid = UUID(uuidString: value) else { return nil }"#,
+            (Self.scope, #"case "col": guard let uuid = UUID(uuidString: value) else { return nil } self = .collection(id: uuid) case "tag": guard let uuid = UUID(uuidString: value) else { return nil } self = .userTag(id: uuid) case "search": guard let uuid = UUID(uuidString: value) else { return nil } self = .savedSearch(id: uuid) case "scope": guard let uuid = UUID(uuidString: value) else { return nil }"#,
              Self.server, #"case "col", "tag", "search", "scope": return UUID(uuidString: value) != nil"#),
-            (Self.models, #"let parts = value.components(separatedBy: "\u{1f}") guard let category = parts.first, !category.isEmpty else { return nil }"#,
+            (Self.scope, #"let parts = value.components(separatedBy: "\u{1f}") guard let category = parts.first, !category.isEmpty else { return nil }"#,
              Self.server, #"let parts = value.components(separatedBy: "\u{1f}") guard let category = parts.first, !category.isEmpty else { return false }"#),
-            (Self.models, #"let bounds = value.components(separatedBy: "..") guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return nil }"#,
+            (Self.scope, #"let bounds = value.components(separatedBy: "..") guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return nil }"#,
              Self.server, #"let bounds = value.components(separatedBy: "..") guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return false }"#),
             (Self.lexicons, #"switch shared.polarity(of: term.lowercased()) {"#,
              Self.server, #"polarity: lens.colorsBySentiment ? lexicons.polarity(of: $0.term.lowercased()) : nil)"#),
@@ -222,7 +225,7 @@ import Testing
              Self.screen, #"setSession({ scope: drawnScope, words: [...sessionWords, term.toLowerCase()] });"#),
             (Self.view, #"WordCloudMainArea(state: displayState) { if measure == .keyness, case .unavailable(let reason) = keyness ?? .pending {"#,
              Self.screen, #"detail={answer.message?.detail ?? ''} /> ) : measure === 'keyness' ? ( <Empty title={words.keynessTitle} detail={words.keynessReason} /> )"#),
-            (Self.models, #"guard !hidden.isEmpty else { return terms } return terms.filter { !hidden.contains($0.term.lowercased()) }"#,
+            (Self.scope, #"guard !hidden.isEmpty else { return terms } return terms.filter { !hidden.contains($0.term.lowercased()) }"#,
              Self.screen, #"return (answer?.terms ?? []).filter((term) => !hidden.has(term.term.toLowerCase()));"#),
             (Self.view, #"if !hiddenWords.isEmpty || !sessionHiddenWords.isEmpty {"#,
              Self.screen, #"{sessionWords.length > 0 && ("#),
