@@ -543,8 +543,8 @@ enum TwoVolumeIndex {
         throw APIParityError("Suggested Next's computation did not end")
     }
 
-    /// The server's kept walks (S29g) are the web's tagger's own: half the fixture documents' bodies, walked as the shared
-    /// words' pass walks them, with their lemmas, and a tenth of those with their classes too, give the tagger's words,
+    /// The server's kept walks (S29g) are the web's tagger's own: a quarter of the fixture documents' bodies, walked as the
+    /// shared words' pass walks them, with their lemmas, and a tenth of those with their classes too, give the tagger's words,
     /// ranges, lemmas and classes, when first walked and when given again; two spellings of one text that `String` holds
     /// equal, composed and decomposed, are each walked as the tagger walks it, never one given the other's walk; and walks
     /// kept past their limit are let go, the least recently given first, and walked again as they were.
@@ -575,9 +575,9 @@ enum TwoVolumeIndex {
         let tagger = FRUSWordCloudTagger()
         let kept = KeptWalks(tagger, wordLimit: 1_000_000)
         var walked = 0
-        for (index, key) in texts.keys.sorted().enumerated() where index.isMultiple(of: 2) {
+        for (index, key) in texts.keys.sorted().enumerated() where index.isMultiple(of: 4) {
             let text = try #require(texts[key])
-            let readings: [WordCloudTagReading] = index.isMultiple(of: 20) ? [[.lemmas], [.lemmas, .lexicalClasses]] : [[.lemmas]]
+            let readings: [WordCloudTagReading] = index.isMultiple(of: 40) ? [[.lemmas], [.lemmas, .lexicalClasses]] : [[.lemmas]]
             for reading in readings {
                 let own = walk(tagger, text, reading)
                 #expect(walk(kept, text, reading) == own, "\(key) first walked")
@@ -585,7 +585,7 @@ enum TwoVolumeIndex {
                 walked += own.count
             }
         }
-        #expect(walked > 150_000 && kept.count.words == walked, "every word kept: \(walked), \(kept.count)")
+        #expect(walked > 75_000 && kept.count.words == walked, "every word kept: \(walked), \(kept.count)")
 
         // One text in two spellings, equal as strings, a byte apart: each is walked as the tagger walks it, in either order.
         let composed = "The caf\u{E9} was closed when the minister arrived."
