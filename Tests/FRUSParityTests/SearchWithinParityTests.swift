@@ -78,6 +78,7 @@ import Testing
         #expect(summary.rows == base.rows.count && summary.hiddenByChecklist == base.hiddenByChecklist, "\(context)")
         #expect(summary.wasCut == base.wasCut && summary.ranksWholeMatch == base.ranksWholeMatch, "\(context)")
         #expect(summary.startTitle == base.direction.startTitle && summary.fieldPrompt == base.direction.fieldPrompt, "\(context)")
+        #expect(summary.memberDigest == SearchWithinRoutes.memberDigest(base), "\(context)")
     }
 
     /// Every page of the layer `fields` asks for through the API, `limit` 100 a page, and the rows they hold.
@@ -415,7 +416,7 @@ import Testing
             "Search results, ranked by a question", " — the closest %1$@ of %2$@ matches, and %3$@ not ranked",
             " — the closest %1$@ of %2$@ matches", " — the highest-scoring %@ of a larger match",
         ]
-        for sentence in sentences {
+        for sentence in sentences + Self.templates.values {
             #expect(scope.contains("defaultValue: \"\(sentence)\""), "ResultSetScope.swift says \"\(sentence)\"")
         }
         // The server's say them in its own interpolation: each held, its placeholders filled, in its file.
@@ -452,6 +453,146 @@ import Testing
             "if case .wordsInMatches = route { return true }",
             "var isCapturePartial: Bool { isMeaningSearch || isPartialEvidence }",
         ], file: "ResultSetScope.swift")
+    }
+
+    /// The app's templates for the two layered routes (`ResultSetScope.swift`), each held to its source by
+    /// `theServersLayerWordsAreTheApps`, by the key the account below fills them in under.
+    static let templates: [String: String] = [
+        "one result": "1 result", "results": "%@ results", "shown": "%@ shown",
+        "words single none": "Your closest match does not contain these words", "words single": "Your closest match contains these words",
+        "words none": "None of your %@ closest matches contains these words", "words one": "1 of your %@ closest matches contains these words",
+        "words": "%1$@ of your %2$@ closest matches contain these words",
+        "words single none filtered": "Your closest match does not both contain these words and pass your filters",
+        "words single filtered": "Your closest match contains these words and passes your filters",
+        "words none filtered": "None of your %@ closest matches both contains these words and passes your filters",
+        "words one filtered": "1 of your %@ closest matches contains these words and passes your filters",
+        "words filtered": "%1$@ of your %2$@ closest matches contain these words and pass your filters",
+        "ranked": "%@, closest first", "ranked partial": "%1$@ · %2$@ ranked · %3$@ not ranked",
+        "whole none filtered": "None of the %@ results that pass your filters could be ranked",
+        "whole none": "None of the %@ results could be ranked",
+        "whole filtered": "Closest %1$@ of the %2$@ results that pass your filters", "whole": "Closest %1$@ of %2$@ results",
+        "whole not ranked": "%@ not ranked",
+        "warn words one": "This document is the one among a Meaning search’s closest matches that contains your words, not every document that contains them. Counts taken inside this corpus are counts inside that set.",
+        "warn words": "These documents are the ones among a Meaning search’s closest matches that contain your words, not every document that contains them. Counts taken inside this corpus are counts inside that set.",
+        "warn whole one": "This document is the closest to your question of %@ matching documents, not all of them. Counts taken inside this corpus are counts inside that subset.",
+        "warn whole": "These %1$@ documents are the closest to your question of %2$@ matching documents, not all of them. Counts taken inside this corpus are counts inside that subset.",
+        "warn whole unranked": "These %1$@ documents are the %2$@ closest to your question of %3$@ matching documents, and %4$@ that it could not rank. Counts taken inside this corpus are counts inside that subset.",
+        "warn highest": "These %1$@ documents are the highest-scoring of %2$@ matching documents. Counts taken inside this corpus are counts inside that subset.",
+        "warn highest unknown": "These %@ documents are the highest-scoring of a larger match, not all of it. Counts taken inside this corpus are counts inside that subset.",
+        "checklist one": "Checklist mode is hiding %@ reviewed document. It will not be in this corpus.",
+        "checklist": "Checklist mode is hiding %@ reviewed documents. They will not be in this corpus.",
+        "source words within": "Words found in a Meaning search’s closest matches to %3$@ — %1$@ of %2$@",
+        "source words": "Words found in a Meaning search’s closest matches — %1$@ of %2$@",
+        "source ranked": "Search results for %@, ranked by a question", "source ranked unlabelled": "Search results, ranked by a question",
+        "source narrowed": "%1$@ (%2$@)", "source highest": " — the highest-scoring %1$@ of %2$@ matches",
+        "source highest unknown": " — the highest-scoring %@ of a larger match",
+        "source whole unranked": " — the closest %1$@ of %2$@ matches, and %3$@ not ranked", "source whole": " — the closest %1$@ of %2$@ matches",
+        "source checklist one": "; %@ reviewed document excluded", "source checklist": "; %@ reviewed documents excluded",
+    ]
+
+    /// `templates[key]` with its placeholders filled in, in order, as `String(format:)` fills `%@` and `%n$@`.
+    static func fill(_ key: String, _ values: String...) -> String {
+        var text = templates[key]!
+        for (index, value) in values.enumerated() {
+            text = text.replacingOccurrences(of: "%\(index + 1)$@", with: value)
+        }
+        for value in values where text.contains("%@") {
+            text = text.replacingOccurrences(of: "%@", with: value, range: text.range(of: "%@"))
+        }
+        return text
+    }
+
+    /// What the server says of a layer's rows, `LayerScope`, is what the app's `ResultSetScope` says of the two layered
+    /// routes, case by case: the header, the capture's warnings, its record and its flags, each sentence the app's own
+    /// template with its counts filled in, grouped as the browser app's words are.
+    @Test func theLayersAccountIsTheApps() {
+        func scope(_ route: ExecutedSearchRoute, loaded: Int, shown: Int? = nil, total: Int? = nil, narrowed: Bool = false,
+                   rankOrder: Bool = true, label: String? = nil, baseCut: Bool? = nil, baseHidden: Int = 0,
+                   narrowing: [String] = []) -> LayerScope {
+            var scope = LayerScope(loaded: loaded, shown: shown ?? loaded, fetchLimit: 7_500, totalMatchCount: total, route: route)
+            scope.layerFiltersNarrowed = narrowed
+            scope.listIsInRankOrder = rankOrder
+            scope.layerBaseLabel = label
+            scope.layerBaseWasCut = baseCut
+            scope.layerBaseHiddenByChecklist = baseHidden
+            scope.narrowing = narrowing
+            return scope
+        }
+        let g = CorpusCapture.grouped
+        // The header of words found in a Meaning list, with and without filters chosen since, and with rows hidden.
+        for narrowed in [false, true] {
+            let suffix = narrowed ? " filtered" : ""
+            #expect(scope(.wordsInMatches(base: 1), loaded: 0, narrowed: narrowed).headerDescription == Self.fill("words single none" + suffix))
+            #expect(scope(.wordsInMatches(base: 1), loaded: 1, narrowed: narrowed).headerDescription == Self.fill("words single" + suffix))
+            #expect(scope(.wordsInMatches(base: 1_200), loaded: 0, narrowed: narrowed).headerDescription == Self.fill("words none" + suffix, "1,200"))
+            #expect(scope(.wordsInMatches(base: 1_200), loaded: 1, narrowed: narrowed).headerDescription == Self.fill("words one" + suffix, "1,200"))
+            #expect(scope(.wordsInMatches(base: 1_200), loaded: 1_100, narrowed: narrowed).headerDescription
+                == Self.fill("words" + suffix, "1,100", "1,200"))
+        }
+        #expect(scope(.wordsInMatches(base: 100), loaded: 5, shown: 3).headerDescription
+            == [Self.fill("shown", "3"), Self.fill("words", "5", "100")].joined(separator: " · "))
+        // A ranking's header: none, closest first in its order, a date order, rows it could not rank, a whole match.
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 0).headerDescription == "No results")
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 1).headerDescription == Self.fill("ranked", Self.fill("one result")))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 1_500).headerDescription == Self.fill("ranked", Self.fill("results", "1,500")))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 1_500, rankOrder: false).headerDescription == Self.fill("results", "1,500"))
+        #expect(scope(.rankedByMeaning(unranked: 7), loaded: 1_500).headerDescription
+            == Self.fill("ranked partial", Self.fill("results", "1,500"), "1,493", "7"))
+        let whole = WholeMatchRanking(size: 35_275, notRanked: 0, closest: 7_500, isCut: true)
+        let filtered = WholeMatchRanking(size: 4_012, filteredOut: 31_263, notRanked: 3, closest: 4_009, isCut: true)
+        let noneRanked = WholeMatchRanking(size: 24, filteredOut: 0, notRanked: 24, closest: 0, isCut: true)
+        #expect(scope(.rankedByMeaning(unranked: 0, wholeMatch: whole), loaded: 7_500, total: 35_275).headerDescription
+            == Self.fill("whole", "7,500", "35,275"))
+        #expect(scope(.rankedByMeaning(unranked: 3, wholeMatch: filtered), loaded: 4_012, total: 35_275).headerDescription
+            == [Self.fill("whole filtered", "4,009", "4,012"), Self.fill("whole not ranked", "3")].joined(separator: " · "))
+        #expect(scope(.rankedByMeaning(unranked: 24, wholeMatch: noneRanked), loaded: 24).headerDescription == Self.fill("whole none", "24"))
+        let noneFiltered = WholeMatchRanking(size: 24, filteredOut: 5, notRanked: 24, closest: 0, isCut: true)
+        #expect(scope(.rankedByMeaning(unranked: 24, wholeMatch: noneFiltered), loaded: 24).headerDescription
+            == Self.fill("whole none filtered", "24"))
+
+        // A capture's warnings.
+        #expect(scope(.wordsInMatches(base: 100), loaded: 1).captureTruncationWarning == Self.fill("warn words one"))
+        #expect(scope(.wordsInMatches(base: 100), loaded: 7).captureTruncationWarning == Self.fill("warn words"))
+        #expect(scope(.rankedByMeaning(unranked: 24, wholeMatch: noneRanked), loaded: 24).captureTruncationWarning
+            == Self.fill("warn highest", "24", "24"))
+        let one = WholeMatchRanking(size: 35_275, notRanked: 0, closest: 1, isCut: true)
+        #expect(scope(.rankedByMeaning(unranked: 0, wholeMatch: one), loaded: 1).captureTruncationWarning == Self.fill("warn whole one", "35,275"))
+        #expect(scope(.rankedByMeaning(unranked: 0, wholeMatch: whole), loaded: 7_500).captureTruncationWarning
+            == Self.fill("warn whole", "7,500", "35,275"))
+        #expect(scope(.rankedByMeaning(unranked: 3, wholeMatch: filtered), loaded: 4_012).captureTruncationWarning
+            == Self.fill("warn whole unranked", "4,012", "4,009", "4,012", "3"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 7_500, total: 9_000, baseCut: true).captureTruncationWarning
+            == Self.fill("warn highest", "7,500", "9,000"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 7_500, baseCut: true).captureTruncationWarning == Self.fill("warn highest unknown", "7,500"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 212, total: 212, baseCut: false).captureTruncationWarning == nil)
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 10, shown: 9).captureChecklistWarning == Self.fill("checklist one", "1"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 10, shown: 9, baseHidden: 2).captureChecklistWarning == Self.fill("checklist", "3"))
+
+        // A capture's record, and its flags.
+        #expect(scope(.wordsInMatches(base: 100), loaded: 7, label: "“how did the embassy”").captureProvenanceDescription
+            == Self.fill("source words within", "7", "100", "“how did the embassy”"))
+        #expect(scope(.wordsInMatches(base: 1_100), loaded: 1_007, narrowing: ["years 1945", "documents only"]).captureProvenanceDescription
+            == Self.fill("source narrowed", Self.fill("source words", "1,007", "1,100"), "years 1945; documents only"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 212, total: 212, label: "“treaties”", baseCut: false).captureProvenanceDescription
+            == Self.fill("source ranked", "“treaties”"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 212, total: 212, baseCut: false).captureProvenanceDescription
+            == Self.fill("source ranked unlabelled"))
+        #expect(scope(.rankedByMeaning(unranked: 0, wholeMatch: whole), loaded: 7_500, label: "“war”").captureProvenanceDescription
+            == Self.fill("source ranked", "“war”") + Self.fill("source whole", "7,500", "35,275"))
+        #expect(scope(.rankedByMeaning(unranked: 3, wholeMatch: filtered), loaded: 4_012, label: "“war”").captureProvenanceDescription
+            == Self.fill("source ranked", "“war”") + Self.fill("source whole unranked", "4,009", "4,012", "3"))
+        #expect(scope(.rankedByMeaning(unranked: 24, wholeMatch: noneRanked), loaded: 24).captureProvenanceDescription
+            == Self.fill("source ranked unlabelled") + Self.fill("source highest", "24", "24"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 7_500, total: 9_000, baseCut: true, baseHidden: 1).captureProvenanceDescription
+            == Self.fill("source ranked unlabelled") + Self.fill("source highest", "7,500", "9,000") + Self.fill("source checklist one", "1"))
+        #expect(scope(.rankedByMeaning(unranked: 0), loaded: 7_500, shown: 7_000, baseCut: true).captureProvenanceDescription
+            == Self.fill("source ranked unlabelled") + Self.fill("source highest unknown", "7,500") + Self.fill("source checklist", g(500)))
+        #expect(scope(.wordsInMatches(base: 100), loaded: 7).isCapturePartial)
+        #expect(!scope(.rankedByMeaning(unranked: 0), loaded: 212, total: 212, baseCut: false).isCapturePartial)
+        #expect(scope(.rankedByMeaning(unranked: 0, wholeMatch: whole), loaded: 7_500).isCapturePartial)
+        var inside = scope(.rankedByMeaning(unranked: 0), loaded: 12, total: 12, baseCut: false)
+        inside.insideTruncatedCorpus = true
+        #expect(inside.isCapturePartial, "inside a corpus captured short, as the app reads `isPartialEvidence`")
     }
 
     /// The browser app's words for Search Within These Results and the fallback: the commands, the field's prompts, the

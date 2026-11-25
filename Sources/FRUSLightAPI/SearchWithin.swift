@@ -5,8 +5,11 @@
 // A list is held as the browser app names it, by the search that found it (`within`): a search by meaning's closest
 // matches, or a keyword search's results or a browse's, with the rows Checklist Mode hid when it was held. The served index
 // keeps it for its user (`HeldList`), the kit's `PinnedResultBase` built as the app's view models build one, so that its
-// row's sentences, its way back and the layers over it ask its search nothing again. `GET /api/v1/search/held` says what
-// the row says of it. `GET /api/v1/search/within` runs the other engine inside it, from the field's words or question:
+// row's sentences, its way back and the layers over it ask its search nothing again while it is kept. The app freezes the
+// rows it holds, and lets go of them once its index is rebuilt; a server builds the list again from its search once it is
+// no longer kept, after any write to the store or on a new index, so the row says the digest of its members, and a request
+// that names it is refused when the list built again holds other members (`HELD_LIST_CHANGED`), for the browser app to
+// let go of it as the app does. `GET /api/v1/search/held` says what the row says of it. `GET /api/v1/search/within` runs the other engine inside it, from the field's words or question:
 // words found in a Meaning list, the kit's `LayeredResultComposer.wordsInMatches` over a keyword search gated to its
 // members; or a keyword list or a browse ranked by a question, the kit's `rerank` of its members, or for a list cut at its
 // ceiling the kit's `rankWholeMatch` of its whole match, inside the filters chosen since. A layer's rows are paged, ordered
@@ -70,6 +73,9 @@ public struct HeldListSummary: Codable, Equatable, Sendable, ResponseEncodable {
     public var fieldPrompt: String
     /// The `base=` part a layer's trail row carries.
     public var signaturePart: String
+    /// A digest of its members' keys in their order, which a request names the list by as `members` inside `within`, so
+    /// that a list built again with other members is refused rather than searched within.
+    public var memberDigest: String
 }
 
 /// A page of a layer's rows, a keyword search's page in shape, and what the app says of the layer.
@@ -205,15 +211,16 @@ public struct FallbackHit: Codable, Equatable, Sendable {
 // MARK: - The held list
 
 /// The list a request names as held, `within`: the search that found it, as `GET /api/v1/search` reads its fields, with
-/// `by=meaning` for a search by meaning's, `label` for the name a browse is shown by, and `reviewed`, the rows Checklist
-/// Mode hid when it was held, which no layer searches.
+/// `by=meaning` for a search by meaning's, `label` for the name a browse is shown by, `reviewed`, the rows Checklist Mode hid
+/// when it was held, which no layer searches, and `members`, the digest of its members the row gave, once it is known.
 struct HeldListRequest: Sendable {
     let search: SearchRequest
     let byMeaning: Bool
     let label: String?
+    let members: String?
 
     /// The fields `within` takes beside a search's.
-    static let fields: Set<String> = ["by", "label"]
+    static let fields: Set<String> = ["by", "label", "members"]
 
     init(_ value: String?) throws(APIProblem) {
         guard let value, !value.isEmpty else {
@@ -232,6 +239,7 @@ struct HeldListRequest: Sendable {
         case let other?: throw APIProblem.invalidParameter("within", "by: keywords or meaning, not \(other)")
         }
         label = try form.single("label").flatMap { $0.isEmpty ? nil : $0 }
+        members = try form.single("members").flatMap { $0.isEmpty ? nil : $0 }
     }
 }
 
@@ -422,7 +430,7 @@ enum SearchWithinRoutes {
         let words = (parameters.keywords ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let key = [scoped.key, asked.byMeaning ? "meaning" : "keywords", words, SearchRequest.signature(parameters),
                    digest(asked.search.reviewed), asked.label ?? "", String(engine.ceiling)].joined(separator: "\n")
-        if let kept = await served.held.value(for: key) { return kept }
+        if let kept = await served.held.value(for: key) { return try unchanged(kept, asked) }
         let base: PinnedResultBase
         if asked.byMeaning {
             let question = try MeaningSearchRoutes.question(of: asked.search, engine: engine)
@@ -440,7 +448,9 @@ enum SearchWithinRoutes {
             do {
                 async let counted = served.recent.count(of: parameters, in: scoped)
                 let rows = try await keywordRows(of: parameters, limit: engine.ceiling, scoped: scoped, served: served)
-                let total = try await counted
+                // A count that fails leaves the list's total unknown, as the app's does, and the list is held all the same.
+                let total = try? await counted
+                try Task.checkCancellation()
                 let expression = try? await scoped.service.matchExpressions(for: parameters).corpus
                 base = pinned(route: .keywords, query: words, rows: rows, hidden: asked.search.reviewed, notDownloaded: 0,
                               fetchLimit: engine.ceiling, totalMatchCount: total, renderedExpression: expression,
@@ -453,7 +463,20 @@ enum SearchWithinRoutes {
         let list = HeldList(base: base, parameters: parameters, key: key)
         try Task.checkCancellation()
         await served.held.keep(list, for: key)
-        return list
+        return try unchanged(list, asked)
+    }
+
+    /// `list`, unless the request names the list by a digest of other members: the list was built again since, after a
+    /// write or on a new index, and holds other rows than the ones searched within, which the browser app then lets go of.
+    static func unchanged(_ list: HeldList, _ asked: HeldListRequest) throws -> HeldList {
+        guard let named = asked.members, named != memberDigest(list.base) else { return list }
+        throw APIProblem(.conflict, code: "HELD_LIST_CHANGED",
+                         detail: "The list you were searching within holds other documents now, since its search was run again; search it again to hold it.")
+    }
+
+    /// The digest of `base`'s members' keys in their order, which the row says and a request names the list by.
+    static func memberDigest(_ base: PinnedResultBase) -> String {
+        SHA256.hash(data: Data(base.memberKeys.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     /// The rows a keyword search keeps of `parameters`, best first, up to `limit`: at the Mac's ceiling, the results the
@@ -660,7 +683,7 @@ enum SearchWithinRoutes {
             wholeMatchCount: base.wholeMatchCount, setDescription: base.setDescription, rowDescription: base.rowDescription,
             accessibilityLabel: base.accessibilityLabel, leftOutDescription: base.leftOutDescription.map(MeaningSearchWords.server),
             backTitle: base.backTitle, captureLabel: base.captureLabel, startTitle: base.direction.startTitle,
-            fieldPrompt: base.direction.fieldPrompt, signaturePart: base.signaturePart)
+            fieldPrompt: base.direction.fieldPrompt, signaturePart: base.signaturePart, memberDigest: memberDigest(base))
     }
 
     static func name(_ direction: SearchLayerDirection) -> String {

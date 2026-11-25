@@ -11,7 +11,7 @@ import type { MeaningSearchResult, ServerStatus } from '../api/meaning';
 import type { HeldListSummary, LayeredSearchResult, MeaningFallback } from '../api/searchWithin';
 import type { SearchItem, SearchResultList } from '../api/types';
 import { sent } from '../test/notes';
-import { coverage, ready, renderAt, sortChoices, stubServer } from '../test/renderRoute';
+import { coverage, ProblemAnswer, ready, renderAt, sortChoices, stubServer } from '../test/renderRoute';
 import { checklistStore } from './checklist';
 import { resetHeldLists } from './heldLists';
 import { resetSearchHistory } from './searchHistory';
@@ -98,6 +98,7 @@ function held(fields: Partial<HeldListSummary> = {}): HeldListSummary {
     startTitle: 'Rank These Results by a Question',
     fieldPrompt: 'A question to rank these results by…',
     signaturePart: 'base=keywords:2:treaties',
+    memberDigest: 'abc',
     ...fields,
   };
 }
@@ -172,7 +173,7 @@ describe('search within these results', () => {
     await screen.findByText('2 results · 1 ranked · 1 not ranked', { exact: false });
     const asked = query(calls(fetch, 'GET', '/api/v1/search/within')[0]![0]);
     expect(asked.get('keywords')).toBe('the Soviet note on Berlin');
-    expect(asked.get('within')).toBe('keywords=treaties');
+    expect(asked.get('within')).toBe('keywords=treaties&members=abc');
     expect(screen.getByRole('region', { name: 'About this Meaning search' }).textContent).toContain('inside the 2 documents you are searching within');
     const results = within(screen.getByRole('list', { name: 'Results' }));
     expect(results.getByText('Semantic match · 61%')).toBeTruthy();
@@ -301,7 +302,7 @@ describe('search within these results', () => {
     await screen.findByText('2 results · 1 ranked · 1 not ranked', { exact: false });
     await waitFor(() => expect(bodies).toHaveLength(2));
     // The layer's own row, with no anchor: the list's was set aside.
-    expect(bodies[1]).toEqual({ search: 'keywords=the+Soviet+note+on+Berlin', mode: 'meaning', within: 'keywords=treaties' });
+    expect(bodies[1]).toEqual({ search: 'keywords=the+Soviet+note+on+Berlin', mode: 'meaning', within: 'keywords=treaties&members=abc' });
 
     await userEvent.click(screen.getByRole('button', { name: 'Save as Working Corpus…' }));
     const dialog = await screen.findByRole('dialog', { name: 'Save Working Corpus' });
@@ -310,7 +311,7 @@ describe('search within these results', () => {
       search: 'keywords=the+Soviet+note+on+Berlin',
       reviewed: [],
       mode: 'meaning',
-      within: 'keywords=treaties',
+      within: 'keywords=treaties&members=abc',
     });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
@@ -320,6 +321,88 @@ describe('search within these results', () => {
     await screen.findByRole('link', { name: 'Telegram From the Embassy' });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(bodies).toHaveLength(2);
+    // Its anchor came back: the same words under another filter refresh the list's own row.
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Document type' }), 'documentsOnly');
+    await waitFor(() => expect(bodies).toHaveLength(3));
+    expect(bodies[2]).toEqual({ search: 'keywords=treaties&documentType=documentsOnly', anchor: { entryId: 'R1', queryText: 'keywords=treaties' } });
+  });
+
+  it('gives the list’s anchor back when Back leaves it, and sets it aside only once the list’s own record has answered', async () => {
+    const bodies: unknown[] = [];
+    let answerFirst: () => void = () => {};
+    const first = new Promise<void>((resolve) => {
+      answerFirst = resolve;
+    });
+    server({
+      '/api/v1/me': me,
+      '/api/v1/me/tags': { items: [] },
+      'POST /api/v1/me/history/searches': async (_: URL, init?: RequestInit) => {
+        const body = sent(init).body as { search: string };
+        bodies.push(body);
+        const number = bodies.length;
+        // The list's own record answers only after the list is held.
+        if (number === 1) await first;
+        return { outcome: 'inserted', anchor: { entryId: `R${number}`, queryText: body.search } };
+      },
+    });
+    const { router } = renderAt('/search?keywords=treaties');
+    await screen.findByRole('link', { name: 'Telegram From the Embassy' });
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Rank These Results by a Question' }));
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the documents' }), 'the Soviet note on Berlin{Enter}');
+    await screen.findByText('2 results · 1 ranked · 1 not ranked', { exact: false });
+    answerFirst();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    // The layer's row has none: the list's anchor was set aside with it once its record answered.
+    expect(bodies[1]).toEqual({ search: 'keywords=the+Soviet+note+on+Berlin', mode: 'meaning', within: 'keywords=treaties&members=abc' });
+    // Back twice: to the list held with its field empty, then out of it.
+    router.history.back();
+    await waitFor(() => expect(router.state.location.search.keywords).toBeUndefined());
+    router.history.back();
+    await waitFor(() => expect(router.state.location.search.within).toBeUndefined());
+    await screen.findByRole('group', { name: 'Search by' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(bodies).toHaveLength(2);
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Document type' }), 'documentsOnly');
+    await waitFor(() => expect(bodies).toHaveLength(3));
+    expect(bodies[2]).toEqual({ search: 'keywords=treaties&documentType=documentsOnly', anchor: { entryId: 'R1', queryText: 'keywords=treaties' } });
+  });
+
+  it('lets go of a list the server built again with other documents', async () => {
+    const changed = { status: 409, code: 'HELD_LIST_CHANGED', detail: 'The list you were searching within holds other documents now, since its search was run again; search it again to hold it.' };
+    server({
+      '/api/v1/search/within': new ProblemAnswer(changed.status, changed.code, changed.detail),
+    });
+    const { router } = renderAt('/search?keywords=treaties');
+    await screen.findByRole('link', { name: 'Telegram From the Embassy' });
+    await userEvent.click(screen.getByRole('button', { name: 'Rank These Results by a Question' }));
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the documents' }), 'the Soviet note on Berlin{Enter}');
+    await waitFor(() => expect(router.state.location.search.within).toBeUndefined());
+    expect(router.state.location.search).toMatchObject({ keywords: 'treaties' });
+    expect(screen.getByText(changed.detail, { selector: '.visually-hidden' })).toBeTruthy();
+  });
+
+  it('recalls a saved search through the list’s own engine, letting go of the list', async () => {
+    server({
+      '/api/v1/me': me,
+      '/api/v1/me/tags': { items: [] },
+      'POST /api/v1/me/history/searches': { outcome: 'inserted', anchor: { entryId: 'R1', queryText: 'q' } },
+      '/api/v1/me/saved-searches': {
+        items: [{ id: 'S1', name: 'Berlin wall', queryText: 'Berlin wall', search: { keywords: ['Berlin wall'] }, notRecalled: [] }],
+      },
+    });
+    const { router } = renderAt('/search?keywords=treaties');
+    await screen.findByRole('link', { name: 'Telegram From the Embassy' });
+    await userEvent.click(screen.getByRole('button', { name: 'Rank These Results by a Question' }));
+    await screen.findByRole('searchbox', { name: 'Search the documents' });
+    expect(router.state.location.search).toMatchObject({ by: 'meaning' });
+    await userEvent.click(screen.getByRole('button', { name: 'Saved searches' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Saved Searches' });
+    // The row's own button recalls it; its Rename and Delete follow it.
+    await userEvent.click((await within(dialog).findAllByRole('button', { name: /Berlin wall/ }))[0]!);
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ keywords: 'Berlin wall' }));
+    expect(router.state.location.search.within).toBeUndefined();
+    expect(router.state.location.search.by).toBeUndefined();
   });
 
   it('swaps the list and the layer: the layer’s words become a list of their own, and the list’s run inside it', async () => {

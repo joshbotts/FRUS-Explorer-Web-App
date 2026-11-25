@@ -233,6 +233,15 @@ import Testing
             #expect(posted.status == .ok, "\(String(buffer: posted.body))")
             let postedTotal = try decode(LayeredSearchResult.self, posted).total
             #expect(postedTotal == 2)
+            // A list named by the digest of its members is the same list; one named by another digest was built again
+            // with other members, and is refused, for the browser app to let go of it.
+            let named = "\(list)&members=\(whole.layer.base.memberDigest)"
+            #expect(try await Self.layer(owner, "\(Self.questionField)&\(Self.within(named))").total == 3)
+            #expect(try await Self.held(owner, named).memberDigest == whole.layer.base.memberDigest)
+            let changed = try await owner.get("/api/v1/search/within?\(Self.questionField)&\(Self.within("\(list)&members=0f0f"))")
+            #expect(changed.status == .conflict && problemCode(changed) == "HELD_LIST_CHANGED")
+            let changedRow = try await owner.get("/api/v1/search/held?\(Self.within("\(list)&members=0f0f"))")
+            #expect(changedRow.status == .conflict && problemCode(changedRow) == "HELD_LIST_CHANGED")
         }
         await encoder.shutdown()
     }

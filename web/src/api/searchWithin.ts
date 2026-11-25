@@ -39,6 +39,8 @@ export interface HeldListSummary {
   startTitle: string;
   fieldPrompt: string;
   signaturePart: string;
+  /** The digest of its members, which names the list from then on, so that one built again otherwise is refused. */
+  memberDigest: string;
 }
 
 /** The route a layer's rows came from. */
@@ -106,37 +108,47 @@ function ask<T>(path: string, fields: URLSearchParams, signal: AbortSignal): Pro
   return fields.toString().length > 1_500 ? postForm<T>(path, fields, signal) : getJSON<T>(path, fields, signal);
 }
 
-/** What the row of the list `within` names says of it; the server keeps the list, so asking again costs nothing. */
-export function heldQuery(within: string | undefined) {
+/**
+ * What the row of the held list says of it, kept by `key` and asked for by `within()`, which names the list with the
+ * digest of its members once the server has given it; the server keeps the list, so asking again costs little.
+ */
+export function heldQuery(key: string | undefined, within: () => string | undefined) {
   return queryOptions<HeldListSummary, unknown, HeldListSummary, unknown[]>({
-    queryKey: ['held', within],
-    queryFn: ({ signal }) => ask<HeldListSummary>('/api/v1/search/held', formEncode({ within }), signal),
-    enabled: within !== undefined,
+    queryKey: ['held', key],
+    queryFn: ({ signal }) => ask<HeldListSummary>('/api/v1/search/held', formEncode({ within: within() }), signal),
+    enabled: key !== undefined,
     staleTime: 5 * 60_000,
     retry: retryServerFaults,
   });
 }
 
 /**
- * A page of the layer `state` says inside the list `within` names: the field's words or question, the filters and the
- * corpus in force, its order and page, and the rows Checklist Mode hides now. The same layer's last page stays while the
- * next loads; another's never stands in. A layer the screen no longer wants is abandoned, and the server stops it.
+ * A page of the layer `state` says inside the held list kept by `key` and named by `within()`: the field's words or
+ * question, the filters and the corpus in force, its order and page, and the rows Checklist Mode hides now. The same
+ * layer's last page stays while the next loads; another's never stands in. A layer the screen no longer wants is
+ * abandoned, and the server stops it.
  */
-export function layerQuery(state: SearchState, within: string | undefined, reviewed: readonly string[], enabled: boolean) {
+export function layerQuery(
+  state: SearchState,
+  key: string | undefined,
+  within: () => string | undefined,
+  reviewed: readonly string[],
+  enabled: boolean,
+) {
   const search = filterFields(state);
   const fields = searchFields(state);
   return queryOptions<LayeredSearchResult, unknown, LayeredSearchResult, unknown[]>({
-    queryKey: ['layer', within, search, fields, reviewed],
+    queryKey: ['layer', key, search, fields, reviewed],
     queryFn: ({ signal }) =>
       ask<LayeredSearchResult>(
         '/api/v1/search/within',
-        formEncode({ ...fields, within, ...(reviewed.length > 0 ? { reviewed: [...reviewed].sort() } : {}) }),
+        formEncode({ ...fields, within: within(), ...(reviewed.length > 0 ? { reviewed: [...reviewed].sort() } : {}) }),
         signal,
       ),
-    enabled: enabled && within !== undefined && (state.keywords ?? '').trim() !== '',
+    enabled: enabled && key !== undefined && (state.keywords ?? '').trim() !== '',
     staleTime: 5 * 60_000,
     placeholderData: (previous, query) =>
-      query !== undefined && query.queryKey[1] === within && JSON.stringify(query.queryKey[2]) === JSON.stringify(search) ? previous : undefined,
+      query !== undefined && query.queryKey[1] === key && JSON.stringify(query.queryKey[2]) === JSON.stringify(search) ? previous : undefined,
     retry: retryServerFaults,
   });
 }

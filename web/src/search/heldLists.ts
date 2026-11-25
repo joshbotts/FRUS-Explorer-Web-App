@@ -18,6 +18,8 @@ export interface HeldList {
   anchor?: SearchAnchor;
   /** Whether a swap held it, before its search was seen to find anything. */
   fromSwap?: boolean;
+  /** The digest of its members the server gave, which names it from then on, so that a list built again otherwise is refused. */
+  members?: string;
 }
 
 const kept = new Map<string, HeldList>();
@@ -47,11 +49,25 @@ export function heldList(within: string): HeldList {
   return { base: { ...base, keywords: base.keywords ?? '' }, reviewed: [] };
 }
 
-/** What the server reads a held list by (`within`): its name, with the rows its checklist hid. */
-export function withinField(within: string | undefined): string | undefined {
+/** What a held list's answers are kept by: its name, with the rows its checklist hid. */
+export function withinKey(within: string | undefined): string | undefined {
   if (within === undefined) return undefined;
   const { reviewed } = heldList(within);
   return reviewed.length > 0 ? `${within}&${formEncode({ reviewed }).toString()}` : within;
+}
+
+/** What the server reads a held list by (`within`): its key, with the digest of its members once the server has given it. */
+export function withinField(within: string | undefined): string | undefined {
+  const key = withinKey(within);
+  if (within === undefined || key === undefined) return undefined;
+  const { members } = heldList(within);
+  return members !== undefined ? `${key}&${formEncode({ members }).toString()}` : key;
+}
+
+/** Keeps the digest of the held list's members, the first time the server gives it. */
+export function keepMembers(within: string, members: string): void {
+  const held = kept.get(within);
+  if (held && held.members === undefined) kept.set(within, { ...held, members });
 }
 
 /** Keeps `anchor` as the trail's anchor of the held list's own search, as a swap learns it once its new list is recorded. */

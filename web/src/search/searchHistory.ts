@@ -11,6 +11,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { formEncode } from '../api/form';
 import { recordSearch, type SearchAnchor } from '../api/research';
+import { heldList, keepAnchor } from './heldLists';
 import { filterFields, type SearchState } from './searchState';
 
 /** Where the tab keeps them. */
@@ -73,39 +74,48 @@ export function recordSearchRun(client: QueryClient, state: SearchState, engine:
   });
 }
 
-/**
- * Sets the anchor aside as a list is held (S27e), as the app's view model sets it aside so that no layer refreshes the
- * list's own row (rule 5), and answers it, for the list to keep. Each layer then writes a row of its own.
- */
-export function setAnchorAside(): SearchAnchor | undefined {
-  const anchor = kept.anchor;
-  keep({ ...kept, anchor: undefined });
-  return anchor;
+// Search Within These Results (S27e) moves the anchor as the app's view model moves it (rule 5): holding a list sets the
+// anchor its own search left aside with it, so that no layer refreshes the list's row, each layer writing rows of its own;
+// leaving gives it back. Each move waits its turn behind the records sent before it, so that a record still unanswered as
+// a list is held or left writes its anchor where it belongs.
+
+/** Sets the anchor aside with the list `within` names, as the list is held. */
+export function holdAnchor(within: string): void {
+  queue = queue.then(() => {
+    keepAnchor(within, kept.anchor);
+    keep({ ...kept, anchor: undefined });
+  });
 }
 
 /**
- * Gives the held list's anchor back as the list is left, its rows shown again with no search, as the app's are put back
- * from memory: the list's own run counts as the run recorded last, so showing it again records nothing.
+ * Gives back the anchor the list `within` names kept, as the list is left, however it is: its rows come back from what
+ * the screen holds, as the app's are put back from memory, so its own run counts as the run recorded last at once.
  */
-export function giveAnchorBack(anchor: SearchAnchor | undefined, state: SearchState, engine: 'keywords' | 'meaning'): void {
-  keep({ anchor, lastRecorded: runKey(state, engine) });
+export function releaseAnchor(within: string): void {
+  const { base } = heldList(within);
+  keep({ ...kept, lastRecorded: runKey(base, base.by === 'meaning' ? 'meaning' : 'keywords') });
+  queue = queue.then(() => keep({ ...kept, anchor: heldList(within).anchor }));
+}
+
+/** Drops the anchor, from one held list to another, a swap's or Back's: the next list's layers write rows of their own. */
+export function dropAnchor(): void {
+  queue = queue.then(() => keep({ ...kept, anchor: undefined }));
 }
 
 /**
- * Records a swap's new list (S27e): its own search, with no anchor, as a search of its own, and answers the anchor it left,
- * which the list keeps while the layer inside it records rows of its own.
+ * Records a swap's new list as a search of its own, with no anchor, and keeps the anchor it left with the list `within`
+ * names, which the list gives back when it is left.
  */
-export function recordListRun(client: QueryClient, state: SearchState, engine: 'keywords' | 'meaning'): Promise<SearchAnchor | undefined> {
+export function recordListRun(client: QueryClient, state: SearchState, engine: 'keywords' | 'meaning', within: string): void {
   const search = runQuery(state);
-  const recorded = queue.then(async () => {
+  keep({ ...kept, lastRecorded: runKey(state, engine) });
+  queue = queue.then(async () => {
     try {
-      return (await recordSearch(client, search, undefined, engine)).anchor;
+      keepAnchor(within, (await recordSearch(client, search, undefined, engine)).anchor);
     } catch {
-      return undefined;
+      // The trail's loss alone, as for any record.
     }
   });
-  queue = recorded.then(() => undefined);
-  return recorded;
 }
 
 /** Forgets the anchor and the run recorded last, and waits for no record sent before, for tests. */

@@ -50,6 +50,7 @@ test('ranks a keyword list by a question by keyboard, swaps the two searches, an
   const swapped = page.getByRole('region', { name: new RegExp(`^Searching within (\\d+ closest matches|the closest match) to “${question}”$`) });
   await expect(swapped).toBeVisible();
   await expect(box).toHaveValue('treaties');
+  await expect(box).toBeFocused();
   await expect(page.getByRole('status').filter({ hasText: 'these words' })).toContainText(
     /(\d+ of your \d+ closest matches contain|1 of your \d+ closest matches contains|Your closest match contains) these words/,
     { timeout: 60_000 },
@@ -62,7 +63,8 @@ test('ranks a keyword list by a question by keyboard, swaps the two searches, an
   await backTabTo(page, leave, 20);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('group', { name: 'Search by' })).toBeVisible();
-  await expect(page.getByRole('searchbox', { name: 'Search the documents' })).toHaveValue(question);
+  await expect(box).toHaveValue(question);
+  await expect(box).toBeFocused();
   await expect(page).toHaveURL(/[?&]by=meaning(&|$)/);
   await expect(page).not.toHaveURL(/[?&]within=/);
   await expect(page.getByRole('status').filter({ hasText: 'closest match' })).toContainText(/\d+ closest match/);
@@ -100,6 +102,7 @@ test('finds words in a Meaning list by keyboard, then searches the whole library
   await tabTo(page, everywhere, 80);
   await page.keyboard.press('Enter');
   await expect(page).not.toHaveURL(/[?&]within=/);
+  await expect(box).toBeFocused();
   await expect(page.getByRole('heading', { name: 'No Results' })).toBeVisible();
   const fallback = page.getByRole('region', { name: 'Semantic matches (experimental)' });
   await expect(fallback).toContainText('Ranked by meaning, not keywords, across the whole series — your exact words may not appear.', {

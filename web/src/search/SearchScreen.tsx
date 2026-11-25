@@ -61,8 +61,8 @@ import { rowChipLimit, tagChips, tagFilterLabel } from './tagRules';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { applyOrder } from '../research/listOrder';
 import { useListOrder, useLoggingEnabled } from '../settings/syncedPreferences';
-import { giveAnchorBack, recordListRun, recordSearchRun, setAnchorAside } from './searchHistory';
-import { heldList, holdList, keepAnchor, withinField } from './heldLists';
+import { dropAnchor, holdAnchor, recordListRun, recordSearchRun, releaseAnchor } from './searchHistory';
+import { heldList, holdList, keepMembers, withinField, withinKey } from './heldLists';
 import { HeldListRow, LayerEmpty, MeaningFallback } from './SearchWithin';
 import { Snippet } from './Snippet';
 
@@ -75,7 +75,9 @@ export function SearchScreen() {
   // held its own rows show until the field has words, then the layer's.
   const within = state.within;
   const held = within !== undefined ? heldList(within) : undefined;
-  const heldName = withinField(within);
+  // Its answers are kept by its name and its hidden rows, and asked for with the digest of its members once known.
+  const heldKey = withinKey(within);
+  const heldField = () => withinField(within);
   const fieldEmpty = (state.keywords ?? '').trim() === '';
   const listState: SearchState | undefined =
     held && fieldEmpty ? { ...held.base, sort: state.sort, offset: state.offset, limit: state.limit } : undefined;
@@ -96,7 +98,9 @@ export function SearchScreen() {
   // the one engine offered there.
   const status = useQuery(serverStatusQuery);
   const offersMeaning = status.data?.semantic?.searchByMeaning === true;
-  const modeSettled = state.by !== 'meaning' || status.data !== undefined || status.isError;
+  // A held Meaning list's own rows wait for the server's word too, and never run through the keyword engine.
+  const listByMeaning = listState?.by === 'meaning';
+  const modeSettled = (state.by !== 'meaning' && !listByMeaning) || status.data !== undefined || status.isError;
   const byMeaning = state.by === 'meaning' && offersMeaning;
   // While a list is held the field runs the other engine inside it: words in a Meaning list, a question over a keyword
   // list or a browse (S27e).
@@ -104,16 +108,26 @@ export function SearchScreen() {
   const engine: SearchMode = direction ? (direction === 'wordsInMatches' ? 'keywords' : 'meaning') : byMeaning ? 'meaning' : 'keywords';
   // The search whose rows are on screen when no layer is: the one asked for, or the held list's own, through its engine.
   const rowsState = listState ?? state;
-  const rowsByMeaning = listState ? listState.by === 'meaning' && offersMeaning : !held && byMeaning;
+  const rowsByMeaning = listState ? listByMeaning && offersMeaning : !held && byMeaning;
   // A search by meaning asks a question: with no words it asks nothing, and shows nothing, as the Mac's lists none.
   const asksMeaning = rowsByMeaning && (rowsState.keywords ?? '').trim() !== '' && !layered;
   const keywordQuery = searchQuery(rowsState, reviewed);
-  const keywordResults = useQuery({ ...keywordQuery, enabled: keywordQuery.enabled && modeSettled && !rowsByMeaning && !layered });
+  const keywordResults = useQuery({
+    ...keywordQuery,
+    enabled: keywordQuery.enabled && modeSettled && !rowsByMeaning && !listByMeaning && !layered,
+  });
   const meaningResults = useQuery(meaningQuery(rowsState, reviewed, asksMeaning));
-  const layerResults = useQuery(layerQuery(state, heldName, reviewed, layered && (engine === 'keywords' || offersMeaning)));
-  const heldSummary = useQuery(heldQuery(heldName));
+  const layerResults = useQuery(layerQuery(state, heldKey, heldField, reviewed, layered && (engine === 'keywords' || offersMeaning)));
+  const heldSummary = useQuery(heldQuery(heldKey, heldField));
   const results: UseQueryResult<SearchResultList, unknown> = layered ? layerResults : rowsByMeaning ? meaningResults : keywordResults;
   const layer = layered ? (results.data as LayeredSearchResult | undefined)?.layer : undefined;
+  // The held list as the server says it last: a layer's own account of it, or its row's.
+  const heldRow = layer?.base ?? heldSummary.data;
+  // The digest of its members names it from then on, so that a list the server builds again otherwise is refused.
+  const memberDigest = heldRow?.memberDigest;
+  useEffect(() => {
+    if (within !== undefined && memberDigest !== undefined) keepMembers(within, memberDigest);
+  }, [within, memberDigest]);
   // The search whose rows are on screen, and the engine that found them: until the next search's arrive, the last
   // one's stay, and a mark made of them would be kept under the next and hide its documents, so marks wait for them,
   // as the Mac's `canMarkReviewed` makes them wait (#1683). Each engine keeps its own last rows, so rows the other
@@ -142,10 +156,22 @@ export function SearchScreen() {
   const tags = useQuery({ ...tagsQuery, enabled: keepsUserData });
   const userTags = keepsUserData ? tags.data?.items : undefined;
   const logging = useLoggingEnabled();
+  // The trail's anchor follows the held list, however the address comes to name one or no longer to, by the row's own
+  // controls, Back and Forward, a recall or a hand-off (the app's rule 5): holding one sets the anchor aside with it,
+  // leaving gives it back, and from one list to another it is dropped. Before the record below, which reads it.
+  const previousWithin = useRef(within);
+  useEffect(() => {
+    const before = previousWithin.current;
+    previousWithin.current = within;
+    if (before === within) return;
+    if (before === undefined && within !== undefined) holdAnchor(within);
+    else if (before !== undefined && within === undefined) releaseAnchor(before);
+    else dropAnchor();
+  }, [within]);
   // Each run the screen shows goes into the trail (S17f), as the Mac's window records each it completes, by the
   // engine it ran through (S27d), and a layer inside the list it ran within (S27e). A held list's own rows shown again
   // are no run: the app puts them back from memory.
-  const record = useEffectEvent(() => recordSearchRun(queryClient, state, engine, layered ? heldName : undefined));
+  const record = useEffectEvent(() => recordSearchRun(queryClient, state, engine, layered ? withinField(within) : undefined));
   const shownRun =
     results.data && !results.isPlaceholderData && (!held || layered) ? JSON.stringify({ ...searchFields(state), engine, within }) : undefined;
   useEffect(() => {
@@ -172,7 +198,7 @@ export function SearchScreen() {
     // refusal or a server fault, or once an index is ready. So does the account of a search that
     // found nothing.
     if (keywords === state.keywords && state.offset === undefined && layered) {
-      void queryClient.refetchQueries({ queryKey: layerQuery(state, heldName, reviewed, true).queryKey, exact: true });
+      void queryClient.refetchQueries({ queryKey: layerQuery(state, heldKey, heldField, reviewed, true).queryKey, exact: true });
     } else if (keywords === state.keywords && state.offset === undefined && byMeaning) {
       void queryClient.refetchQueries({ queryKey: meaningQuery(state, reviewed, true).queryKey, exact: true });
     } else if (keywords === state.keywords && state.offset === undefined) {
@@ -219,7 +245,8 @@ export function SearchScreen() {
   }
 
   // Search Within These Results (S27e). What a screen reader hears as a list is held, left or swapped, and the search
-  // box, which takes the focus as a list is held, as the app's field takes the keyboard.
+  // box, which takes the focus as a list is held, as the app's field takes the keyboard, and again as the row's or the
+  // empty state's control it was on goes, on leaving the list, swapping it or searching the whole library.
   const [layerAnnouncement, setLayerAnnouncement] = useState('');
   const [announcesHold, setAnnouncesHold] = useState(false);
   if (announcesHold && heldSummary.data) {
@@ -235,7 +262,7 @@ export function SearchScreen() {
    */
   function holdTheList(direction: LayerDirection) {
     const base: SearchState = { ...state, panel: undefined, reading: undefined, timelineMode: undefined, offset: undefined };
-    const name = holdList(base, reviewed, setAnchorAside());
+    const name = holdList(base, reviewed);
     setLayerAnnouncement('');
     setAnnouncesHold(true);
     setBoxFocus((count) => count + 1);
@@ -250,12 +277,20 @@ export function SearchScreen() {
     });
   }
 
-  /** Leaves the held list: its search's rows come back as they were, with its order, its engine and its trail anchor. */
+  /**
+   * The list's own search, as leaving it shows it, as the Mac's window leaves a list: its words, its engine and its order,
+   * under the filters in force, which, where one was chosen inside the list, run its search again.
+   */
+  function listSearch(list: SearchState): SearchState {
+    return { ...state, keywords: list.keywords, by: list.by, sort: list.sort, within: undefined, offset: undefined };
+  }
+
+  /** Leaves the held list: its search's rows come back, with its order and its engine, and the trail's anchor with them. */
   function leaveTheList() {
     if (!held) return;
-    giveAnchorBack(held.anchor, held.base, held.base.by === 'meaning' ? 'meaning' : 'keywords');
     setLayerAnnouncement(copy.searchLayer.left);
-    void navigate({ search: { ...held.base, offset: undefined } });
+    setBoxFocus((count) => count + 1);
+    void navigate({ search: listSearch(held.base) });
   }
 
   /**
@@ -275,9 +310,9 @@ export function SearchScreen() {
       offset: undefined,
     };
     const name = holdList(base, [], undefined, true);
-    setAnchorAside();
-    if (keepsUserData) void recordListRun(queryClient, base, listEngine).then((anchor) => keepAnchor(name, anchor));
+    if (keepsUserData) recordListRun(queryClient, base, listEngine, name);
     setLayerAnnouncement(swap.help);
+    setBoxFocus((count) => count + 1);
     void navigate({
       search: {
         ...base,
@@ -292,18 +327,40 @@ export function SearchScreen() {
   // A swap's new list that found nothing holds nothing, as the app's swap ends with nothing to hold: its own search shows.
   const emptySwap = held?.fromSwap === true && heldSummary.data !== undefined && heldSummary.data.rows === 0;
   const endTheSwap = useEffectEvent(() => {
-    if (!held) return;
-    giveAnchorBack(held.anchor, held.base, held.base.by === 'meaning' ? 'meaning' : 'keywords');
-    void navigate({ search: { ...held.base, offset: undefined }, replace: true });
+    if (held) void navigate({ search: listSearch(held.base), replace: true });
   });
   useEffect(() => {
     if (emptySwap) endTheSwap();
   }, [emptySwap]);
 
+  // A list the server refuses to hold is let go of, as the Mac's window lets go of one whose index was rebuilt: one built
+  // again with other members (`HELD_LIST_CHANGED`), or one a link names that cannot be held here, a Meaning list with the
+  // encoder off, another user's corpus.
+  const heldError = heldSummary.error instanceof ApiError ? heldSummary.error : undefined;
+  const layerError = layerResults.error instanceof ApiError ? layerResults.error : undefined;
+  const refusal =
+    held && heldError && heldError.status >= 400 && heldError.status < 500
+      ? heldError
+      : held && layerError?.code === 'HELD_LIST_CHANGED'
+        ? layerError
+        : undefined;
+  // What a screen reader hears of it is said as the refusal arrives, and the list is let go of after the render.
+  const [refusalSaid, setRefusalSaid] = useState<ApiError | undefined>(undefined);
+  if (refusal && refusal !== refusalSaid) {
+    setRefusalSaid(refusal);
+    setLayerAnnouncement(refusal.code === 'HELD_LIST_CHANGED' ? refusal.message : copy.searchLayer.left);
+  }
+  const letGo = useEffectEvent(() => {
+    if (held) void navigate({ search: listSearch(held.base), replace: true });
+  });
+  useEffect(() => {
+    if (refusal) letGo();
+  }, [refusal]);
+
   /** Words found nowhere in a Meaning list searched for across the whole library: the list is let go, the words stay. */
   function searchTheLibrary() {
     if (!held) return;
-    giveAnchorBack(held.anchor, held.base, held.base.by === 'meaning' ? 'meaning' : 'keywords');
+    setBoxFocus((count) => count + 1);
     void navigate({ search: { ...state, within: undefined, by: undefined, offset: undefined } });
   }
 
@@ -357,7 +414,9 @@ export function SearchScreen() {
    * own count, which the server takes, as the Mac stamps a recall.
    */
   function recall(saved: SavedSearch) {
-    void navigate({ search: recalledSearch(saved.search, state) });
+    // A recall lets go of a held list, as the app's hand-off does, and runs through the list's own engine, the one the
+    // reader last chose, never the field's inside the list.
+    void navigate({ search: recalledSearch(saved.search, held ? { ...state, by: held.base.by } : state) });
     recordRun(queryClient, saved.id).catch(() => {
       // A stamp that fails leaves the badge where it was, as a count that fails does on the Mac.
     });
@@ -403,7 +462,9 @@ export function SearchScreen() {
         engine={offersMeaning || held ? engine : undefined}
         onEngine={setMode}
         counting={
-          layered ? { state, engine, within: heldName } : { state: rowsState, engine: rowsByMeaning ? 'meaning' : 'keywords' }
+          layered
+            ? { state, engine, within: withinField(within) }
+            : { state: rowsState, engine: rowsByMeaning ? 'meaning' : 'keywords' }
         }
         boxFocus={boxFocus}
         held={
@@ -411,14 +472,14 @@ export function SearchScreen() {
             ? {
                 row: (
                   <HeldListRow
-                    summary={heldSummary.data}
+                    summary={heldRow}
                     swap={layer?.swap}
                     canSwap={!results.isFetching}
                     onSwap={() => layer?.swap && swapTheLayer(layer.swap)}
                     onLeave={leaveTheList}
                   />
                 ),
-                prompt: heldSummary.data?.fieldPrompt ?? copy.searchLayer.prompt[direction],
+                prompt: heldRow?.fieldPrompt ?? copy.searchLayer.prompt[direction],
               }
             : undefined
         }
@@ -569,7 +630,7 @@ export function SearchScreen() {
       {sheet === 'savedSearches' && <SavedSearchesDialog onRecall={recall} onClose={closed} />}
       {sheet === 'saveCorpus' &&
         (layered ? (
-          <SaveCorpusDialog state={state} reviewed={reviewed} engine={engine} within={heldName} onClose={closed} />
+          <SaveCorpusDialog state={state} reviewed={reviewed} engine={engine} within={withinField(within)} onClose={closed} />
         ) : (
           <SaveCorpusDialog state={rowsState} reviewed={reviewed} engine={rowsByMeaning ? 'meaning' : 'keywords'} onClose={closed} />
         ))}

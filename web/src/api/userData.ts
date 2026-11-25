@@ -84,7 +84,8 @@ export function searchTagsQuery(state: SearchState, enabled: boolean, engine: 'k
  * and the tags' counts.
  */
 export function searchesChanged(client: QueryClient) {
-  for (const key of ['search', 'timeline', 'concordance', 'facets', 'inspect', 'searchTags']) {
+  // A search by meaning's rows (S27d), a held list and a layer (S27e) carry the user's tags too.
+  for (const key of ['search', 'timeline', 'concordance', 'facets', 'inspect', 'searchTags', 'meaning', 'held', 'layer']) {
     void client.invalidateQueries({ queryKey: [key] });
   }
 }
