@@ -35,22 +35,12 @@ enum LanguageReadings {
     /// Whether two doubles are one, but for the last bits a JSON round trip on Linux can move (S23d's lesson).
     static func same(_ a: Double, _ b: Double) -> Bool { abs(a - b) <= 1e-9 * max(1, abs(b)) }
 
-    /// A request through the test client, asked again while the server's first loads outrun the client's 20 s wait under
-    /// CI's load (S27c's `EmbedCheckTests`, S29e's clouds).
+    /// A request through the test client, its answer decoded, or what the server said instead. The client is the router's,
+    /// which waits as long as an answer takes, where a live server's client gives up at 20 s.
     static func answer<T: Decodable>(_ type: T.Type, _ client: any TestClientProtocol, _ path: String) async throws -> T {
-        var failure: (any Error)?
-        for _ in 0..<6 {
-            do {
-                let response = try await client.execute(uri: path, method: .get)
-                guard response.status == .ok else { throw APIParityError("\(path): \(response.status.code) \(String(buffer: response.body))") }
-                return try ServedFixture.decode(T.self, response)
-            } catch let error as APIParityError {
-                throw error
-            } catch {
-                failure = error
-            }
-        }
-        throw failure ?? APIParityError("\(path) never answered")
+        let response = try await client.execute(uri: path, method: .get)
+        guard response.status == .ok else { throw APIParityError("\(path): \(response.status.code) \(String(buffer: response.body))") }
+        return try ServedFixture.decode(T.self, response)
     }
 
     /// A language folder of the family's clouds with other references beside them, or none: `references` maps each
@@ -356,11 +346,20 @@ extension WordCloudLiveParityTests {
             // In Checklist Mode, the results kept less those it hides, and the caveat counts them.
             let first = try await service.search(parameters: try SearchRequest(formEncoded: "keywords=treaty").parameters, limit: 3, offset: 0)
             let reviewed = first.map { "\($0.volumeId)/\($0.documentId)" }
-            let hiding = try await Self.collocates(client, "keywords=treaty&" + reviewed.map { "reviewed=\($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)" }.joined(separator: "&"))
+            let fields = "keywords=treaty&" + reviewed.map { "reviewed=\($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)" }.joined(separator: "&")
+            let hiding = try await Self.collocates(client, fields)
             let (outcome, results) = try await Self.kits("keywords=treaty", window: 10, reviewed: Set(reviewed))
             Self.expect(hiding, isTheKits: outcome, window: 10, "treaty in Checklist Mode")
             #expect(hiding.caveat?.contains("which is every matching document. 3 reviewed documents are excluded.") == true, "\(hiding.caveat ?? "")")
             #expect(hiding.documentsInScope == results && results == treaty.documentsInScope.map { $0 - 3 })
+            // The same as a POST of its form, for a Checklist Mode that hides more results than an address holds.
+            let posted = try await client.execute(uri: "/api/v1/search/collocates", method: .post,
+                                                  headers: [.contentType: "application/x-www-form-urlencoded"], body: ByteBuffer(string: fields))
+            #expect(posted.status == .ok)
+            #expect(try ServedFixture.decode(SearchCollocates.self, posted) == hiding, "the POST's answer is the address's")
+            // In the date's order, which decides what a scan the budget stops reads; the fixtures' scans read every result.
+            let dated = try await Self.collocates(client, "keywords=treaty&sort=dateAscending")
+            #expect(dated.items == treaty.items && dated.documentsOffered == treaty.documentsOffered)
 
             // A search that matched nothing, and one with no word the scan can centre on.
             let none = try await Self.collocates(client, "keywords=zzyzx")
@@ -407,6 +406,75 @@ extension WordCloudLiveParityTests {
         // No results, before anything is read.
         #expect(try await CollocatesRoutes.outcome(of: [], parameters: parameters, window: 10, settings: .standard, scoped: scoped,
                                                    resources: fixture.resources) == .unavailable(.noMatches))
+    }
+
+    /// The web's tagger, noting the queue each of its walks runs on.
+    final class QueueNotingTagger: WordCloudTagger, @unchecked Sendable {
+        let inner = FRUSWordCloudTagger()
+        private let lock = NSLock()
+        private var noted: [String?] = []
+
+        var queues: [String?] {
+            lock.lock()
+            defer { lock.unlock() }
+            return noted
+        }
+        var identity: WordCloudTokenizerIdentity { inner.identity }
+        var health: NaturalLanguageHealth { inner.health }
+
+        private func note() {
+            let queue = DispatchQueue.getSpecific(key: CollocationExecutor.label)
+            lock.lock()
+            noted.append(queue)
+            lock.unlock()
+        }
+
+        func enumerateWords(in text: String, reading: WordCloudTagReading,
+                            using body: (Range<String.Index>, String?, () -> WordCloudLexicalClass?) -> Bool) {
+            note()
+            inner.enumerateWords(in: text, reading: reading, using: body)
+        }
+
+        func enumerateNames(in text: String, using body: (Range<String.Index>, WordCloudNameType?) -> Bool) {
+            note()
+            inner.enumerateNames(in: text, using: body)
+        }
+    }
+
+    @Test func theScansTaggingRunsOnTheQueueItPrefers() async throws {
+        // The kit's scan as the route runs it, on a service of its own over the served index, which hops to the index's
+        // pipeline for each chunk's texts and fans the chunk out before it tags: every walk of the tagger is on the queue.
+        let fixture = try await WordCloudLiveParityTests.shared.value
+        let scoped = try fixture.served.ownSearch(for: nil)
+        let parameters = try SearchRequest(formEncoded: "keywords=treaty").parameters
+        let results = try await scoped.service.search(parameters: parameters, limit: 7_500, offset: 0)
+        let host = try WordCloudParityTests.Host.open()
+        let tagger = QueueNotingTagger()
+        let configuration = CollocationConfiguration.configured(tuning: .standard, includeDiplomatic: true, languageAnalysis: tagger.health,
+                                                                stopwords: host.stopwords, lexicons: host.lexicons)
+        guard case .available(let reference) = LanguageReadings.references.baseline(
+            for: .allTerms, tuning: .standard, includeDiplomatic: true, languageAnalysis: tagger.health, tokenizer: tagger.identity)
+        else { throw APIParityError("the family's reference is refused at the app's own settings") }
+        let outcome = try await CollocationExecutor.run(label: "frus-light.collocates") {
+            try await scoped.service.collocation(for: results, parameters: parameters, windowSize: 10, configuration: configuration,
+                                                 reference: reference, tagger: tagger)
+        }
+        #expect(tagger.queues.count >= 2 && tagger.queues.allSatisfy { $0 == "frus-light.collocates" }, "\(tagger.queues)")
+        let kits = try await Self.kits("keywords=treaty", window: 10).0
+        #expect(outcome == kits, "the same scan as the kit's apart")
+    }
+
+    @Test func theScopeSentenceIsTheAppsForEachSet() {
+        // Every match kept; the 7,500 reached, or a count above what was kept; inside a corpus captured short; and the
+        // reviewed documents Checklist Mode excludes, one and more.
+        let complete = "Measured over every result this search loaded, which is every matching document."
+        let capped = "Measured over every result this search loaded, not the page on screen — those are the highest-scoring matches, not a sample of all of them."
+        #expect(CollocationRules.scopeDescription(.init(loaded: 30, shown: 30, total: 30, insideTruncatedCorpus: false)) == complete)
+        #expect(CollocationRules.scopeDescription(.init(loaded: 7_500, shown: 7_499, total: 9_012, insideTruncatedCorpus: false))
+                == capped + " 1 reviewed document is excluded.")
+        #expect(CollocationRules.scopeDescription(.init(loaded: 40, shown: 40, total: 41, insideTruncatedCorpus: false)) == capped)
+        #expect(CollocationRules.scopeDescription(.init(loaded: 12, shown: 10, total: 12, insideTruncatedCorpus: true))
+                == capped + " 2 reviewed documents are excluded.")
     }
 
     @Test func theScanRunsOnTheQueueItPrefersOffTheCooperativePool() async throws {

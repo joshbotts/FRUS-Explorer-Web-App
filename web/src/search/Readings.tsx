@@ -21,6 +21,8 @@ import type {
   SearchTimeline,
   TimelineDocument,
 } from '../api/types';
+import { preferencesQuery } from '../api/research';
+import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useSyncedPreferences } from '../settings/syncedPreferences';
 import { pageCount, type Reading, readings, type SearchState } from './searchState';
@@ -433,6 +435,8 @@ function ConcordanceRow({ line }: { line: ConcordanceLine }) {
 const collocationKeys = { window: 'frus.search.collocation.window', order: 'frus.search.collocation.order' };
 /** `CollocationView.windowSizes`, and the Mac's default of ten words either side. */
 const collocationWindows = [5, 10, 20, 50];
+/** `CollocationOrder.allCases`: Evidence first, the Mac's default. */
+const collocationOrders: readonly CollocationOrder[] = ['evidence', 'effect'];
 
 function storedValue(key: string): string | null {
   try {
@@ -462,12 +466,14 @@ export function storedCollocationOrder(): CollocationOrder {
 }
 
 /**
- * Collocates, as the Mac's `CollocationView` lays them out: Within and Rank by over a caveat that says
- * which set was measured and how much of it the scan saw, then the neighbours, most distinctive first,
- * each with its multiple and its two counts, and the number the list is ordered on. The server ranks
- * over the results the search keeps, less those Checklist Mode hides, under the reader's Word Cloud
- * settings; a change of window asks again, a change of order asks nothing. Each neighbour opens a
- * search for itself, as a word of the Word Cloud does, where the Mac's row offers Copy.
+ * Collocates, as the Mac's `CollocationView` lays them out: Within and Rank by, which stay whatever the
+ * panel shows, over a caveat that says which set was measured and how much of it the scan saw, then the
+ * neighbours, most distinctive first, each with its multiple and its two counts, and the number the list
+ * is ordered on. The server ranks over the results the search keeps, in the order chosen, less those
+ * Checklist Mode hides, under the reader's Word Cloud settings, once they are known; a change of window
+ * asks again, and while it is asked the caveat of the last window goes with its list; a change of order
+ * asks nothing. Each neighbour opens a search for itself, as a word of the Word Cloud does, where the
+ * Mac's row offers Copy.
  */
 export function CollocatesReading({
   state,
@@ -477,66 +483,67 @@ export function CollocatesReading({
   /** The results Checklist Mode hides (S17e), which the scan leaves out, as the Mac's reads what its checklist leaves. */
   reviewed?: readonly string[];
 }) {
-  const { preferences } = useSyncedPreferences();
+  const me = useQuery(meQuery);
+  const { keepsUserData, preferences } = useSyncedPreferences();
+  const held = useQuery({ ...preferencesQuery, enabled: keepsUserData });
+  // Asked once the reader's settings are known, theirs or the app's own, as the Word Cloud is, so no scan is made twice.
+  const settingsKnown = (me.isSuccess || me.isError) && (!keepsUserData || preferences !== undefined || held.isError);
   const [size, setSize] = useState(storedCollocationWindow);
   const [order, setOrder] = useState(storedCollocationOrder);
-  // The criteria the server reads of the reader's Word Cloud settings: a change asks again.
+  // The criteria the server reads of the reader's Word Cloud settings, the hidden words not among them: a change asks again.
   const criteria = preferences?.wordCloud;
   const settings = criteria
     ? JSON.stringify([criteria.minLength, criteria.minCount, criteria.foldPlurals, criteria.filterMarkings, criteria.excludeBoilerplate])
     : 'standard';
-  const collocates = useQuery(collocatesQuery(state, size, settings, reviewed));
+  const options = collocatesQuery(state, size, settings, reviewed);
+  const collocates = useQuery({ ...options, enabled: settingsKnown && options.enabled !== false });
   const data = collocates.data;
+  // While another window's ranking comes, the Mac's panel shows its loading line under the controls.
+  const loading = !data || collocates.isPlaceholderData;
   const withinId = useId();
   const rankById = useId();
-  if (collocates.isError && !collocates.isFetching) {
-    return (
-      <p className="error" role="alert">
-        {failure(collocates.error, copy.collocates.failed)}
-      </p>
-    );
-  }
-  if (!data) return <p role="status">{copy.collocates.loading}</p>;
-  // While another window's ranking comes, the Mac's panel shows its loading line under the controls.
-  const loading = collocates.isPlaceholderData;
   return (
     <div className="collocates" aria-busy={collocates.isFetching}>
       <div className="collocates-header">
         <div className="sort-orders" role="group" aria-labelledby={withinId}>
           <span id={withinId}>{copy.collocates.within}</span>
-          {data.windowChoices.map((choice) => (
+          {collocationWindows.map((choice) => (
             <button
-              key={choice.value}
+              key={choice}
               type="button"
-              aria-pressed={Number(choice.value) === size}
+              aria-pressed={choice === size}
               onClick={() => {
-                setSize(Number(choice.value));
-                keepValue(collocationKeys.window, choice.value);
+                setSize(choice);
+                keepValue(collocationKeys.window, String(choice));
               }}
             >
-              {choice.title}
+              {copy.collocates.window(choice)}
             </button>
           ))}
         </div>
         <div className="sort-orders" role="group" aria-labelledby={rankById}>
           <span id={rankById}>{copy.collocates.rankBy}</span>
-          {data.orderChoices.map((choice) => (
+          {collocationOrders.map((choice) => (
             <button
-              key={choice.value}
+              key={choice}
               type="button"
-              aria-pressed={choice.value === order}
+              aria-pressed={choice === order}
               onClick={() => {
-                setOrder(choice.value as CollocationOrder);
-                keepValue(collocationKeys.order, choice.value);
+                setOrder(choice);
+                keepValue(collocationKeys.order, choice);
               }}
             >
-              {choice.title}
+              {copy.collocates.orders[choice]}
             </button>
           ))}
         </div>
-        {data.state === 'ranked' && data.caveat && <p className="caption">{data.caveat}</p>}
+        {!loading && data.state === 'ranked' && data.caveat && <p className="caption">{data.caveat}</p>}
       </div>
-      {loading ? (
+      {collocates.isError && !collocates.isFetching ? (
+        <p className="error" role="alert">
+          {failure(collocates.error, copy.collocates.failed)}
+        </p>
+      ) : loading ? (
         <p role="status">{copy.collocates.loading}</p>
       ) : (
         <>

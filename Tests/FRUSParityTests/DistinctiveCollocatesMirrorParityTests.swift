@@ -26,27 +26,33 @@ import Testing
 
     @Test func collocatesAreRebuiltAsTheAppsPanelRebuildsThem() throws {
         try ArchivalAndSeriesMirrorParityTests.expect([
-            (Self.searchView, #"guard !results.isEmpty else { collocation = .unavailable(.noMatches); return }"#,
+            (Self.searchSheet, #"guard !results.isEmpty else { collocation = .unavailable(.noMatches); return }"#,
              Self.collocates, #"guard !results.isEmpty else { return .unavailable(.noMatches) }"#),
-            (Self.searchView, #"let availability = BundledKeynessBaseline.baseline( for: .allTerms, tuning: configuration.tuning, includeDiplomatic: configuration.includeDiplomatic, languageAnalysis: configuration.languageAnalysis)"#,
+            (Self.searchSheet, #"let availability = BundledKeynessBaseline.baseline( for: .allTerms, tuning: configuration.tuning, includeDiplomatic: configuration.includeDiplomatic, languageAnalysis: configuration.languageAnalysis)"#,
              Self.collocates, #"let availability = references.baseline( for: .allTerms, tuning: configuration.tuning, includeDiplomatic: configuration.includeDiplomatic, languageAnalysis: configuration.languageAnalysis, tokenizer: WordCloudLive.tagger.identity)"#),
-            (Self.searchView, #"case .unavailable(.noArtifact), .unavailable(.lensNotPriced): collocation = .unavailable(.noArtifact); return"#,
+            (Self.searchSheet, #"case .unavailable(.noArtifact), .unavailable(.lensNotPriced): collocation = .unavailable(.noArtifact); return"#,
              Self.collocates, #"case .unavailable(.noArtifact), .unavailable(.lensNotPriced): return .unavailable(.noArtifact)"#),
-            (Self.searchView, #"case .unavailable(.languageAnalysisUnavailable): collocation = .unavailable(.languageAnalysisUnavailable); return"#,
+            (Self.searchSheet, #"case .unavailable(.languageAnalysisUnavailable): collocation = .unavailable(.languageAnalysisUnavailable); return"#,
              Self.collocates, #"case .unavailable(.languageAnalysisUnavailable): return .unavailable(.languageAnalysisUnavailable)"#),
-            (Self.searchView, #"case .unavailable(.configurationMismatch(let mismatches)): collocation = .unavailable(.configurationMismatch(mismatches)); return"#,
+            (Self.searchSheet, #"case .unavailable(.configurationMismatch(let mismatches)): collocation = .unavailable(.configurationMismatch(mismatches)); return"#,
              Self.collocates, #"case .unavailable(.configurationMismatch(let mismatches)): return .unavailable(.configurationMismatch(mismatches))"#),
-            (Self.searchView, #"case .available(let found): reference = found"#,
+            (Self.searchSheet, #"case .available(let found): reference = found"#,
              Self.collocates, #"case .available(let found): reference = found"#),
-            (Self.searchView, #"windowSize: collocationWindow, configuration: configuration, reference: reference)"#,
+            (Self.searchSheet, #"windowSize: collocationWindow, configuration: configuration, reference: reference)"#,
              Self.collocates, #"windowSize: window, configuration: configuration, reference: reference,"#),
-            (Self.searchView, #"} catch is CancellationError {"#,
+            (Self.searchSheet, #"} catch is CancellationError {"#,
              Self.collocates, #"} catch is CancellationError { throw CancellationError()"#),
-            (Self.searchView, #"} catch { collocation = .unavailable(.scanFailed) }"#,
+            (Self.searchSheet, #"} catch { collocation = .unavailable(.scanFailed) }"#,
              Self.collocates, #"return .unavailable(.scanFailed)"#),
             // The whole retained set, less what Checklist Mode hides, as `displayedResults` is: not the page.
-            (Self.searchView, #"let results = vm.displayedResults"#,
-             Self.collocates, #"let shown = loaded.filter { !search.hides($0) }"#),
+            (Self.searchSheet, #"let results = searchVM.displayedResults"#,
+             Self.collocates, #"let shown = search.sort.sorted(loaded.filter { !search.hides($0) })"#),
+            // The order a scan reads the results in, which decides what one the budget stops reads.
+            ("App/MacSearchViewModel.swift", #"var allSortedResults: [SearchResult] { sortOrder.sorted(results) }"#,
+             Self.collocates, #"search.sort.sorted(loaded.filter"#),
+            // iOS's panel rebuilds as the Mac's does.
+            (Self.searchView, #"guard !results.isEmpty else { collocation = .unavailable(.noMatches); return }"#,
+             Self.collocates, #"guard !results.isEmpty else { return .unavailable(.noMatches) }"#),
             ("kit:FRUSCoreKit/Search/CollocationConfiguration.swift", #"public static func configured(tuning: WordCloudTuning, includeDiplomatic: Bool, languageAnalysis: NaturalLanguageHealth, stopwords: WordCloudStopwordSet, lexicons: WordCloudLexiconSet) -> CollocationConfiguration {"#,
              Self.collocates, #"let configuration = CollocationConfiguration.configured( tuning: settings.tuning, includeDiplomatic: settings.includeDiplomatic, languageAnalysis: WordCloudLive.tagger.health, stopwords: stopwords, lexicons: lexicons)"#),
             ("Search/CollocationService.swift", #"let includeDiplomatic = UserDefaults.standard .object(forKey: WordCloudSettings.Keys.excludeBoilerplate) as? Bool ?? true"#,
@@ -86,7 +92,7 @@ import Testing
             (Self.scope, #"var hiddenByChecklist: Int { max(0, loaded - shown) }"#, Self.collocates, #"var hiddenByChecklist: Int { max(0, loaded - shown) }"#),
             (Self.scope, #"if didHitFetchLimit { return true } if case .truncated = appliedCorpusTruncation { return true }"#,
              Self.collocates, #"var isPartialEvidence: Bool { didHitFetchLimit || insideTruncatedCorpus }"#),
-            ("Sources/FRUSLightAPI/WorkingCorpora.swift", #"var didHitFetchLimit: Bool { loaded >= Self.fetchLimit || total > loaded }"#,
+            (Self.scope, #"case .keywords: break } if loaded >= fetchLimit { return true } if let totalMatchCount { return totalMatchCount > loaded }"#,
              Self.collocates, #"var didHitFetchLimit: Bool { loaded >= SearchRequest.retainedLimit || total > loaded }"#),
             (Self.scope, #"description = isPartialEvidence ? String(localized: "search.collocation.caveat.scope.loaded.capped","#,
              Self.collocates, #"var description = facts.isPartialEvidence ? appWords("search.collocation.caveat.scope.loaded.capped","#),
@@ -142,6 +148,8 @@ import Testing
             (Self.collocationView, #"fold.formatted(.number.precision(.fractionLength(1)))) + "×""#, Self.copy, #"concentration: (multiple: string) => `${multiple}×`,"#),
             (Self.collocationView, #"if let note = result.printedFormsNote { printedFormsNoteRow(note) }"#,
              Self.readings, #"{data.printedFormsNote && <p className="caption collocates-printed">{data.printedFormsNote}</p>}"#),
+            (Self.collocationView, #"enum CollocationOrder: String, CaseIterable, Sendable { /// Log-likelihood — the corpus-linguistics standard, and comparable with published figures. case evidence"#,
+             Self.readings, #"const collocationOrders: readonly CollocationOrder[] = ['evidence', 'effect'];"#),
         ])
     }
 
@@ -167,6 +175,8 @@ import Testing
             (Self.collocationView, "search.collocation.window.label", "Within", "collocates", "within"),
             (Self.collocationView, "search.collocation.order.label", "Rank by", "collocates", "rankBy"),
             (Self.collocationView, "search.collocation.loading", "Reading the words around your matches…", "collocates", "loading"),
+            (Self.collocationView, "search.collocation.order.evidence", "Evidence", "collocates", "evidence"),
+            (Self.collocationView, "search.collocation.order.effect", "Concentration", "collocates", "effect"),
             (Self.cloudView, "wordcloud.word.search", "Search for this term", "collocates", "searchHint"),
             (Self.searchView, "search.mode.collocates", "Collocates", "readings", "collocates"),
             (Self.cloudView, "wordcloud.keyness.unavailable.title", "No Distinctiveness Ranking", "wordCloud", "keynessTitle"),
@@ -181,6 +191,9 @@ import Testing
         let cloud = try ArchivalAndSeriesMirrorParityTests.source(Self.cloudView)
         let collocates = try NoteViewParityTests.block("collocates", of: copy)
         let wordCloud = try NoteViewParityTests.block("wordCloud", of: copy)
+        // The Within picker's choices.
+        #expect(view.contains(#"Text(String(format: String(localized: "search.collocation.window %lld", defaultValue: "±%lld words"), Int64($0))).tag($0)"#)
+                && collocates.contains("window: (size: number) => `±${size} words`"))
         // A neighbour's row, the app's two forms, its counts grouped as #1683 grouped the caveat's.
         #expect(NoteViewParityTests.writes(view, "search.collocation.row.counts %@ %lld %lld", "%@× more often here · %lld nearby · %lld corpus-wide")
                 && collocates.contains("`${multiple}× more often here · ${nearby.toLocaleString('en-US')} nearby · ${corpusWide.toLocaleString('en-US')} corpus-wide`"))

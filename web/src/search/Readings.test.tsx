@@ -526,6 +526,32 @@ describe('Collocates', () => {
     expect(screen.getByRole('group', { name: 'Within' })).toBeTruthy();
   });
 
+  it('keeps its controls over a window that failed, asks in the order the results are in, and goes back', async () => {
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': volumes,
+      '/api/v1/search': threeResults,
+      '/api/v1/search/collocates': (url: URL) =>
+        url.searchParams.get('window') === '50' ? new ProblemAnswer(500, 'INTERNAL_ERROR', 'The scan failed.') : collocates(),
+    });
+    const user = userEvent.setup();
+    renderAt('/search?keywords=negotiating&reading=collocates&sort=dateAscending');
+    await screen.findByRole('list', { name: 'Words near your matches' });
+    const asked = () => fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).filter((url) => url.pathname === '/api/v1/search/collocates');
+    // A scan the budget stops reads the first results, so the order is asked for.
+    expect(asked()[0]?.searchParams.get('sort')).toBe('dateAscending');
+    const within = screen.getByRole('group', { name: 'Within' });
+    await user.click(within.querySelector('button:nth-of-type(4)')!);
+    // Asked once more, a second later, before the panel says so.
+    expect((await screen.findByRole('alert', {}, { timeout: 4_000 })).textContent).toContain('The scan failed.');
+    // The controls stay, so the reader can go back to a window that answered, which asks nothing again.
+    const before = asked().length;
+    expect(before).toBe(3);
+    await user.click(within.querySelector('button:nth-of-type(2)')!);
+    expect(await screen.findByRole('list', { name: 'Words near your matches' })).toBeTruthy();
+    expect(asked().length).toBe(before);
+  });
+
   it('is asked again when the same search is made again, after it failed', async () => {
     let asked = 0;
     stubServer({

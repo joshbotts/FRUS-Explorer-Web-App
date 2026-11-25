@@ -1,6 +1,7 @@
 // GET /api/v1/search/collocates (PLAN's S29f): Search's fourth reading, Collocates, the words a search's matches keep
 // company with, as the Mac's window builds it (`SearchSheet.rebuildCollocation`): over the results the app keeps of the
-// search, 7,500 at most, less those Checklist Mode hides, not the page on screen, the kit's scan
+// search, 7,500 at most, less those Checklist Mode hides, in the order `sort` gives them (`displayedResults`, whose order
+// decides which results a scan the budget stops reads), not the page on screen, the kit's scan
 // (`SearchService.collocation(for:parameters:windowSize:configuration:reference:tagger:maxMatches:)`, S29b) collects the
 // words within a window of each match, the windows merged so that a word near two matches counts once, at most 200
 // matches a document and the kit's token budget, counts them with the web's tagger (FRUSLanguage's
@@ -15,8 +16,9 @@
 //
 // The scan tags for a second or more over a full index, on its search service's actor: the request has a service of
 // its own, so the corpus's shared one is never held, takes a turn of the counts' gate (S29e), and prefers an executor of
-// its own, a Dispatch queue, which a default actor's work follows, so that the tagging holds no thread of Swift's
-// cooperative pool; and it stops when its client goes, between chunks of 400 documents.
+// its own, a serial Dispatch queue, which a default actor's work follows, so that the tagging holds no thread of Swift's
+// cooperative pool, and the kit's fan-out of a chunk's documents runs on it one after another, bounded as the tagging
+// is; and it stops when its client goes, between chunks of 400 documents.
 
 import FRUSCoreKit
 import FRUSLanguage
@@ -109,8 +111,9 @@ struct CollocationScopeFacts: Equatable, Sendable {
 }
 
 enum CollocatesRoutes {
-    /// The field `/search/collocates` takes beside a search's and its page's: the window. The page and its order say
-    /// nothing of it, which reads every result kept, and are taken so a search's address can be read as it stands.
+    /// The field `/search/collocates` takes beside a search's and its page's: the window. The page says nothing of it,
+    /// which reads every result kept, and is taken so a search's address can be read as it stands; the order is the
+    /// order the scan reads the results in.
     static let fields: Set<String> = ["window"]
 
     /// The collocates of the search `form` says, for the user `request` acts for, under their Word Cloud settings.
@@ -131,8 +134,9 @@ enum CollocatesRoutes {
                 async let kept = served.retained.results(of: parameters, in: scoped)
                 let total = try await served.recent.count(of: parameters, in: scoped)
                 let loaded = try await kept
-                // In Checklist Mode, the results kept less those it hides, as the Mac's panel reads `displayedResults`.
-                let shown = loaded.filter { !search.hides($0) }
+                // In Checklist Mode, the results kept less those it hides, in the order chosen, as the Mac's panel reads
+                // `displayedResults`: a scan the budget stops reads the first of them.
+                let shown = search.sort.sorted(loaded.filter { !search.hides($0) })
                 let outcome = try await outcome(of: shown, parameters: parameters, window: window, settings: reader.settings,
                                                 scoped: scoped, resources: resources)
                 let facts = CollocationScopeFacts(loaded: loaded.count, shown: shown.count, total: total,
@@ -416,10 +420,11 @@ enum CollocationRules {
 
 // MARK: - Where the scan runs
 
-/// A task executor over a Dispatch queue of its own (PLAN's S29f). Collocates' scan runs on its search service's actor, a
-/// default actor, whose work runs on the executor the calling task prefers (SE-0417): so its tagging, which holds a thread
-/// for a second or more over a full index, runs on this queue, and the scan's fan-out with it, rather than on Swift's
-/// cooperative pool, which has one thread per processor, as `WordCloudCounter` keeps a count off it.
+/// A task executor over a serial Dispatch queue of its own (PLAN's S29f). Collocates' scan runs on its search service's
+/// actor, a default actor, whose work runs on the executor the calling task prefers (SE-0417): so its tagging, which holds
+/// a thread for a second or more over a full index, runs on this queue, rather than on Swift's cooperative pool, which has
+/// one thread per processor, as `WordCloudCounter` keeps a count off it; and the kit's fan-out of a chunk's documents,
+/// whose child tasks inherit the preference, runs on it one after another, where the app's runs them side by side.
 ///
 /// Measured in swift:6.4-noble: an actor entered as a task's first work under the preference, from a thread of the pool,
 /// runs on that thread until the task first suspends; entered once the task has moved to the preferred executor, it runs

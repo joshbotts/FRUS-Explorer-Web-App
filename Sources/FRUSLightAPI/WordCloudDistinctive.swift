@@ -26,7 +26,7 @@ public struct CloudDistinctive: Codable, Equatable, Sendable {
     public var state: String
     /// Why there is no ranking: the kit's `KeynessCloud.Unavailable` (`noArtifact`, `lensNotPriced`,
     /// `configurationMismatch`, `languageAnalysisUnavailable`, `noTermsAboveFloor`, `nothingOverRepresented`), or the
-    /// web's `noCount`, a scope whose text the served index does not hold.
+    /// web's `noCount`, a scope whose text the served index does not hold, and `noIndex`, while no index is served.
     public var reason: String?
     /// The title and the detail the page says a refusal in, "No Distinctiveness Ranking".
     public var message: CloudAnswer.Message?
@@ -140,6 +140,15 @@ extension CloudRules {
         reading.reason = "noCount"
         reading.message = .init(title: keynessTitle,
                                 detail: "Distinctive ranks a count of this scope’s own documents, and this server’s index holds none of them, so there is nothing to rank. Its language family’s list keeps only the words the scope uses most.")
+        return reading
+    }
+
+    /// The same while no index is served, none imported yet or one being installed, compacted or reset, the web's words.
+    static var withoutIndex: CloudDistinctive {
+        var reading = CloudDistinctive(state: "unavailable", scores: [], layout: [])
+        reading.reason = "noIndex"
+        reading.message = .init(title: keynessTitle,
+                                detail: "Distinctive ranks a count of this scope’s own documents, and this server serves no index at the moment, so there is nothing to count. Its language family’s list keeps only the words the scope uses most.")
         return reading
     }
 

@@ -88,7 +88,8 @@ import Testing
         }
     }
 
-    /// Distinctive (PLAN's S29f) on a server that serves no index: the family's list, which no ranking reads, says why, and
+    /// Distinctive (PLAN's S29f) on a server that serves no index: the family's list, which no ranking reads, says why, as
+    /// the reason it is, no index served, not that one holds none of the scope (the parity suite's `noCount`), and
     /// Search's Collocates wait for an index, as its other readings do. The rankings themselves are held to the kit's in
     /// `DistinctiveParityTests` and `CollocatesParityTests`.
     @Test func distinctiveAndCollocatesWithoutAnIndex() async throws {
@@ -97,8 +98,9 @@ import Testing
         try await fixture.app.test(.router) { client in
             let ranked = try await Self.cloud(client, "?scope=vol:frus1961-63v06&lens=topics&measure=keyness&hidden=soviet")
             #expect(ranked.source == "family" && ranked.state == "terms" && ranked.terms.count == 50, "Frequency's list stands beside it")
-            #expect(ranked.distinctive?.state == "unavailable" && ranked.distinctive?.reason == "noCount" && ranked.distinctive?.scores.isEmpty == true)
+            #expect(ranked.distinctive?.state == "unavailable" && ranked.distinctive?.reason == "noIndex" && ranked.distinctive?.scores.isEmpty == true)
             #expect(ranked.distinctive?.message?.title == "No Distinctiveness Ranking")
+            #expect(ranked.distinctive?.message?.detail.contains("this server serves no index at the moment") == true, "not that the index holds none")
             #expect(try await Self.cloud(client, "?scope=vol:frus1961-63v06&lens=topics").distinctive == nil, "Frequency carries no ranking")
             // A lens the tagger cannot serve says so first, as the app's main area draws the state before any ranking.
             let people = try await Self.cloud(client, "?scope=vol:frus1961-63v06&lens=people&measure=keyness")

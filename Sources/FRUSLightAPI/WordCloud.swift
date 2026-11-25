@@ -150,7 +150,9 @@ final class FamilyClouds: Sendable {
         return file.configuration.wordForm == form ? nil : .otherWordForm(file.configuration.wordForm)
     }
 
-    /// The reference counted in `form`, or why it is refused.
+    /// The reference counted in `form`, or why it is refused: the family's own check of the file, by its identity and its
+    /// form, which `LanguageFamilyParityTests` holds. The rankings read the references through the kit's lookup
+    /// (``references(language:lists:)``), whose rule refuses another tokenizer's reference where a scope is ranked.
     func reference(_ form: WordCloudWordForm, in directory: URL) -> Result<KeynessBaselineFile, FamilyRefusal> {
         (form == .dictionary ? dictionaryReference : printedReference).value(in: directory)
     }
@@ -1041,7 +1043,7 @@ enum WordCloudRoutes {
             let held = atTheFamilys && ownList && measure == .frequency ? nil : (try? await provider.servedIfReady()) ?? nil
             guard let held, holdsText(resolution, served: held) else {
                 var family = try await Blocking.run { Self.answer(familyScope, lens: lens, settings: reader.settings, resources: resources) }
-                if measure == .keyness, family.state == "terms" { family.distinctive = CloudRules.withoutCount }
+                if measure == .keyness, family.state == "terms" { family.distinctive = held == nil ? CloudRules.withoutIndex : CloudRules.withoutCount }
                 return family
             }
             served = held

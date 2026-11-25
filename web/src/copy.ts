@@ -607,6 +607,9 @@ export const copy = {
    */
   collocates: {
     within: 'Within',
+    /** The Within picker's choices and Rank by's, the app's (`search.collocation.window %lld`, `CollocationOrder.pickerLabel`). */
+    window: (size: number) => `±${size} words`,
+    orders: { evidence: 'Evidence', effect: 'Concentration' },
     rankBy: 'Rank by',
     loading: 'Reading the words around your matches…',
     list: 'Words near your matches',

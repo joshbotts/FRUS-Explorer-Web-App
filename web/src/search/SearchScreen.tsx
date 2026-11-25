@@ -214,8 +214,8 @@ export function SearchScreen() {
       if (state.reading === 'concordance') {
         void queryClient.refetchQueries({ queryKey: concordanceQuery(state, reviewed).queryKey, exact: true });
       }
-      // Collocates (S29f), under whichever window and settings the reading asked for this search.
-      if (state.reading === 'collocates') void queryClient.refetchQueries({ queryKey: ['collocates', filterFields(state)] });
+      // Collocates (S29f), the window and settings on screen alone: the others kept would each be a scan.
+      if (state.reading === 'collocates') void queryClient.refetchQueries({ queryKey: ['collocates', filterFields(state)], type: 'active' });
     } else {
       update({ keywords });
     }
@@ -1273,12 +1273,13 @@ function Results({
               reviewed={reviewed}
               total={list.total}
             />
+          ) : reading === 'collocates' ? (
+            // Every result kept, as the timeline reads them, so no page is past their end (S29f).
+            <CollocatesReading state={state} reviewed={reviewed} />
           ) : list.items.length === 0 ? (
             <p>{copy.search.pastEnd}</p>
           ) : reading === 'concordance' ? (
             <ConcordanceReading state={state} total={list.total} order={state.align ?? 'leftContext'} onOrder={onAlign} reviewed={reviewed} />
-          ) : reading === 'collocates' ? (
-            <CollocatesReading state={state} reviewed={reviewed} />
           ) : (
             <ol ref={listElement} className="result-list" aria-label={copy.search.results} start={first}>
               {list.items.map((item, index) => (

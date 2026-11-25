@@ -2,7 +2,8 @@
 // corpus, for the corpus, each subseries and each volume, and since S29e every scope the app's cloud takes counted live
 // on the server from the served index's text by the kit's count with the same tagger, under the reader's own Word Cloud
 // settings, which follow them in their synced preferences; a count that outlasts a request is a job, which the page
-// follows here; and the settings' writes, the criteria through the preferences and the hidden words through routes of
+// follows here; since S29f a cloud sized by Distinctive, the server's ranking of the count against the family's
+// reference; and the settings' writes, the criteria through the preferences and the hidden words through routes of
 // their own, as the app's settings write each.
 import { keepPreviousData, type QueryClient, queryOptions } from '@tanstack/react-query';
 import { getJSON } from './client';
