@@ -32,14 +32,16 @@ import Testing
     }
 
     /// The semantic vectors over the fixture shards, with what a server reads once already read: the bundled pair,
-    /// through this store, and `fixture`'s subject index and the lexical axis's stop words. A live test's client waits
-    /// 20 s for each answer, and a debug build decoding these under the whole target's load can take longer than that
-    /// (CI's x86_64 runner did, on the first list's request), so a live test reads them before its server starts.
+    /// through this store, and `fixture`'s subject index and the lexical axis's stop words, and since S29g the shared words'
+    /// references and the web's tagger, which the list's pass reads. A live test's client waits 20 s for each answer, and a
+    /// debug build decoding these under the whole target's load can take longer than that (CI's x86_64 runner did, on the
+    /// first list's request), so a live test reads them before its server starts.
     static func warmed(_ fixture: UserDataFixture) async throws -> SemanticVectors {
         let resources = fixture.server.resources
         let vectors = SemanticVectors(resources: resources.directory, shards: RepositoryFiles.semanticShards)
         _ = try await vectors.bundle().get()
         _ = try await Blocking.run { resources.documentSubjectIndex != nil && !RelatedDocumentsRoutes.lexicalStopwords(resources).isEmpty }
+        _ = try await Blocking.run { (RelatedDocumentsRoutes.sharedTermsLists(resources).references, WordCloudLive.tagger.identity) }
         return vectors
     }
 
@@ -81,8 +83,8 @@ import Testing
             #expect(list.axes.allSatisfy { $0.available }, "every axis ranks, the semantic and the lexical among them")
             #expect(list.missingShards.isEmpty, "both served volumes' shards are held")
             let row = try #require(list.rows.first { $0.semanticScore != nil }, "a row the semantic axis scored: \(list.rows.map(\.documentId))")
-            #expect(row.chips.contains { $0.axis == "semanticSimilarity" && $0.text.contains("Semantic match · ") },
-                    "its chip, the kit's label: \(row.chips)")
+            #expect(row.chips.contains { $0.axis == "semanticSimilarity" && $0.text.hasPrefix("shares: ") },
+                    "its chip, the kit's: the words it shares with the anchor since S29g, or its match: \(row.chips)")
             #expect(row.verdict == nil)
             #expect(list.rows.filter { $0.semanticScore == nil }.allSatisfy { !$0.chips.contains { $0.axis == "semanticSimilarity" } })
             let neighbour = "\(row.volumeId)/\(row.documentId)"
