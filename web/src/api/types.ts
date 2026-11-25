@@ -326,6 +326,57 @@ export interface SearchConcordance {
   coverage: Coverage;
 }
 
+/** Collocates' orders, the Mac's `CollocationOrder`: Evidence, G², and Concentration, the fold difference. */
+export type CollocationOrder = 'evidence' | 'effect';
+
+/** A word near a search's matches (S29f): the kit's `KeynessScore` over the merged windows. */
+export interface CollocatesNeighbour {
+  term: string;
+  /** Occurrences within the windows, and in the corpus reference. */
+  nearby: number;
+  corpusWide: number;
+  logLikelihood: number;
+  logRatio: number;
+  /** How many times more often here than corpus-wide. */
+  fold: number;
+  /** Rarer corpus-wide than the reference prices: its corpus count is unknown, not zero. */
+  unpriced: boolean;
+}
+
+/** A search's collocates (GET /search/collocates, S29f), over the results it keeps, as the kit ranks them. */
+export interface SearchCollocates {
+  /** Words either side of each match, and the windows offered, each with the Mac's label. */
+  window: number;
+  windowChoices: Choice[];
+  /** The orders, with the Mac's label for each; the first is the Mac's. */
+  orderChoices: Choice[];
+  state: 'ranked' | 'unavailable';
+  /** The kit's reason for no ranking. */
+  reason?: string;
+  message?: { title: string; detail: string };
+  mismatches?: string[];
+  /** The row a ranking of printed forms opens with. */
+  printedFormsNote?: string;
+  /** What the scan could and could not see, above the list. */
+  caveat?: string;
+  items: CollocatesNeighbour[];
+  /** Each order, as positions in items. */
+  orders: Partial<Record<CollocationOrder, number[]>>;
+  documentsScanned?: number;
+  documentsInScope?: number;
+  documentsOffered?: number;
+  anchorCount?: number;
+  omittedAnchorCount?: number;
+  windowTokenCount?: number;
+  minimumCount?: number;
+  referenceCutoffCount?: number;
+  wordForm?: string;
+  wasBounded?: boolean;
+  retainedLimit: number;
+  retainedCount: number;
+  coverage: Coverage;
+}
+
 /** One of a query's searchable units, as the kit's parser reports it. */
 export interface SearchOperand {
   text: string;

@@ -35,6 +35,10 @@ const lookingUp = !!process.env.FRUS_E2E_LOOK_UP;
 // follow-up) and a merge by keyboard, on the smoke test's Standalone server, which applies a correction at once.
 const people = /people\.spec\.ts$/;
 const correcting = !!process.env.FRUS_E2E_PEOPLE;
+// Distinctive and Collocates (PLAN's S29f): its spec's Standalone tests, a fixture volume's ranking and a search's
+// collocates, on the smoke test's Standalone server, whose index holds the three fixture volumes' text.
+const language = /distinctive-collocates\.spec\.ts$/;
+const ranking = !!process.env.FRUS_E2E_LANGUAGE;
 
 export default defineConfig({
   testDir: './e2e',
@@ -54,7 +58,9 @@ export default defineConfig({
                 ? { testMatch: lookUp }
                 : correcting
                   ? { testMatch: people }
-                  : { testIgnore: [signIn, accounts, updateReview] }),
+                  : ranking
+                    ? { testMatch: language }
+                    : { testIgnore: [signIn, accounts, updateReview] }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

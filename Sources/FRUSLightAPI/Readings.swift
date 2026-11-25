@@ -3,7 +3,8 @@
 // of a search, 7,500 at most, as the Mac's window plots them (`DocumentTimelineView` over its
 // `displayedResults`); the concordance lines up every occurrence of the search's terms in one page
 // of those results, as the Mac's window builds it for the page on screen
-// (`SearchService.concordance(for:parameters:radius:)`).
+// (`SearchService.concordance(for:parameters:radius:)`). The fourth, Collocates, over the results kept
+// as the timeline's, is registered here and built in Collocates.swift (PLAN's S29f).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -158,6 +159,15 @@ enum ReadingRoutes {
         router.post("/api/v1/search/concordance") { request, context -> SearchConcordance in
             try await concordance(try await postedForm(request), request: request, context: context, provider: provider,
                                   resources: resources, users: users)
+        }
+        // From S29f, the fourth reading, Collocates, over the results kept, as the timeline reads them (Collocates.swift).
+        router.get("/api/v1/search/collocates") { request, context -> SearchCollocates in
+            try await CollocatesRoutes.collocates(try FormQuery(request.uri.query), request: request, context: context,
+                                                  provider: provider, resources: resources, users: users)
+        }
+        router.post("/api/v1/search/collocates") { request, context -> SearchCollocates in
+            try await CollocatesRoutes.collocates(try await postedForm(request), request: request, context: context,
+                                                  provider: provider, resources: resources, users: users)
         }
     }
 

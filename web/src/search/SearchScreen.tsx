@@ -38,7 +38,7 @@ import { CorpusBanner, CorpusFilter, SaveCorpusDialog, ScopeFilter } from './Wor
 import { FacetPanel, useFacetPanelState } from './FacetPanel';
 import { MeaningBeyond, MeaningEmpty, MeaningStrip, SearchBy, type SearchMode } from './MeaningSearch';
 import { inspectorFields, QueryInspectorStrip, ZeroResult } from './QueryInspector';
-import { ConcordanceReading, ReadingPicker, TimelineReading, type TimelineMode } from './Readings';
+import { CollocatesReading, ConcordanceReading, ReadingPicker, TimelineReading, type TimelineMode } from './Readings';
 import {
   defaultLimit,
   documentTypes,
@@ -214,6 +214,8 @@ export function SearchScreen() {
       if (state.reading === 'concordance') {
         void queryClient.refetchQueries({ queryKey: concordanceQuery(state, reviewed).queryKey, exact: true });
       }
+      // Collocates (S29f), the window and settings on screen alone: the others kept would each be a scan.
+      if (state.reading === 'collocates') void queryClient.refetchQueries({ queryKey: ['collocates', filterFields(state)], type: 'active' });
     } else {
       update({ keywords });
     }
@@ -1271,6 +1273,9 @@ function Results({
               reviewed={reviewed}
               total={list.total}
             />
+          ) : reading === 'collocates' ? (
+            // Every result kept, as the timeline reads them, so no page is past their end (S29f).
+            <CollocatesReading state={state} reviewed={reviewed} />
           ) : list.items.length === 0 ? (
             <p>{copy.search.pastEnd}</p>
           ) : reading === 'concordance' ? (

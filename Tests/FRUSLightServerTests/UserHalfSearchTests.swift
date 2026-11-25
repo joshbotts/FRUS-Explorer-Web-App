@@ -131,7 +131,7 @@ import Testing
             // A tag that is not the user's is refused, by every route that takes a search.
             for path in ["/api/v1/search?", "/api/v1/search/inspect?", "/api/v1/search/facets?section=volumes&",
                          "/api/v1/search/facets/selection?section=volumes&", "/api/v1/search/timeline?",
-                         "/api/v1/search/concordance?", "/api/v1/me/search/tags?"] {
+                         "/api/v1/search/concordance?", "/api/v1/search/collocates?", "/api/v1/me/search/tags?"] {
                 let refused = try await owner.get("\(path)keywords=treaties&userTagIds=\(tag)&userTagIds=\(Self.strangerTag)")
                 #expect(refused.status == .notFound && problemCode(refused) == "TAG_NOT_FOUND", "\(path)")
             }

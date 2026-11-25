@@ -18,6 +18,7 @@ import type {
   DocumentList,
   Readiness,
   ReaderLinkTarget,
+  SearchCollocates,
   SearchConcordance,
   SearchInspection,
   SearchResultList,
@@ -172,6 +173,25 @@ export function concordanceQuery(state: SearchState, reviewed: readonly string[]
     staleTime: 5 * 60_000,
     placeholderData: (previous, query) => (sameSearch(query, search) ? previous : undefined),
     retry: retryServerFaults,
+  });
+}
+
+/**
+ * The search's collocates (S29f) over the results it keeps, in the order chosen, within `window` words of its matches,
+ * under the reader's Word Cloud settings, which `settings` names so that a change asks again. The same search's last
+ * answer stays while the next loads, as the timeline's does; another search's never stands in. The scan reads every
+ * result kept, so neither the page nor its size is asked, and turning a page asks nothing; the order is, since a scan
+ * the budget stops reads the first results. A fault is asked again once, each asking being a scan.
+ */
+export function collocatesQuery(state: SearchState, window: number, settings: string, reviewed: readonly string[] = []) {
+  const search = filterFields(state);
+  return queryOptions<SearchCollocates, unknown, SearchCollocates, unknown[]>({
+    queryKey: ['collocates', search, state.sort ?? 'relevance', window, settings, reviewed],
+    queryFn: ({ signal }) => searchRequest<SearchCollocates>('/api/v1/search/collocates', { ...search, sort: state.sort, window }, reviewed, signal),
+    enabled: state.keywords !== undefined,
+    staleTime: 5 * 60_000,
+    placeholderData: (previous, query) => (sameSearch(query, search) ? previous : undefined),
+    retry: (failures, error) => failures < 1 && retryServerFaults(failures, error),
   });
 }
 
@@ -336,7 +356,7 @@ export function citationBatchQuery(text: string | undefined) {
  * The queries that read what the server indexes, asked again when its index changes (the shell's readiness banner)
  * and after a curator's correction of it (PLAN's S21g): the people and the classifications with them.
  */
-export const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder', 'sources', 'archivalNeighbours', 'archivalCollection', 'volumeSources', 'people', 'classification', 'analyticsContext', 'corpusChart', 'corpusDocuments', 'chronology', 'crossReferenceAnalytics', 'archivalLibrary'];
+export const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'collocates', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder', 'sources', 'archivalNeighbours', 'archivalCollection', 'volumeSources', 'people', 'classification', 'analyticsContext', 'corpusChart', 'corpusDocuments', 'chronology', 'crossReferenceAnalytics', 'archivalLibrary'];
 
 /** Retries a network failure or a server fault twice; never a refusal, nor a 503 while importing. */
 export function retryServerFaults(failures: number, error: unknown): boolean {

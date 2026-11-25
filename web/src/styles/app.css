@@ -1035,6 +1035,54 @@ button.facet-row:hover {
   white-space: nowrap;
 }
 
+/* Collocates (S29f), the Mac's panel: Within and Rank by over the caveat, then each neighbour on a row, its rank, the
+   word with its multiple and counts beneath, and the number the list is ordered on at the right. */
+.collocates-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.collocates-header .caption {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.collocates-list {
+  max-width: 40rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collocates-list li {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.375rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.collocates-rank,
+.collocates-value {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.collocates-word .caption {
+  display: block;
+  margin: 0.125rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.collocates-printed {
+  max-width: 40rem;
+}
+
 /* A line's document stays at the left of what the screen shows, however far its line is scrolled. */
 .kwic-source {
   position: sticky;
@@ -2816,6 +2864,18 @@ dialog.cross-volume {
   white-space: nowrap;
 }
 
+/* Distinctive's line under each word (S29f), the app's: its multiple and its two counts. */
+.cloud-keyness-caption {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cloud-caveat {
+  max-width: 40rem;
+}
+
 /* The bar against the first word's count (`weightBar`): sixty points at the most. */
 .cloud-bar {
   display: inline-block;
@@ -2867,13 +2927,6 @@ dialog.cross-volume {
   justify-content: space-between;
   max-width: 24rem;
   padding: 0.25rem 0;
-}
-
-/* Search's Collocates, offered and refused (S24i): drawn as a control that does not answer, its text still at 4.5:1. */
-.reading-picker .reading-unavailable {
-  color: var(--text-secondary);
-  border-style: dashed;
-  cursor: not-allowed;
 }
 
 /* ─── Semantic Analytics (PLAN's S28b) ────────────────────────────────────── */

@@ -73,10 +73,44 @@ import Testing
                 ("/api/v1/cloud?scope=everything", .badRequest, "INVALID_PARAMETER"),
                 ("/api/v1/cloud?scope=era:1969-76", .badRequest, "INVALID_PARAMETER"),
                 ("/api/v1/cloud?lens=nouns", .badRequest, "INVALID_PARAMETER"),
-                ("/api/v1/cloud?measure=keyness", .badRequest, "UNKNOWN_PARAMETER"),
+                // Since S29f Distinctive is a measure the route takes, and the words hidden from a cloud its alone.
+                ("/api/v1/cloud?measure=loudness", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/cloud?hidden=treaty", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/cloud?collocates=1", .badRequest, "UNKNOWN_PARAMETER"),
                 ("/api/v1/cloud/context?scope=corpus", .badRequest, "UNKNOWN_PARAMETER"),
                 ("/api/v1/cloud?scope=corpus&scope=sub:1861", .badRequest, "INVALID_PARAMETER"),
                 ("/api/v1/cloud/jobs/5E17F000-0000-4000-8000-0000000000A1", .notFound, "JOB_NOT_FOUND"),
+            ]
+            for (path, status, code) in refusals {
+                let response = try await client.execute(uri: path, method: .get)
+                #expect(response.status == status && problemCode(response) == code, "\(path): \(response.status) \(String(buffer: response.body))")
+            }
+        }
+    }
+
+    /// Distinctive (PLAN's S29f) on a server that serves no index: the family's list, which no ranking reads, says why, as
+    /// the reason it is, no index served, not that one holds none of the scope (the parity suite's `noCount`), and
+    /// Search's Collocates wait for an index, as its other readings do. The rankings themselves are held to the kit's in
+    /// `DistinctiveParityTests` and `CollocatesParityTests`.
+    @Test func distinctiveAndCollocatesWithoutAnIndex() async throws {
+        let fixture = try await UserDataFixture()
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let ranked = try await Self.cloud(client, "?scope=vol:frus1961-63v06&lens=topics&measure=keyness&hidden=soviet")
+            #expect(ranked.source == "family" && ranked.state == "terms" && ranked.terms.count == 50, "Frequency's list stands beside it")
+            #expect(ranked.distinctive?.state == "unavailable" && ranked.distinctive?.reason == "noIndex" && ranked.distinctive?.scores.isEmpty == true)
+            #expect(ranked.distinctive?.message?.title == "No Distinctiveness Ranking")
+            #expect(ranked.distinctive?.message?.detail.contains("this server serves no index at the moment") == true, "not that the index holds none")
+            #expect(try await Self.cloud(client, "?scope=vol:frus1961-63v06&lens=topics").distinctive == nil, "Frequency carries no ranking")
+            // A lens the tagger cannot serve says so first, as the app's main area draws the state before any ranking.
+            let people = try await Self.cloud(client, "?scope=vol:frus1961-63v06&lens=people&measure=keyness")
+            #expect(people.state == "lensUnavailable" && people.distinctive == nil)
+
+            let refusals: [(String, HTTPResponse.Status, String)] = [
+                ("/api/v1/search/collocates?keywords=treaty", .serviceUnavailable, "INDEX_NOT_READY"),
+                ("/api/v1/search/collocates?keywords=treaty&window=13", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/search/collocates?keywords=treaty&window=10&window=20", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/search/collocates?keywords=treaty&order=effect", .badRequest, "UNKNOWN_PARAMETER"),
             ]
             for (path, status, code) in refusals {
                 let response = try await client.execute(uri: path, method: .get)

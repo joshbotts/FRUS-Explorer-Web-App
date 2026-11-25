@@ -581,11 +581,8 @@ export const copy = {
   readings: {
     label: 'Reading',
     help: 'How to read these results. The concordance covers this page; the others cover the whole retained set.',
-    titles: { list: 'List', timeline: 'Timeline', concordance: 'Concordance' },
-    /** From S24i, the Mac's fourth, offered and refused until phase 4: its title, the app's, and the reason, the web's own. */
-    collocates: 'Collocates',
-    collocatesUnavailable:
-      'Collocates, the words near your matches, are counted in their dictionary forms, which this server’s language analysis cannot do yet.',
+    /** Since S29f the Mac's four, Collocates among them, which S24i offered refused until the server's tagger. */
+    titles: { list: 'List', timeline: 'Timeline', concordance: 'Concordance', collocates: 'Collocates' },
   },
   timeline: {
     /** The mode picker's name, which the Mac's segmented picker hides. */
@@ -633,6 +630,36 @@ export const copy = {
     lines: 'Occurrences',
     loading: 'Building the concordance…',
     failed: 'The concordance could not be built.',
+  },
+  /**
+   * Collocates (S29f), the Mac's `CollocationView`: its controls and its loading line, the app's, and each neighbour's row as
+   * the app composes it, the multiple whole from ten and to one place below, its two counts grouped, as #1683 grouped the
+   * caveat's, where the app's row prints them through `%lld`. The list's name and a failure are the web's own.
+   */
+  collocates: {
+    within: 'Within',
+    /** The Within picker's choices and Rank by's, the app's (`search.collocation.window %lld`, `CollocationOrder.pickerLabel`). */
+    window: (size: number) => `±${size} words`,
+    orders: { evidence: 'Evidence', effect: 'Concentration' },
+    rankBy: 'Rank by',
+    loading: 'Reading the words around your matches…',
+    list: 'Words near your matches',
+    failed: 'The collocates could not be read.',
+    /** The row's multiple, as the app's `formatted(.number.precision(.fractionLength(_:)))` gives it. */
+    multiple: (fold: number) =>
+      fold >= 10
+        ? fold.toLocaleString('en-US', { maximumFractionDigits: 0, roundingMode: 'halfEven' })
+        : fold.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1, roundingMode: 'halfEven' }),
+    row: (multiple: string, nearby: number, corpusWide: number) =>
+      `${multiple}× more often here · ${nearby.toLocaleString('en-US')} nearby · ${corpusWide.toLocaleString('en-US')} corpus-wide`,
+    rowUnpriced: (multiple: string, nearby: number, cutoff: number) =>
+      `${multiple}× more often here · ${nearby.toLocaleString('en-US')} nearby · fewer than ${cutoff.toLocaleString('en-US')} corpus-wide (unpriced)`,
+    /** The number the list is ordered on: G² to one place under Evidence, the multiple under Concentration. */
+    evidence: (logLikelihood: number) =>
+      logLikelihood.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1, roundingMode: 'halfEven' }),
+    concentration: (multiple: string) => `${multiple}×`,
+    /** The web's own: a neighbour opens a search for itself, as a word of the Word Cloud does (`Search for this term`). */
+    searchHint: 'Search for this term',
   },
   inspector: {
     /** The strip's name for assistive technology; the Mac's strip shows no title. */
@@ -2590,8 +2617,22 @@ export const copy = {
     hiddenInLens: (term: string) => `${term} hidden in this lens`,
     hiddenEverywhere: (term: string) => `${term} hidden in all word clouds`,
     keynessTitle: 'No Distinctiveness Ranking',
-    keynessReason:
-      'Distinctive ranks a scope’s words against the corpus reference this server’s tagger counted, which this server does not rank them against yet. Size words by frequency instead.',
+    /**
+     * Distinctive's list (S29f), the app's keyness list: each word's multiple and its two counts, composed as the app's row,
+     * the counts grouped where the app's `%lld` leaves them bare, its G² to one place and the app's reading of it aloud.
+     * The list's name, its columns and the cloud's label are the web's own.
+     */
+    keynessListTitle: 'Terms by distinctiveness',
+    keyness: 'Keyness',
+    foldPhrase: (multiple: string) => `${multiple}× more often here`,
+    keynessCounts: (here: number, corpusWide: number) => `${here.toLocaleString('en-US')} here · ${corpusWide.toLocaleString('en-US')} corpus-wide`,
+    keynessCountsUnpriced: (here: number, cutoff: number) =>
+      `${here.toLocaleString('en-US')} here · fewer than ${cutoff.toLocaleString('en-US')} corpus-wide (unpriced)`,
+    keynessValue: (logLikelihood: number) =>
+      logLikelihood.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1, roundingMode: 'halfEven' }),
+    keynessA11y: (value: string, fold: string, counts: string) => `keyness ${value}; ${fold}; ${counts}`,
+    keynessCanvasLabel: (drawn: number, total: number) =>
+      `Word cloud of ${drawn} of ${total} terms, each sized by how distinctive it is of this scope. The list below names every term with its keyness.`,
     backToDocument: 'Back to the document',
     /** A count that outlasts a request (S29e), the web's own: its job, followed until it ends. */
     jobWaiting: 'Waiting for the server’s other jobs to finish.',

@@ -235,7 +235,7 @@ import Testing
             // Her tag filters no search of his, nor of no one's, by any route.
             for browser in [bob, nobody] {
                 for path in ["/api/v1/search?", "/api/v1/search/inspect?", "/api/v1/search/facets?section=volumes&",
-                             "/api/v1/search/timeline?", "/api/v1/search/concordance?"] {
+                             "/api/v1/search/timeline?", "/api/v1/search/concordance?", "/api/v1/search/collocates?"] {
                     let refused = try await browser.get("\(path)keywords=treaties&userTagIds=\(hers.tag.id)")
                     #expect(refused.status == .notFound && problemCode(refused) == "TAG_NOT_FOUND", "\(path)")
                 }

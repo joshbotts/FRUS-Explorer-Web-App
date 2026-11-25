@@ -1,17 +1,30 @@
 // The readings of a search's results beside the list (SPEC, Search), as the Mac's window offers them
-// in its Reading picker: the timeline, which counts by year the results the search keeps, and the
-// concordance, which lines up every occurrence of the search's terms in the page on screen; Collocates,
-// the Mac's fourth, is offered and refused with its reason until phase 4 (S24i). Each says
-// which set it read, in the Mac's words. The server computes both with the kit: the timeline's years
-// are its Years facet over what the search keeps, and the concordance its lines for the page, with
-// each of its orders, so the browser sorts nothing and counts nothing itself.
+// in its Reading picker: the timeline, which counts by year the results the search keeps, the
+// concordance, which lines up every occurrence of the search's terms in the page on screen, and since
+// S29f Collocates, the words the matches keep company with across the results the search keeps, which
+// S24i offered refused until the server's tagger. Each says which set it read, in the Mac's words. The
+// server computes each with the kit: the timeline's years are its Years facet over what the search
+// keeps, the concordance its lines for the page, with each of its orders, and Collocates its ranking of
+// the words near the matches against the corpus reference, with each of its orders, so the browser
+// sorts nothing and counts nothing itself.
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { memo, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
-import { concordanceQuery, timelineQuery } from '../api/endpoints';
-import type { ConcordanceLine, ConcordanceOrder, SearchTimeline, TimelineDocument } from '../api/types';
+import { collocatesQuery, concordanceQuery, timelineQuery } from '../api/endpoints';
+import type {
+  CollocatesNeighbour,
+  CollocationOrder,
+  ConcordanceLine,
+  ConcordanceOrder,
+  SearchCollocates,
+  SearchTimeline,
+  TimelineDocument,
+} from '../api/types';
+import { preferencesQuery } from '../api/research';
+import { meQuery } from '../api/userData';
 import { copy } from '../copy';
+import { useSyncedPreferences } from '../settings/syncedPreferences';
 import { pageCount, type Reading, readings, type SearchState } from './searchState';
 
 /**
@@ -28,7 +41,6 @@ export function ReadingPicker({
   onChange: (reading: Reading) => void;
 }) {
   const labelId = useId();
-  const collocatesId = useId();
   return (
     <div className="sort-orders reading-picker" role="group" aria-labelledby={labelId} title={copy.readings.help}>
       <span id={labelId}>{copy.readings.label}</span>
@@ -37,14 +49,6 @@ export function ReadingPicker({
           {copy.readings.titles[choice]}
         </button>
       ))}
-      {/* From S24i, the Mac's fourth reading, offered and refused until the server's language analysis (phase 4), with why:
-          it stays in reach of the keyboard, so its reason is read. */}
-      <button type="button" aria-disabled="true" aria-describedby={collocatesId} title={copy.readings.collocatesUnavailable} className="reading-unavailable">
-        {copy.readings.collocates}
-      </button>
-      <span id={collocatesId} className="visually-hidden">
-        {copy.readings.collocatesUnavailable}
-      </span>
     </div>
   );
 }
@@ -423,6 +427,183 @@ function ConcordanceRow({ line }: { line: ConcordanceLine }) {
         <b className="kwic-keyword">{line.keyword}</b> <span className="kwic-right">{line.right}</span>{' '}
         <span className="kwic-source">{source}</span>
       </Link>
+    </li>
+  );
+}
+
+/** The windows and orders this browser keeps, under the Mac's keys (`SearchCollocationDefaults`), as its `@AppStorage` does. */
+const collocationKeys = { window: 'frus.search.collocation.window', order: 'frus.search.collocation.order' };
+/** `CollocationView.windowSizes`, and the Mac's default of ten words either side. */
+const collocationWindows = [5, 10, 20, 50];
+/** `CollocationOrder.allCases`: Evidence first, the Mac's default. */
+const collocationOrders: readonly CollocationOrder[] = ['evidence', 'effect'];
+
+function storedValue(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function keepValue(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage that refuses keeps nothing: the next search opens on the Mac's default.
+  }
+}
+
+/** The window this browser keeps, ten words by default. */
+export function storedCollocationWindow(): number {
+  const value = Number(storedValue(collocationKeys.window));
+  return collocationWindows.includes(value) ? value : 10;
+}
+
+/** The order this browser keeps, Evidence by default (`CollocationOrder.evidence`). */
+export function storedCollocationOrder(): CollocationOrder {
+  return storedValue(collocationKeys.order) === 'effect' ? 'effect' : 'evidence';
+}
+
+/**
+ * Collocates, as the Mac's `CollocationView` lays them out: Within and Rank by, which stay whatever the
+ * panel shows, over a caveat that says which set was measured and how much of it the scan saw, then the
+ * neighbours, most distinctive first, each with its multiple and its two counts, and the number the list
+ * is ordered on. The server ranks over the results the search keeps, in the order chosen, less those
+ * Checklist Mode hides, under the reader's Word Cloud settings, once they are known; a change of window
+ * asks again, and while it is asked the caveat of the last window goes with its list; a change of order
+ * asks nothing. Each neighbour opens a search for itself, as a word of the Word Cloud does, where the
+ * Mac's row offers Copy.
+ */
+export function CollocatesReading({
+  state,
+  reviewed = [],
+}: {
+  state: SearchState;
+  /** The results Checklist Mode hides (S17e), which the scan leaves out, as the Mac's reads what its checklist leaves. */
+  reviewed?: readonly string[];
+}) {
+  const me = useQuery(meQuery);
+  const { keepsUserData, preferences } = useSyncedPreferences();
+  const held = useQuery({ ...preferencesQuery, enabled: keepsUserData });
+  // Asked once the reader's settings are known, theirs or the app's own, as the Word Cloud is, so no scan is made twice.
+  const settingsKnown = (me.isSuccess || me.isError) && (!keepsUserData || preferences !== undefined || held.isError);
+  const [size, setSize] = useState(storedCollocationWindow);
+  const [order, setOrder] = useState(storedCollocationOrder);
+  // The criteria the server reads of the reader's Word Cloud settings, the hidden words not among them: a change asks again.
+  const criteria = preferences?.wordCloud;
+  const settings = criteria
+    ? JSON.stringify([criteria.minLength, criteria.minCount, criteria.foldPlurals, criteria.filterMarkings, criteria.excludeBoilerplate])
+    : 'standard';
+  const options = collocatesQuery(state, size, settings, reviewed);
+  const collocates = useQuery({ ...options, enabled: settingsKnown && options.enabled !== false });
+  const data = collocates.data;
+  // While another window's ranking comes, the Mac's panel shows its loading line under the controls.
+  const loading = !data || collocates.isPlaceholderData;
+  const withinId = useId();
+  const rankById = useId();
+  return (
+    <div className="collocates" aria-busy={collocates.isFetching}>
+      <div className="collocates-header">
+        <div className="sort-orders" role="group" aria-labelledby={withinId}>
+          <span id={withinId}>{copy.collocates.within}</span>
+          {collocationWindows.map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={choice === size}
+              onClick={() => {
+                setSize(choice);
+                keepValue(collocationKeys.window, String(choice));
+              }}
+            >
+              {copy.collocates.window(choice)}
+            </button>
+          ))}
+        </div>
+        <div className="sort-orders" role="group" aria-labelledby={rankById}>
+          <span id={rankById}>{copy.collocates.rankBy}</span>
+          {collocationOrders.map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={choice === order}
+              onClick={() => {
+                setOrder(choice);
+                keepValue(collocationKeys.order, choice);
+              }}
+            >
+              {copy.collocates.orders[choice]}
+            </button>
+          ))}
+        </div>
+        {!loading && data.state === 'ranked' && data.caveat && <p className="caption">{data.caveat}</p>}
+      </div>
+      {collocates.isError && !collocates.isFetching ? (
+        <p className="error" role="alert">
+          {failure(collocates.error, copy.collocates.failed)}
+        </p>
+      ) : loading ? (
+        <p role="status">{copy.collocates.loading}</p>
+      ) : (
+        <>
+          {/* A ranking of printed forms says so before its first row, and so does a refusal that is a result of the count. */}
+          {data.printedFormsNote && <p className="caption collocates-printed">{data.printedFormsNote}</p>}
+          {data.state === 'unavailable' ? (
+            <div className="empty-reading">
+              <h3>{data.message?.title}</h3>
+              <p>{data.message?.detail}</p>
+            </div>
+          ) : (
+            <CollocatesList collocates={data} order={order} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The neighbours in the order chosen, which the server gives as positions, so a change of order asks nothing. */
+const CollocatesList = memo(function CollocatesList({ collocates, order }: { collocates: SearchCollocates; order: CollocationOrder }) {
+  const positions = collocates.orders[order] ?? collocates.items.map((_, index) => index);
+  const cutoff = collocates.referenceCutoffCount ?? 1;
+  return (
+    <ol className="collocates-list" aria-label={copy.collocates.list}>
+      {positions.map((position, rank) => {
+        const neighbour = collocates.items[position];
+        return neighbour ? <CollocatesRow key={neighbour.term} neighbour={neighbour} rank={rank + 1} order={order} cutoff={cutoff} /> : null;
+      })}
+    </ol>
+  );
+});
+
+/**
+ * One neighbour, as the Mac's row draws it: its rank, the word, its multiple and two counts, unpriced said plainly, and
+ * the number the list is ordered on. The word opens its search; the row's numbers are its description, read with it.
+ */
+function CollocatesRow({ neighbour, rank, order, cutoff }: { neighbour: CollocatesNeighbour; rank: number; order: CollocationOrder; cutoff: number }) {
+  const captionId = useId();
+  const multiple = copy.collocates.multiple(neighbour.fold);
+  const caption =
+    neighbour.unpriced && cutoff > 1
+      ? copy.collocates.rowUnpriced(multiple, neighbour.nearby, cutoff)
+      : copy.collocates.row(multiple, neighbour.nearby, neighbour.corpusWide);
+  return (
+    <li>
+      <span className="collocates-rank" aria-hidden="true">
+        {rank}
+      </span>
+      <span className="collocates-word">
+        <Link to="/search" search={{ keywords: neighbour.term }} title={copy.collocates.searchHint} aria-describedby={captionId}>
+          {neighbour.term}
+        </Link>
+        <span id={captionId} className="caption">
+          {caption}
+        </span>
+      </span>
+      <span className="collocates-value">
+        {order === 'evidence' ? copy.collocates.evidence(neighbour.logLikelihood) : copy.collocates.concentration(multiple)}
+      </span>
     </li>
   );
 }

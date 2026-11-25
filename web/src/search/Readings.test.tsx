@@ -1,13 +1,14 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ConcordanceLine, SearchConcordance, SearchItem, SearchResultList, SearchTimeline } from '../api/types';
+import type { ConcordanceLine, SearchCollocates, SearchConcordance, SearchItem, SearchResultList, SearchTimeline } from '../api/types';
 import { coverage, ProblemAnswer, ready, renderAt, sortChoices, stubServer } from '../test/renderRoute';
 import { niceStep } from './Readings';
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.localStorage.clear();
 });
 
 function item(fields: Partial<SearchItem>): SearchItem {
@@ -94,29 +95,57 @@ function concordance(fields: Partial<SearchConcordance> = {}): SearchConcordance
   };
 }
 
+/** A ranking the server gives (S29f): three neighbours, the last rarer corpus-wide than the reference prices. */
+function collocates(fields: Partial<SearchCollocates> = {}): SearchCollocates {
+  return {
+    window: 10,
+    windowChoices: [5, 10, 20, 50].map((size) => ({ value: String(size), title: `±${size} words` })),
+    orderChoices: [
+      { value: 'evidence', title: 'Evidence' },
+      { value: 'effect', title: 'Concentration' },
+    ],
+    state: 'ranked',
+    caveat:
+      'Words occurring fewer than 114 times corpus-wide are unpriced and score as if new. Measured over every result this search loaded, which is every matching document. 12 matches, in 3 documents that had indexed text.',
+    items: [
+      { term: 'treaty', nearby: 9, corpusWide: 41_234, logLikelihood: 1234.56, logRatio: 4.2, fold: 18.38, unpriced: false },
+      { term: 'ratify', nearby: 4, corpusWide: 2_310, logLikelihood: 87.04, logRatio: 6.1, fold: 68.6, unpriced: false },
+      { term: 'zorin', nearby: 3, corpusWide: 0, logLikelihood: 40.31, logRatio: 9.3, fold: 630.4, unpriced: true },
+    ],
+    orders: { evidence: [0, 1, 2], effect: [1, 0, 2] },
+    documentsScanned: 3,
+    documentsInScope: 3,
+    documentsOffered: 3,
+    anchorCount: 12,
+    omittedAnchorCount: 0,
+    windowTokenCount: 120,
+    minimumCount: 3,
+    referenceCutoffCount: 114,
+    wordForm: 'dictionary',
+    wasBounded: false,
+    retainedLimit: 7500,
+    retainedCount: 3,
+    coverage,
+    ...fields,
+  };
+}
+
 const volumes = { total: 0, limit: 1000, offset: 0, items: [], coverage };
 
 describe('the readings', () => {
-  it('offer the list, the timeline and the concordance, in the Mac’s words, and show the one chosen in the results’ place, with Collocates refused', async () => {
+  it('offer the list, the timeline, the concordance and Collocates, in the Mac’s words, and show the one chosen in the results’ place', async () => {
     const fetch = stubServer({
       '/readyz': ready,
       '/api/v1/volumes': volumes,
       '/api/v1/search': threeResults,
       '/api/v1/search/timeline': timeline(),
       '/api/v1/search/concordance': concordance(),
+      '/api/v1/search/collocates': collocates(),
     });
     const user = userEvent.setup();
     const { router } = renderAt('/search?keywords=negotiating');
     const picker = await screen.findByRole('group', { name: 'Reading' });
     expect(within(picker).getAllByRole('button').map((button) => button.textContent)).toEqual(['List', 'Timeline', 'Concordance', 'Collocates']);
-    // The Mac's fourth, offered and refused until the server's language analysis (S24i), its reason read with it.
-    const collocates = within(picker).getByRole('button', { name: 'Collocates' });
-    expect(collocates.getAttribute('aria-disabled')).toBe('true');
-    expect(collocates.getAttribute('aria-describedby') && document.getElementById(collocates.getAttribute('aria-describedby')!)?.textContent).toBe(
-      'Collocates, the words near your matches, are counted in their dictionary forms, which this server’s language analysis cannot do yet.',
-    );
-    await user.click(collocates);
-    expect(router.state.location.search).not.toHaveProperty('reading');
     expect(within(picker).getByRole('button', { name: 'List' }).getAttribute('aria-pressed')).toBe('true');
     expect(picker.getAttribute('title')).toBe('How to read these results. The concordance covers this page; the others cover the whole retained set.');
     expect(screen.getByRole('navigation', { name: 'Pages' })).toBeTruthy();
@@ -139,6 +168,13 @@ describe('the readings', () => {
     expect(concordanceURL?.searchParams.get('limit')).toBe('20');
     expect(concordanceURL?.searchParams.get('offset')).toBe('0');
 
+    // From S29f, the Mac's fourth: the words near the matches across every result kept, so no page to turn.
+    await user.click(within(picker).getByRole('button', { name: 'Collocates' }));
+    expect(router.state.location.search).toMatchObject({ reading: 'collocates' });
+    expect(await screen.findByRole('list', { name: 'Words near your matches' })).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Pages' })).toBeNull();
+    expect(document.activeElement).toBe(within(picker).getByRole('button', { name: 'Collocates' }));
+
     await user.click(within(picker).getByRole('button', { name: 'List' }));
     expect(router.state.location.search).not.toHaveProperty('reading');
     expect(await screen.findByRole('list', { name: 'Results' })).toBeTruthy();
@@ -153,7 +189,7 @@ describe('the readings', () => {
     });
     renderAt('/search?keywords=formosa&reading=timeline');
     const picker = await screen.findByRole('group', { name: 'Reading' });
-    for (const name of ['List', 'Timeline', 'Concordance']) expect((within(picker).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    for (const name of ['List', 'Timeline', 'Concordance', 'Collocates']) expect((within(picker).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
     expect(await screen.findByRole('heading', { name: 'No Results' })).toBeTruthy();
     expect(screen.queryByRole('img')).toBeNull();
   });
@@ -382,6 +418,154 @@ describe('the concordance', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('The server has no index to search yet.');
     await user.click(screen.getByRole('button', { name: 'Search' }));
     expect(await screen.findByRole('list', { name: 'Occurrences' })).toBeTruthy();
+    expect(asked).toBe(2);
+  });
+});
+
+describe('Collocates', () => {
+  it('lists the words near the matches as the server ranks them, each with its multiple and two counts, and opens a word’s search', async () => {
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': volumes,
+      '/api/v1/search': threeResults,
+      '/api/v1/search/collocates': collocates(),
+    });
+    const user = userEvent.setup();
+    const { router } = renderAt('/search?keywords=negotiating&reading=collocates&offset=0');
+    const words = await screen.findByRole('list', { name: 'Words near your matches' });
+    const rows = within(words).getAllByRole('listitem');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      '1treaty18× more often here · 9 nearby · 41,234 corpus-wide1,234.6',
+      '2ratify69× more often here · 4 nearby · 2,310 corpus-wide87.0',
+      '3zorin630× more often here · 3 nearby · fewer than 114 corpus-wide (unpriced)40.3',
+    ]);
+    // The word is a link whose description is its row's numbers, read with it.
+    const treaty = within(words).getByRole('link', { name: 'treaty' });
+    expect(treaty.getAttribute('href')).toBe('/search?keywords=treaty');
+    expect(document.getElementById(treaty.getAttribute('aria-describedby')!)?.textContent).toBe('18× more often here · 9 nearby · 41,234 corpus-wide');
+    // What the scan saw, in the server's words, the Mac's.
+    expect(screen.getByText(/Measured over every result this search loaded, which is every matching document\. 12 matches, in 3 documents/)).toBeTruthy();
+    const within10 = within(screen.getByRole('group', { name: 'Within' })).getByRole('button', { name: '±10 words' });
+    expect(within10.getAttribute('aria-pressed')).toBe('true');
+    expect(within(screen.getByRole('group', { name: 'Rank by' })).getByRole('button', { name: 'Evidence' }).getAttribute('aria-pressed')).toBe('true');
+    // The search's fields and the window, never its page: the scan reads every result the search keeps.
+    const asked = fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).find((url) => url.pathname === '/api/v1/search/collocates');
+    expect(asked?.searchParams.get('keywords')).toBe('negotiating');
+    expect(asked?.searchParams.get('window')).toBe('10');
+    expect(asked?.searchParams.has('limit')).toBe(false);
+    expect(asked?.searchParams.has('offset')).toBe(false);
+
+    await user.click(treaty);
+    await waitFor(() => expect(router.state.location.search).toEqual({ keywords: 'treaty' }));
+  });
+
+  it('ranks by Concentration without asking again, asks again within another window, and keeps both in this browser', async () => {
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': volumes,
+      '/api/v1/search': threeResults,
+      '/api/v1/search/collocates': (url: URL) =>
+        url.searchParams.get('window') === '20' ? collocates({ window: 20, items: [collocates().items[0]!], orders: { evidence: [0], effect: [0] } }) : collocates(),
+    });
+    const user = userEvent.setup();
+    renderAt('/search?keywords=negotiating&reading=collocates');
+    const words = await screen.findByRole('list', { name: 'Words near your matches' });
+    const asked = () => fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname === '/api/v1/search/collocates').length;
+    expect(asked()).toBe(1);
+    await user.click(within(screen.getByRole('group', { name: 'Rank by' })).getByRole('button', { name: 'Concentration' }));
+    // Priced words first, by their multiple; the unpriced last, whose multiple is an upper bound.
+    expect(within(words).getAllByRole('link').map((link) => link.textContent)).toEqual(['ratify', 'treaty', 'zorin']);
+    expect(within(words).getAllByRole('listitem').map((row) => row.querySelector('.collocates-value')?.textContent)).toEqual(['69×', '18×', '630×']);
+    expect(asked()).toBe(1);
+    expect(window.localStorage.getItem('frus.search.collocation.order')).toBe('effect');
+
+    await user.click(within(screen.getByRole('group', { name: 'Within' })).getByRole('button', { name: '±20 words' }));
+    await waitFor(() => expect(within(screen.getByRole('list', { name: 'Words near your matches' })).getAllByRole('link').map((link) => link.textContent)).toEqual(['treaty']));
+    expect(asked()).toBe(2);
+    expect(window.localStorage.getItem('frus.search.collocation.window')).toBe('20');
+  });
+
+  it('opens on the window and order this browser kept', async () => {
+    window.localStorage.setItem('frus.search.collocation.window', '50');
+    window.localStorage.setItem('frus.search.collocation.order', 'effect');
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': volumes,
+      '/api/v1/search': threeResults,
+      '/api/v1/search/collocates': collocates({ window: 50 }),
+    });
+    renderAt('/search?keywords=negotiating&reading=collocates');
+    await screen.findByRole('list', { name: 'Words near your matches' });
+    expect(within(screen.getByRole('group', { name: 'Within' })).getByRole('button', { name: '±50 words' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(screen.getByRole('group', { name: 'Rank by' })).getByRole('button', { name: 'Concentration' }).getAttribute('aria-pressed')).toBe('true');
+    const asked = fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).find((url) => url.pathname === '/api/v1/search/collocates');
+    expect(asked?.searchParams.get('window')).toBe('50');
+  });
+
+  it('says why there are none, in the server’s words, with the row a count of printed forms opens with', async () => {
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': volumes,
+      '/api/v1/search': threeResults,
+      '/api/v1/search/collocates': collocates({
+        state: 'unavailable',
+        reason: 'noNeighboursAboveFloor',
+        message: { title: 'No Collocates', detail: 'No word appears at least 3 times near your matches.' },
+        printedFormsNote: 'Compared as printed: this server’s tagger does not reduce words to their dictionary forms.',
+        caveat: undefined,
+        items: [],
+        orders: {},
+      }),
+    });
+    renderAt('/search?keywords=negotiating&reading=collocates');
+    expect(await screen.findByRole('heading', { name: 'No Collocates' })).toBeTruthy();
+    expect(screen.getByText('No word appears at least 3 times near your matches.')).toBeTruthy();
+    expect(screen.getByText(/^Compared as printed:/)).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Words near your matches' })).toBeNull();
+    // The Mac's controls stay over its account of none.
+    expect(screen.getByRole('group', { name: 'Within' })).toBeTruthy();
+  });
+
+  it('keeps its controls over a window that failed, asks in the order the results are in, and goes back', async () => {
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': volumes,
+      '/api/v1/search': threeResults,
+      '/api/v1/search/collocates': (url: URL) =>
+        url.searchParams.get('window') === '50' ? new ProblemAnswer(500, 'INTERNAL_ERROR', 'The scan failed.') : collocates(),
+    });
+    const user = userEvent.setup();
+    renderAt('/search?keywords=negotiating&reading=collocates&sort=dateAscending');
+    await screen.findByRole('list', { name: 'Words near your matches' });
+    const asked = () => fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost')).filter((url) => url.pathname === '/api/v1/search/collocates');
+    // A scan the budget stops reads the first results, so the order is asked for.
+    expect(asked()[0]?.searchParams.get('sort')).toBe('dateAscending');
+    const within = screen.getByRole('group', { name: 'Within' });
+    await user.click(within.querySelector('button:nth-of-type(4)')!);
+    // Asked once more, a second later, before the panel says so.
+    expect((await screen.findByRole('alert', {}, { timeout: 4_000 })).textContent).toContain('The scan failed.');
+    // The controls stay, so the reader can go back to a window that answered, which asks nothing again.
+    const before = asked().length;
+    expect(before).toBe(3);
+    await user.click(within.querySelector('button:nth-of-type(2)')!);
+    expect(await screen.findByRole('list', { name: 'Words near your matches' })).toBeTruthy();
+    expect(asked().length).toBe(before);
+  });
+
+  it('is asked again when the same search is made again, after it failed', async () => {
+    let asked = 0;
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': volumes,
+      '/api/v1/search': threeResults,
+      '/api/v1/search/inspect': { inspection: undefined },
+      '/api/v1/search/collocates': () => (++asked === 1 ? new ProblemAnswer(503, 'INDEX_NOT_READY', 'A new index is being installed.') : collocates()),
+    });
+    const user = userEvent.setup();
+    renderAt('/search?keywords=negotiating&reading=collocates');
+    expect((await screen.findByRole('alert')).textContent).toContain('The server has no index to search yet.');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByRole('list', { name: 'Words near your matches' })).toBeTruthy();
     expect(asked).toBe(2);
   });
 });

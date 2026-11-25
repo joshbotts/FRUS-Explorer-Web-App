@@ -21,9 +21,10 @@
 // family's files under any settings, filtered as above, and the settings such a list cannot show, those that would let
 // in a word the generator never counted, are named by the kit's own comparability rule
 // (`KeynessBaselineFile.Configuration.mismatches`), since the clouds were counted under the generator's configuration
-// (`CloudVectorsRunner`: the standard tuning, the diplomatic layer on). The Distinctive measure and collocates wait for
-// S29f. The lenses are the app's nine, its bar's order, and those the server's tagger cannot serve, the entity lenses,
-// which name people, places and organizations, are said to be unavailable in the terms of the kit's health.
+// (`CloudVectorsRunner`: the standard tuning, the diplomatic layer on). Since S29f the Distinctive measure ranks a live
+// count against the family's reference (WordCloudDistinctive.swift), and Search's Collocates rank against it too
+// (Collocates.swift). The lenses are the app's nine, its bar's order, and those the server's tagger cannot serve, the
+// entity lenses, which name people, places and organizations, are said to be unavailable in the terms of the kit's health.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -97,6 +98,22 @@ final class FamilyFile<Value: Sendable>: @unchecked Sendable {
     }
 }
 
+/// A value made the first time it is asked for, and kept: two first requests at once wait for one making (PLAN's S29f).
+final class MadeOnce<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var held: Value?
+
+    /// The value, made by `make` the first time.
+    func value(_ make: () -> Value) -> Value {
+        lock.lock()
+        defer { lock.unlock() }
+        if let held { return held }
+        let made = make()
+        held = made
+        return made
+    }
+}
+
 /// The language family's clouds and references (PLAN's S29d), from the family's folder, and the app's word lists that
 /// filter them, from its data files, each decoded on first use by the kit's loader and kept while the server runs. The
 /// four files are held to the server's tagger's identity, and a reference to the form its name says: one of another
@@ -120,6 +137,7 @@ final class FamilyClouds: Sendable {
                                       decode: { try KeynessBaselineFile(contentsOf: $0) }, check: { FamilyClouds.reference($0, .printed) })
     private let stopwordFile = DecodedFile("word-cloud-stopwords.json") { try WordCloudStopwordSet(contentsOf: $0) }
     private let lexiconFile = DecodedFile("word-cloud-lexicons.json") { try WordCloudLexiconSet(contentsOf: $0) }
+    private let keynessReferences = MadeOnce<KeynessReferences>()
 
     /// A cloud file counted by another tokenizer than the family's, refused.
     static func counted(_ file: CloudVectorsFile) -> FamilyRefusal? {
@@ -132,9 +150,27 @@ final class FamilyClouds: Sendable {
         return file.configuration.wordForm == form ? nil : .otherWordForm(file.configuration.wordForm)
     }
 
-    /// The reference counted in `form`, or why it is refused.
+    /// The reference counted in `form`, or why it is refused: the family's own check of the file, by its identity and its
+    /// form, which `LanguageFamilyParityTests` holds. The rankings read the references through the kit's lookup
+    /// (``references(language:lists:)``), whose rule refuses another tokenizer's reference where a scope is ranked.
     func reference(_ form: WordCloudWordForm, in directory: URL) -> Result<KeynessBaselineFile, FamilyRefusal> {
         (form == .dictionary ? dictionaryReference : printedReference).value(in: directory)
+    }
+
+    /// The two references as the kit reads them, which Distinctive and Collocates rank against (PLAN's S29f):
+    /// `KeynessReferences(dictionaryAt:printedAt:lexiconsAt:stopwordsAt:)` over the family's folder, each file held to
+    /// its own stamp's form, with the digests of the app's word lists in `lists`, which the scope's tokenizer reads. A
+    /// reference another tokenizer counted is kept, where ``reference(_:in:)`` refuses it, so that the kit's rule
+    /// refuses a scope against it (`Mismatch.tokenizer`) in the app's words; one missing or unreadable is left out, and
+    /// its lookups are the kit's `noArtifact`. Decoded once, on first use, as the family's other files are.
+    func references(language directory: URL, lists: URL) -> KeynessReferences {
+        keynessReferences.value {
+            KeynessReferences(
+                dictionaryAt: directory.appendingPathComponent(KeynessBaselineFile.resourceName(for: .dictionary) + ".json"),
+                printedAt: directory.appendingPathComponent(KeynessBaselineFile.resourceName(for: .printed) + ".json"),
+                lexiconsAt: lists.appendingPathComponent("word-cloud-lexicons.json"),
+                stopwordsAt: lists.appendingPathComponent("word-cloud-stopwords.json"))
+        }
     }
 
     /// `WordCloudStopwords.shared`: the bundled stop lists, empty where the file is missing or malformed.
@@ -373,6 +409,8 @@ public struct CloudAnswer: Codable, Equatable, Sendable, ResponseEncodable {
     public var account: String?
     /// The job counting the scope, while it is `counting`.
     public var job: CloudJob?
+    /// Under Distinctive, for a scope with words to draw, the kit's ranking of them or why there is none (PLAN's S29f).
+    public var distinctive: CloudDistinctive?
 
     public struct Scope: Codable, Equatable, Sendable {
         /// The app's signature (`WordCloudScope.signature`): `corpus`, `sub:<subseries>`, `vol:<volume>`,
@@ -745,16 +783,20 @@ enum WordCloudRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             return try await Blocking.run { context(resources: resources) }
         }
-        // A scope's cloud: 200 with its words, or 202 while a job counts it, which `job` names (PLAN's S29e).
+        // A scope's cloud: 200 with its words, or 202 while a job counts it, which `job` names (PLAN's S29e); under
+        // Distinctive, with the kit's ranking of them (PLAN's S29f).
         router.get("/api/v1/cloud") { request, context -> EditedResponse<CloudAnswer> in
             let query = try FormQuery(request.uri.query)
-            try query.refuseUnknown(["scope", "lens"])
+            try query.refuseUnknown(["scope", "lens", "measure", "hidden"])
             let scope = try scope(query.single("scope"))
             let lens = try lens(query.single("lens"))
+            let measure = try query.choice("measure", among: KeynessCloudMeasure.allCases) ?? .frequency
+            let hidden = try hiddenWords(query, measure: measure)
             let reader = try await reader(for: request, context: context, users: users)
             // A count within the request stops when its client goes, as the app's stops when another replaces it.
             let answer = try await context.whileClientConnected {
-                try await cloud(scope, lens: lens, reader: reader, provider: provider, resources: resources, services: users.services)
+                try await cloud(scope, lens: lens, reader: reader, provider: provider, resources: resources, services: users.services,
+                                measure: measure, hidden: hidden)
             }
             return EditedResponse(status: answer.state == "counting" ? .accepted : .ok, headers: [.cacheControl: "no-store"], response: answer)
         }
@@ -826,6 +868,24 @@ enum WordCloudRoutes {
             throw APIProblem.invalidParameter("lens", "must be one of \(CloudRules.lenses.map(\.rawValue).joined(separator: ", ")), the lenses the page offers, not \(raw)")
         }
         return lens
+    }
+
+    /// The most words a request may name hidden from its cloud alone: a count keeps no more terms than this.
+    static let hiddenLimit = WordCloudLive.termLimit
+
+    /// The words an address names hidden from its cloud alone (#233), which Distinctive ranks without, as the app's view
+    /// ranks the terms its cloud shows (PLAN's S29f): each lower-cased, as the app keeps them. Frequency's are left out by
+    /// the page, which draws the count's terms, so the field is Distinctive's alone.
+    static func hiddenWords(_ query: FormQuery, measure: KeynessCloudMeasure) throws -> Set<String> {
+        let words = try query.list("hidden") ?? []
+        guard !words.isEmpty else { return [] }
+        guard measure == .keyness else {
+            throw APIProblem.invalidParameter("hidden", "only Distinctive ranks without the words hidden from a cloud; the page leaves them out of a cloud sized by frequency")
+        }
+        guard words.count <= hiddenLimit else {
+            throw APIProblem.invalidParameter("hidden", "names at most \(hiddenLimit) words, the terms a count keeps, not \(words.count)")
+        }
+        return Set(words.map { $0.lowercased() })
     }
 
     /// Whom a cloud is asked for: their settings, and their id where the request acts for one.
@@ -942,9 +1002,12 @@ enum WordCloudRoutes {
     /// in it, the family's list is filtered by the settings; a scope the family holds no list of its own of, such as a
     /// volume side-loaded under an id the generator never counted, is counted wherever the index holds it. Every other
     /// scope is counted, with an index served. A count kept answers at once; one that outlasts a request is `counting`,
-    /// with its job.
+    /// with its job. Under Distinctive (PLAN's S29f) the three are counted at any settings, as the app's view counts
+    /// every scope it ranks, since a family's list is too short a pool, and a count with words to draw carries the kit's
+    /// ranking of them, less `hidden`; a family's list stood in for a count says why there is none.
     static func cloud(_ scope: WordCloudScope, lens: WordCloudLens, reader: Reader, provider: ServedIndexProvider,
-                      resources: ServerResources, services: UserDataServices?) async throws -> CloudAnswer {
+                      resources: ServerResources, services: UserDataServices?, measure: KeynessCloudMeasure = .frequency,
+                      hidden: Set<String> = []) async throws -> CloudAnswer {
         let resolution = try await resolve(scope, reader: reader, services: services, resources: resources)
         // A record with no name is the scope bar's Untitled, so the cloud's heading is never empty.
         let heading = resolution.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -973,12 +1036,15 @@ enum WordCloudRoutes {
                 let found = CloudRules.terms(forScope: familyScope, lens: lens, core: core, volumes: volumes)
                 return (core.map { reader.settings.areTheFamilys($0, lens: lens) } ?? false, found != nil && found?.fallbackSubseries == nil)
             }
-            // At the family's settings the scope's own list, which needs no index. Under others, or where the family holds
-            // no list of the scope's own, a count of the documents the index holds of it; with no index served, one being
-            // installed, or none of its documents in it, the family's list filtered by the settings.
-            let held = atTheFamilys && ownList ? nil : (try? await provider.servedIfReady()) ?? nil
+            // At the family's settings the scope's own list, which needs no index, but for Distinctive, which ranks a count.
+            // Under others, or where the family holds no list of the scope's own, a count of the documents the index holds
+            // of it; with no index served, one being installed, or none of its documents in it, the family's list filtered
+            // by the settings, which Distinctive cannot rank.
+            let held = atTheFamilys && ownList && measure == .frequency ? nil : (try? await provider.servedIfReady()) ?? nil
             guard let held, holdsText(resolution, served: held) else {
-                return try await Blocking.run { Self.answer(familyScope, lens: lens, settings: reader.settings, resources: resources) }
+                var family = try await Blocking.run { Self.answer(familyScope, lens: lens, settings: reader.settings, resources: resources) }
+                if measure == .keyness, family.state == "terms" { family.distinctive = held == nil ? CloudRules.withoutIndex : CloudRules.withoutCount }
+                return family
             }
             served = held
         } else {
@@ -987,6 +1053,20 @@ enum WordCloudRoutes {
         answer.analyzeWithin = CloudRules.analyzeWithin(resolution, indexed: served.indexedVolumeIds, resources: resources)
         let lexicons = try await Blocking.run { resources.familyClouds.lexicons(in: resources.directory) }
         let hasReader = reader.user != nil
+        // Under Distinctive, the family's references as the kit reads them, decoded once (PLAN's S29f).
+        let references = measure == .keyness
+            ? try await Blocking.run { resources.familyClouds.references(language: resources.languageDirectory, lists: resources.directory) }
+            : nil
+        /// A count's answer, ranked under Distinctive when it has words to draw, as the app's main area ranks only those.
+        func counted(_ result: WordCloudResult, settings: CloudSettings) -> CloudAnswer {
+            var counted = answer
+            CloudRules.live(result, into: &counted, lens: lens, settings: settings, hasReader: hasReader, lexicons: lexicons)
+            if let references, counted.state == "terms" {
+                counted.distinctive = CloudRules.distinctive(result, lens: lens, settings: settings, hidden: hidden,
+                                                             references: references, lexicons: lexicons)
+            }
+            return counted
+        }
         let heavy = WordCloudLive.isHeavy(scope)
         // The documents, read here for a count within the request and for a scope of a reader's own, which its count is
         // kept by; a heavy scope's job reads its own.
@@ -994,32 +1074,29 @@ enum WordCloudRoutes {
         let key = WordCloudLive.key(resolution, lens: lens, settings: reader.settings, keys: keys)
         let keeper = served.wordClouds
         if let kept = await keeper.result(for: key) {
-            CloudRules.live(kept, into: &answer, lens: lens, settings: reader.settings, hasReader: hasReader, lexicons: lexicons)
-            return answer
+            return counted(kept, settings: reader.settings)
         }
         if let services, heavy || (keys?.count ?? 0) > WordCloudLive.requestLimit {
             let job = try await WordCloudLive.job(resolution, key: key, lens: lens, settings: reader.settings, keeper: keeper,
                                                   provider: provider, resources: resources, services: services, requestedBy: reader.user)
             // A job that ended between the two reads has kept its count.
             if let kept = await keeper.result(for: key) {
-                CloudRules.live(kept, into: &answer, lens: lens, settings: reader.settings, hasReader: hasReader, lexicons: lexicons)
-                return answer
+                return counted(kept, settings: reader.settings)
             }
             answer.state = "counting"
             answer.message = CloudRules.countingMessage(scope)
             answer.job = CloudJob(job)
             return answer
         }
-        let counted: [WordCloudDocumentKey]
-        if let keys { counted = keys } else { counted = try await WordCloudLive.keys(resolution, served: served, services: services) }
+        let documents: [WordCloudDocumentKey]
+        if let keys { documents = keys } else { documents = try await WordCloudLive.keys(resolution, served: served, services: services) }
         let settings = reader.settings
         // Within the request, in its turn: a burst of requests takes the gate's turns, never every processor.
         let result = try await WordCloudLive.gate.run {
-            try await WordCloudLive.count(counted, lens: lens, settings: settings, served: served, resources: resources)
+            try await WordCloudLive.count(documents, lens: lens, settings: settings, served: served, resources: resources)
         }
         await keeper.keep(result, for: key)
-        CloudRules.live(result, into: &answer, lens: lens, settings: settings, hasReader: hasReader, lexicons: lexicons)
-        return answer
+        return counted(result, settings: settings)
     }
 
     /// Whether the served index holds any of a family scope's documents: any volume, for the corpus, or any of the

@@ -4,11 +4,13 @@
 // (S29d) at the family's settings, and every other scope, or any of them under other settings, is counted live from the
 // served index. The Word Cloud opens from the header's Analytics menu, after Chronology, on the corpus: the lens is
 // changed by the lens bar's arrow keys, an entity lens saying why the server draws none, the list read back after each,
-// the scope changed to a volume, and Distinctive refused with its reason; a word hidden in this lens by its menu leaves a
+// the scope changed to a volume, and since S29f Distinctive counting the volume's two rows here, which hold no word
+// three times, so that the kit ranks none, in the app's words; a word hidden in this lens by its menu leaves a
 // volume's cloud the index holds none of and is shown again from Settings ▸ Word Cloud; the reader's rail opens its
 // document's own cloud, counted live, whose lens and diplomatic layer are changed by keyboard, and the corpus is then
-// counted as a job the page follows; Chronology opens its range's cloud; and Search offers Collocates refused, axe at each
-// state. Each test sets back the reader's word cloud settings and this browser's measure.
+// counted as a job the page follows; Chronology opens its range's cloud; and Search's Collocates, chosen by keyboard,
+// find no word three times near the export's few matches and say so, in the app's words, axe at each state. Each test
+// sets back the reader's word cloud settings and this browser's measure. distinctive-collocates.spec.ts ranks both.
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -62,7 +64,7 @@ function lens(page: Page, label: string): Locator {
 
 const unavailable = 'This server’s tagger does not recognize names, so the “People” lens can’t be drawn. All terms, Topics (nouns), Actions (verbs), Descriptors (adjectives), Concepts, and Sentiment still work.';
 
-test('changes the lens by keyboard and reads the list, then the scope, and refuses Distinctive with its reason', async ({ page }) => {
+test('changes the lens by keyboard and reads the list, then the scope, and sizes words by Distinctive', async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto('search');
   await reset(page);
@@ -116,12 +118,17 @@ test('changes the lens by keyboard and reads the list, then the scope, and refus
     await expect.poll(async () => (await terms(page)).slice(0, 3)).toEqual(['agreement', 'peace', 'agree']);
     await axeCheck(page);
 
-    // Distinctive, by keyboard: refused with its reason, the cloud and its list set aside, Frequency bringing them back.
+    // Distinctive, by keyboard (S29f), under All terms, the lens bar's arrow wrapping round to it: the volume is counted
+    // from the two rows the export holds of it, where no word occurs three times, so the kit ranks none, in the app's
+    // words, the cloud and its list set aside; Frequency brings the family's list back.
+    await tabTo(page, lens(page, 'Sentiment'));
+    await arrowTo(page, 'ArrowRight', lens(page, 'All terms'));
+    await expect(page.getByRole('table', { name: 'Terms by count' })).toBeVisible();
     const frequency = page.getByRole('radio', { name: 'Frequency', exact: true });
     await tabTo(page, frequency);
     await arrowTo(page, 'ArrowRight', page.getByRole('radio', { name: 'Distinctive', exact: true }));
     await expect(page.getByRole('heading', { level: 2, name: 'No Distinctiveness Ranking' })).toBeVisible();
-    await expect(page.getByText(/which this server does not rank them against yet/)).toBeVisible();
+    await expect(page.getByText(/^No word occurs at least 3 times in this scope\. A word appearing once or twice can top a keyness ranking/)).toBeVisible();
     await expect(page.getByRole('table', { name: 'Terms by count' })).toHaveCount(0);
     await axeCheck(page);
     await arrowTo(page, 'ArrowLeft', frequency);
@@ -228,7 +235,7 @@ test('opens its document’s own cloud from the reader’s rail, and changes the
   }
 });
 
-test('Chronology opens its range’s cloud, and Search offers Collocates refused', async ({ page }) => {
+test('Chronology opens its range’s cloud, and Search’s Collocates say why they rank nothing here', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('chronology?from=1960-11-01&to=1960-11-30');
   await reset(page);
@@ -242,16 +249,18 @@ test('Chronology opens its range’s cloud, and Search offers Collocates refused
     await expect(page.getByRole('link', { name: 'View in Chronology' })).toBeVisible();
     await axeCheck(page);
 
-    // Search's Reading picker: Collocates, the Mac's fourth, in reach of the keyboard with its reason, choosing nothing.
+    // Search's Reading picker: Collocates, the Mac's fourth, chosen by keyboard (S29f). Near the export's three matches
+    // no word occurs three times ("treaty" twice), so the kit ranks none, and the panel says why in the app's words.
     await page.goto('search?keywords=negotiating+OR+canal');
     await expect(page.getByRole('list', { name: 'Results' }).getByRole('link')).toHaveCount(3);
     const collocates = page.getByRole('group', { name: 'Reading' }).getByRole('button', { name: 'Collocates' });
     // Past the header, Search by (S27d), the box, the filters and the readings before it: more than sixty stops.
     await tabTo(page, collocates, 80);
-    await expect(collocates).toHaveAttribute('aria-disabled', 'true');
-    await expect(collocates).toHaveAccessibleDescription(/this server’s language analysis cannot do yet/);
     await page.keyboard.press('Enter');
-    await expect(page).not.toHaveURL(/reading=/);
+    await expect(page).toHaveURL(/reading=collocates/);
+    await expect(page.getByRole('heading', { name: 'No Collocates' })).toBeVisible();
+    await expect(page.getByText(/^No word appears at least 3 times near your matches\./)).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Within' })).toBeVisible();
     await axeCheck(page);
   } finally {
     await reset(page);

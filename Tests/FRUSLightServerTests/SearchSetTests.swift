@@ -267,7 +267,7 @@ import Testing
 
             for path in ["/api/v1/search?", "/api/v1/search/inspect?", "/api/v1/search/facets?section=volumes&",
                          "/api/v1/search/facets/selection?section=volumes&", "/api/v1/search/timeline?",
-                         "/api/v1/search/concordance?", "/api/v1/me/search/tags?"] {
+                         "/api/v1/search/concordance?", "/api/v1/search/collocates?", "/api/v1/me/search/tags?"] {
                 let refused = try await owner.get("\(path)\(either)&workingCorpusId=\(Self.stranger)")
                 #expect(refused.status == .notFound && problemCode(refused) == "CORPUS_NOT_FOUND", "\(path)")
             }
