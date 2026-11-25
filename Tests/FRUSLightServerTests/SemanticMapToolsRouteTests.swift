@@ -135,7 +135,7 @@ import Testing
         let fixture = try await ServerFixture()
         let vectors = SemanticVectors(resources: fixture.resources.directory, shards: fixture.state.configuration.semanticShards)
         let provider = ServedIndexProvider(state: fixture.state, resources: fixture.resources,
-                                           volumesDirectory: fixture.reader.volumesDirectory, userStore: nil)
+                                           volumesDirectory: await fixture.reader.volumesDirectory, userStore: nil)
         let reading = SemanticMapReading(files: SemanticMapFiles(vectors: vectors), provider: provider, resources: fixture.resources)
         let tools = SemanticMapTools(reading: reading, vectors: vectors, provider: provider, resources: fixture.resources)
         async let first = tools.slice(from: "frus1961-63v06", to: "frus1969-76ve09p1")

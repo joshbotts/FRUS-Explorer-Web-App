@@ -263,7 +263,8 @@ export function SemanticAnalyticsScreen() {
     setNotice(addressRefusal.notice);
   }
   const poleSerial = useRef(0);
-  const cameraRef = useRef<MapCamera | null>(null);
+  // The view on screen, as the map last drew it, which the figure is drawn through.
+  const viewRef = useRef<{ camera: MapCamera; pixelHeight: number } | null>(null);
   const [exportFailure, setExportFailure] = useState<string | undefined>(undefined);
   const lassoSerial = useRef(0);
   const [focus, setFocus] = useState<MapFocus | undefined>(undefined);
@@ -467,14 +468,17 @@ export function SemanticAnalyticsScreen() {
   /** The figure of the view on screen, its points drawn again at the plate's size under the kit's caption band. */
   async function exportFigure() {
     setExportFailure(undefined);
-    const camera = cameraRef.current;
-    if (!camera || !drawnPoints || !drawn) return;
+    const view = viewRef.current;
+    if (!view || !drawnPoints || !drawn) return;
+    const camera = view.camera;
     try {
       const [{ renderMapFigure }, figure] = await Promise.all([
         import('./semanticMapFigure'),
         semanticMapFigure(scope, drawn.id, { x: camera.centre[0], y: camera.centre[1], halfExtent: camera.halfExtent }, sliced?.poles),
       ]);
-      const blob = await renderMapFigure({ points: drawnPoints, slots: drawn.slots, palette: drawn.palette, flags: ghost.flags, camera, figure });
+      const blob = await renderMapFigure({
+        points: drawnPoints, slots: drawn.slots, palette: drawn.palette, flags: ghost.flags, camera, screenPixelHeight: view.pixelHeight, figure,
+      });
       saveFile(blob, `${figure.plate.fileName}.png`);
     } catch (error) {
       setExportFailure(error instanceof ApiError ? errorMessage(error) : words.export.renderError);
@@ -640,7 +644,7 @@ export function SemanticAnalyticsScreen() {
                   slice={sliceScale}
                   lassoing={lassoing}
                   onLasso={(path) => void lassoed(path)}
-                  cameraRef={cameraRef}
+                  viewRef={viewRef}
                   lens={drawn.id}
                   slots={drawn.slots}
                   palette={drawn.palette}

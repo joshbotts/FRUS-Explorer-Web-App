@@ -102,7 +102,7 @@ export function SemanticMap({
   slice,
   lassoing = false,
   onLasso,
-  cameraRef,
+  viewRef,
 }: {
   /** The server's answer: six bytes a point. */
   points: ArrayBuffer;
@@ -144,8 +144,8 @@ export function SemanticMap({
   lassoing?: boolean;
   /** A lasso drawn: its path in the grid's own coordinates, three points or more. */
   onLasso?: (path: [number, number][]) => void;
-  /** Where the page reads the camera on screen, for the figure it exports. */
-  cameraRef?: RefObject<MapCamera | null>;
+  /** Where the page reads the view on screen, its camera and its drawing buffer's height, for the figure it exports. */
+  viewRef?: RefObject<{ camera: MapCamera; pixelHeight: number } | null>;
 }) {
   const helpId = useId();
   const prefix = useId();
@@ -194,6 +194,7 @@ export function SemanticMap({
     if (!drawn || !view || !sized.current) return;
     drawn.draw(latest.current);
     view.dataset.view = viewKey(latest.current, gridExtent);
+    if (viewRef) viewRef.current = { camera: latest.current, pixelHeight: canvas.current?.height ?? 0 };
   });
   // One frame for however many changes come before the next animation frame.
   const requestDraw = useEffectEvent(() => {
@@ -291,11 +292,10 @@ export function SemanticMap({
   // Each change of the view is drawn, and said once it settles; its names are asked for once it rests.
   useEffect(() => {
     latest.current = camera;
-    if (cameraRef) cameraRef.current = camera;
     requestDraw();
     const timer = window.setTimeout(() => setStatus(zoomWords(camera, gridExtent, words.zoom)), statusDelay);
     return () => window.clearTimeout(timer);
-  }, [camera, gridExtent, cameraRef]);
+  }, [camera, gridExtent]);
   useEffect(() => {
     if (!names || viewSize.width <= 0 || viewSize.height <= 0) return;
     const timer = window.setTimeout(

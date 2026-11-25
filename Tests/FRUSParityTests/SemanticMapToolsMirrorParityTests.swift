@@ -24,6 +24,7 @@ import Testing
     static let screen = "web:analytics/SemanticAnalyticsScreen.tsx"
     static let figure = "web:analytics/semanticMapFigure.ts"
     static let tools = "Sources/FRUSLightAPI/SemanticMapTools.swift"
+    static let renderer = "Semantic/Map/SemanticMapRenderer.swift"
 
     @Test func theLassoIsTheApps() throws {
         try ArchivalAndSeriesMirrorParityTests.expect([
@@ -42,7 +43,7 @@ import Testing
             (Self.view, #"path.addLines(model.lassoPath) path.closeSubpath()"#, Self.map, #"<polygon points={lassoPath.map(([x, y]) => `${x},${y}`).join(' ')} />"#),
             // A path of fewer than three points closes no lasso.
             (Self.view, #"guard let map = BundledSemanticMap.vectors, let index, lassoPath.count >= 3 else {"#,
-             Self.map, #"if (event.type !== 'pointerup' || press.current?.moved !== true || stroke.length < 3) return;"#),
+             Self.map, #"if (event.type !== 'pointerup' || press.current?.moved !== true || stroke.points.length < 3) return;"#),
             (Self.view, #"guard let map = BundledSemanticMap.vectors, let index, lassoPath.count >= 3 else {"#,
              Self.tools, #"guard polygon.count >= 3 else { return (nil, mask.scope) }"#),
             // The scan of the positions drawn, under the scope, at the capture's cap, and the kit's capture of it.
@@ -67,7 +68,7 @@ import Testing
              """#),
             // The view's point turned into the grid's (`unproject`), as the browser's lasso is sent in it.
             (Self.view, #"inside: lassoPath, positions: positions, camera: camera, size: size,"#,
-             Self.map, #"onLasso?.(stroke.map(([x, y]) => gridPoint(latest.current, view, x, y)));"#),
+             Self.map, #"onLasso?.(stroke.points.map(([x, y]) => gridPoint(latest.current, view, x, y)));"#),
             // A scope drops the lasso, as it drops the selection; the toggle drops it too.
             (Self.view, #"selection = nil lassoResult = nil renderer?.setScopeFlags(scope?.flags ?? [])"#,
              Self.screen, #"setCards((current) => ({ region: current.region })); setLasso(undefined);"#),
@@ -185,7 +186,7 @@ import Testing
              Self.cards, #"{onShow && <Nearest key={`${point.volumeId}/${point.documentId}`} point={point} onShow={onShow} />} {point.served ? ("#),
             // The axis's card: the slice's two ends with the way back, or the one pole set, and the notice.
             (Self.view, #"Text(verbatim: "\(slice.negativeLabel) → \(slice.positiveLabel)")"#, Self.cards, #"<p className="semantic-card-ids">{words.axis.poles(slice.from, slice.to)}</p>"#),
-            (Self.view, #"} else if let pole = model.poles.negative ?? model.poles.positive {"#, Self.screen, #"pole={sliced || laying ? undefined : (poles.negative ?? poles.positive)}"#),
+            (Self.view, #"} else if let pole = model.poles.negative ?? model.poles.positive {"#, Self.screen, #"pole={sliced || laying || (named && !addressRefusal) ? undefined : (poles.negative ?? poles.positive)}"#),
             // The slice's scale: each tick's year at its row on the left edge while in view, the poles at the ends, the gutter.
             (Self.view, #"SemanticMapLabelLayout.project( SIMD2<Float>(-extent, y), camera: model.camera, size: proxy.size)"#,
              Self.map, #"const y = viewPoint(camera, size, [-gridExtent, tick.y])[1];"#),
@@ -266,6 +267,9 @@ import Testing
              Self.figure, #"canvas.width = figure.width * figureScale; canvas.height = figure.height * figureScale;"#),
             (Self.view, #"Text(label.text) .font(.caption2.weight(.medium)) .foregroundStyle(.white)"#,
              Self.figure, #"mark: { type: 'text', fontSize: 11, fontWeight: 500, color: '#ffffff' },"#),
+            // Each point the share of the plate's height that it is of the screen's.
+            (Self.renderer, #"pointSize: pointSize * Float(height) / Float(max(1, drawablePixelSize.height)),"#,
+             Self.figure, #"return (pointSize * height) / Math.max(1, screenHeight);"#),
         ])
     }
 

@@ -1,13 +1,15 @@
 // The semantic map's figure (PLAN's S28e), as the app's `exportMapFigure` makes it and the analytics' figures are drawn
 // here (`figureSpec`, `renderFigure`): the points drawn again, by the map's own renderer, into a plate of the app's
 // rectangle at its twice-size raster (`AnalyticsFigureExporter.scale`), through the camera on screen, with the lens's
-// colours and the scope's ghost; the regions' names over it, laid out by the kit for the plate on the server, none on a
-// slice; and the kit's caption band around it, its title and facts above and its caveats, the attribution and the
-// pointer to the CSV below. The plate is the app's dark map inset in the light figure, as the app's is.
+// colours and the scope's ghost, each point the share of the plate's height it is of the screen's, as the app's
+// offscreen pass sizes it (`renderOffscreen`); the regions' names over it, laid out by the kit for the plate on the
+// server, none on a slice; and the kit's caption band around it, its title and facts above and its caveats, the
+// attribution and the pointer to the CSV below. The plate is the app's dark map inset in the light figure, as the app's
+// is. The app draws its plate at twice the raster and halves it, for its edges; the web draws it at the raster.
 import type { SemanticMapFigure } from '../api/semanticMap';
 import { type ChartSpec, figureSpec } from './analyticsRules';
 import { SemanticMapRenderer } from './semanticMapRenderer';
-import type { MapCamera, Rgba } from './semanticMapRules';
+import { type MapCamera, pointSize, type Rgba } from './semanticMapRules';
 
 /** The figure's raster scale: a plate of 1,144 points is drawn 2,288 pixels wide (`AnalyticsFigureExporter.scale`). */
 export const figureScale = 2;
@@ -46,7 +48,7 @@ export function mapFigureChart(image: string, figure: SemanticMapFigure): ChartS
 
 /** The points drawn into the plate's raster, as a PNG's address, or a throw where the browser cannot draw them. */
 export function drawPlate(
-  draw: { points: ArrayBuffer; slots: Uint8Array; palette: readonly Rgba[]; flags?: Uint8Array; camera: MapCamera },
+  draw: { points: ArrayBuffer; slots: Uint8Array; palette: readonly Rgba[]; flags?: Uint8Array; camera: MapCamera; screenPixelHeight: number },
   figure: SemanticMapFigure,
 ): string {
   const canvas = document.createElement('canvas');
@@ -57,7 +59,8 @@ export function drawPlate(
     renderer.setPoints(draw.points);
     renderer.setLens(draw.slots, draw.palette);
     renderer.setScope(draw.flags);
-    renderer.draw(draw.camera);
+    // Each point the share of the plate's height that it is of the screen's (`renderOffscreen`'s Trap 1).
+    renderer.draw(draw.camera, plateSize(canvas.height, draw.screenPixelHeight));
     // Read in the task that drew it, before the browser may clear a buffer it does not keep.
     return canvas.toDataURL('image/png');
   } finally {
@@ -66,9 +69,22 @@ export function drawPlate(
   }
 }
 
+/** A point's size in a plate `height` pixels high, from the screen's drawing buffer `screenHeight` pixels high. */
+export function plateSize(height: number, screenHeight: number): number {
+  return (pointSize * height) / Math.max(1, screenHeight);
+}
+
 /** The whole figure as a PNG: the plate, its names and the kit's caption band. */
 export async function renderMapFigure(
-  draw: { points: ArrayBuffer; slots: Uint8Array; palette: readonly Rgba[]; flags?: Uint8Array; camera: MapCamera; figure: SemanticMapFigure },
+  draw: {
+    points: ArrayBuffer;
+    slots: Uint8Array;
+    palette: readonly Rgba[];
+    flags?: Uint8Array;
+    camera: MapCamera;
+    screenPixelHeight: number;
+    figure: SemanticMapFigure;
+  },
 ): Promise<Blob> {
   const image = drawPlate(draw, draw.figure);
   const { renderFigure } = await import('./VegaChart');

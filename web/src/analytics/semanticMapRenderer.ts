@@ -219,8 +219,11 @@ export class SemanticMapRenderer {
     return this.count;
   }
 
-  /** Draws every point through `camera` into the canvas's drawing buffer, whose size the caller has set. */
-  draw(camera: MapCamera): void {
+  /**
+   * Draws every point through `camera` into the canvas's drawing buffer, whose size the caller has set, each point
+   * `size` of the buffer's pixels across, the map's own by default.
+   */
+  draw(camera: MapCamera, size = pointSize): void {
     const gl = this.gl;
     if (gl.isContextLost()) return;
     const width = gl.drawingBufferWidth;
@@ -231,7 +234,7 @@ export class SemanticMapRenderer {
     const [scaleX, scaleY] = cameraScale(camera, height > 0 ? width / height : 1);
     gl.uniform2f(this.centre, camera.centre[0], camera.centre[1]);
     gl.uniform2f(this.scale, scaleX, scaleY);
-    gl.uniform1f(this.pointSizeAt, pointSize);
+    gl.uniform1f(this.pointSizeAt, size);
     gl.clear(gl.COLOR_BUFFER_BIT);
     // Points are drawn once each has its slot: never with a lens of another count.
     if (this.count > 0 && this.slotCount === this.count) gl.drawArrays(gl.POINTS, 0, this.count);

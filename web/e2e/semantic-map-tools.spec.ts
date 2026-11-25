@@ -176,7 +176,8 @@ test('draws a lasso by pointer around a document, saves what it caught, and expo
     expect([...bytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     // Twice the plate's 1,144 points wide, and more with the band's margins.
     expect(bytes.readUInt32BE(16)).toBeGreaterThanOrEqual(2 * 1_144);
-    // The plate holds the points drawn: the figure's middle row, across the plate, has colours no caption's grey has.
+    // The plate holds the points drawn, each the share of the plate the screen's point is of the screen: the figure has
+    // colours no caption's grey, no name's white and no ground has.
     const coloured = await page.evaluate(async (base64) => {
       const image = new Image();
       image.src = `data:image/png;base64,${base64}`;
@@ -187,7 +188,7 @@ test('draws a lasso by pointer around a document, saves what it caught, and expo
       const context = canvas.getContext('2d');
       if (!context) return 0;
       context.drawImage(image, 0, 0);
-      const row = context.getImageData(0, Math.floor(image.height / 2), image.width, 1).data;
+      const row = context.getImageData(0, 0, image.width, image.height).data;
       let count = 0;
       for (let at = 0; at < row.length; at += 4) {
         const [r, g, b] = [row[at] ?? 0, row[at + 1] ?? 0, row[at + 2] ?? 0];
@@ -195,7 +196,7 @@ test('draws a lasso by pointer around a document, saves what it caught, and expo
       }
       return count;
     }, bytes.toString('base64'));
-    expect(coloured).toBeGreaterThan(20);
+    expect(coloured).toBeGreaterThan(2_000);
     await expect(page.getByRole('alert')).toHaveCount(0);
   } finally {
     await forget(page, [name]);
