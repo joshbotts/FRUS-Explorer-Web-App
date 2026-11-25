@@ -172,8 +172,9 @@ import Testing
     @Test func theWordsAreTheApps() throws {
         let sources = NoteViewParityTests.Sources()
         let view = try sources.app(Self.view)
-        let lens = try sources.app("FRUSCoreKit/Semantic/SemanticMapLens.swift")
-        let export = try sources.app("FRUSCoreKit/Semantic/SemanticMapExport.swift")
+        // The kit's files, by the paths the pairs name without their prefix (`Sources.app` reads `FRUSCoreKit/` from the root).
+        let lens = try sources.app(String(Self.lens.dropFirst("kit:".count)))
+        let export = try sources.app(String(Self.export.dropFirst("kit:".count)))
         let menu = try sources.app(Self.menu)
         let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
         let block = try NoteViewParityTests.block("semanticAnalytics", of: copy)

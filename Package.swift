@@ -335,15 +335,15 @@ let package = Package(
         // generator's core, whose `SourceExplorerExportRunner.exportRecord` builds the record the
         // export gives a source note by the generator's own reading, apart from the kit's
         // `SourceExplorerResolution`, and the five cores it reads, each with upstream's dependencies
-        // and settings, with the generator's own tests, and since S27c's pin move each core's own tests,
-        // with upstream's dependencies, the six being shared code since FRUS-Explorer#1983. The parity
-        // harness alone links them, and no image a release ships holds it: the server needs none of
-        // them. A file that imports both
-        // FRUSCoreKit and these cores sees two each of CentralFilesIndex, CollectionAuthorityIndex,
-        // CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll, SourceProvenanceIndex (public
-        // in the kit since FRUS-Explorer#1899) and VolumeSourcesIndex, and names them by module; and
-        // CountrySeriesIndex and GeoKeyNormalizer, internal to the kit, are the cores' alone there, but
-        // twice over where the file imports the kit `@testable`.
+        // and settings, with the generator's own tests, and since S27c's pin move each core's own
+        // tests, with upstream's dependencies, the six being shared code since FRUS-Explorer#1983. The
+        // parity harness alone links them, and no image a release ships holds it: the server needs none
+        // of them. A file that imports both FRUSCoreKit and these cores sees two each of
+        // CentralFilesIndex, CollectionAuthorityIndex, CountryRoll, LotFileEntry, NumericalFileIndex,
+        // NumericalFileRoll, SourceProvenanceIndex (public in the kit since FRUS-Explorer#1899) and
+        // VolumeSourcesIndex, and names them by module; and CountrySeriesIndex and GeoKeyNormalizer,
+        // internal to the kit, are the cores' alone there, but twice over where the file imports the
+        // kit `@testable`.
         .target(
             name: "LotClaimantsIndexGeneratorCore",
             dependencies: ["GeneratorKit", "SourceNoteKit"],
