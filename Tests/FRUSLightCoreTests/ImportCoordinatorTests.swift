@@ -16,12 +16,12 @@ struct WatchFixture {
     init(store: ((DataDirectory) -> any FileStore)? = nil, retryDelay: Duration = .seconds(60),
          removeFile: (@Sendable (URL) throws -> Void)? = nil,
          isReadable: (@Sendable (String) -> Bool)? = nil, alsoNotify: (any ImportObserver)? = nil,
-         log: @escaping @Sendable (String) -> Void = { _ in }) throws {
+         holding: (any IndexFileObserver)? = nil, log: @escaping @Sendable (String) -> Void = { _ in }) throws {
         directory = try TemporaryDirectory()
         files = DataDirectory(root: directory.url.appendingPathComponent("data"))
         try files.prepare()
         let used = store?(files) ?? files
-        state = ServerState(configuration: ServerConfiguration(dataDirectory: files.root), log: log)
+        state = ServerState(configuration: ServerConfiguration(dataDirectory: files.root), indexFileObserver: holding, log: log)
         jobs = InProcessJobQueue()
         coordinator = ImportCoordinator(
             files: used, importer: IndexImporter(files: used, writer: LocalIndexWriter(files: used)),
@@ -66,9 +66,123 @@ final class CancelAtStep: ImportObserver, @unchecked Sendable {
     }
 }
 
+/// Holds the start's open, or the reset, at the moments it names until the test lets each go (S20d).
+final class HoldAt: IndexFileObserver {
+    private let gates: [IndexFileMoment: JobGate]
+
+    init(_ moments: [IndexFileMoment]) {
+        gates = Dictionary(uniqueKeysWithValues: moments.map { ($0, JobGate()) })
+    }
+
+    func reached(_ moment: IndexFileMoment) async { await gates[moment]?.wait() }
+
+    func hasReached(_ moment: IndexFileMoment) -> Bool { gates[moment]?.reached ?? false }
+
+    func untilReached(_ moment: IndexFileMoment) async { await gates[moment]?.untilReached() }
+
+    func letGo(_ moment: IndexFileMoment) { gates[moment]?.open() }
+
+    /// Lets every hold go, so that nothing waits on after a test that failed.
+    func letGoOfAll() { gates.values.forEach { $0.open() } }
+}
+
+/// The orders in which the start's open of the index found there and a reset reach its file (S20d): one
+/// after the other, held in place by `HoldAt`, or racing, as the server runs them.
+enum StartAndReset: CaseIterable, Sendable {
+    /// The reset runs whole before the open begins, which finds no file.
+    case resetBeforeTheOpenBegins
+    /// The order of main's ci run 45672715631, at 3f5a04b: the reset has moved the generation and not yet
+    /// removed the files when the open begins.
+    case resetUnderWayAsTheOpenBegins
+    /// The open has taken its generation and not yet read the file when the reset runs whole: the open then
+    /// fails for want of the file.
+    case resetBeforeTheOpenReads
+    /// The open has read the file and not yet said so when the reset runs whole.
+    case resetBeforeTheOpenReports
+    /// The two race, unheld.
+    case racing
+
+    var holds: [IndexFileMoment] {
+        switch self {
+        case .resetBeforeTheOpenBegins, .racing: []
+        case .resetUnderWayAsTheOpenBegins: [.resetWillRemove, .openWillRead]
+        case .resetBeforeTheOpenReads: [.openWillRead]
+        case .resetBeforeTheOpenReports: [.openDidRead]
+        }
+    }
+}
+
 @Suite struct ImportCoordinatorTests {
-    /// The index's reset (S20d) removes nothing an import made live after it was asked for; and a reset
-    /// while the start opens the index found there wins, so the server waits for an export.
+    /// A reset while the start opens the index found there wins (S20d), in every order the two reach its
+    /// file: nothing is served, and the server waits for an export, with no word of the open's failure.
+    @Test(.timeLimit(.minutes(2)), arguments: StartAndReset.allCases)
+    func aResetWinsOverTheStartsOpen(_ order: StartAndReset) async throws {
+        let held = HoldAt(order.holds)
+        defer { held.letGoOfAll() }
+        let f = try WatchFixture(holding: order.holds.isEmpty ? nil : held)
+        let (state, files) = (f.state, f.files)
+        try SyntheticExport().write(to: files.liveIndex)
+        #expect(try CorpusIndex.open(files.liveIndex).summary.documents > 0, "the file opens: only the reset keeps it unserved")
+        await state.prepareToOpenExistingIndex(files: files)
+        let generation = await state.indexGeneration
+        let reset: @Sendable () async throws -> Void = { _ = try await state.resetIndex(files: files, askedAt: generation) }
+        switch order {
+        case .resetBeforeTheOpenBegins:
+            try await reset()
+            await state.openExistingIndex(files: files)
+        case .resetUnderWayAsTheOpenBegins:
+            let resetting = Task { try await reset() }
+            await held.untilReached(.resetWillRemove)
+            let ended = Switch(false)
+            let opening = Task {
+                await state.openExistingIndex(files: files)
+                ended.value = true
+            }
+            // The open ends at once. Were it to read, it would hold before reading until the files are gone.
+            while !ended.value, !held.hasReached(.openWillRead) { try await Task.sleep(for: .milliseconds(5)) }
+            held.letGo(.resetWillRemove)
+            try await resetting.value
+            held.letGo(.openWillRead)
+            await opening.value
+            #expect(!held.hasReached(.openWillRead), "the open read nothing while the reset was under way")
+        case .resetBeforeTheOpenReads, .resetBeforeTheOpenReports:
+            let moment = order.holds[0]
+            let opening = Task { await state.openExistingIndex(files: files) }
+            await held.untilReached(moment)
+            try await reset()
+            held.letGo(moment)
+            await opening.value
+        case .racing:
+            async let opening: Void = state.openExistingIndex(files: files)
+            try await reset()
+            await opening
+        }
+        #expect(await state.status().index == nil, "the reset wins")
+        let readiness = await state.readiness()
+        #expect(readiness.step == .waitingForExport, "\(readiness)")
+        #expect(!FileManager.default.fileExists(atPath: files.liveIndex.path))
+    }
+
+    /// A failure that is not a reset's doing is still said (S20d): an index found at start that cannot be
+    /// opened is reported, before any reset and after one has ended.
+    @Test func anIndexFoundAtStartThatCannotBeOpenedIsReported() async throws {
+        let f = try WatchFixture()
+        let notAnIndex = Data("Not an index.".utf8)
+        try notAnIndex.write(to: f.files.liveIndex)
+        await f.state.prepareToOpenExistingIndex(files: f.files)
+        await f.state.openExistingIndex(files: f.files)
+        var readiness = await f.state.readiness()
+        #expect(readiness.step == .openingIndex && readiness.detail.hasPrefix("The index could not be opened: "), "\(readiness)")
+
+        _ = try await f.state.resetIndex(files: f.files, askedAt: f.state.indexGeneration)
+        #expect(await f.state.readiness().step == .waitingForExport)
+        try notAnIndex.write(to: f.files.liveIndex)
+        await f.state.openExistingIndex(files: f.files)
+        readiness = await f.state.readiness()
+        #expect(readiness.step == .openingIndex && readiness.detail.hasPrefix("The index could not be opened: "), "\(readiness)")
+    }
+
+    /// The index's reset (S20d) removes nothing an import made live after it was asked for.
     @Test func aResetRemovesNoIndexMadeLiveAfterItWasAskedFor() async throws {
         let fixture = try WatchFixture()
         let asked = await fixture.state.indexGeneration
@@ -84,18 +198,6 @@ final class CancelAtStep: ImportObserver, @unchecked Sendable {
         #expect(await fixture.state.readiness().step == .waitingForExport)
         #expect(!FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
         #expect(!FileManager.default.fileExists(atPath: fixture.files.previousIndex.path))
-
-        // An index found at start, reset while the start opens it, is not served.
-        let started = try WatchFixture()
-        try SyntheticExport().write(to: started.files.liveIndex)
-        await started.state.prepareToOpenExistingIndex(files: started.files)
-        let generation = await started.state.indexGeneration
-        async let opening: Void = started.state.openExistingIndex(files: started.files)
-        _ = try await started.state.resetIndex(files: started.files, askedAt: generation)
-        await opening
-        #expect(await started.state.status().index == nil, "the reset wins")
-        let readiness = await started.state.readiness()
-        #expect(readiness.step == .waitingForExport, "\(readiness)")
     }
 
     /// An import's job cancelled between its steps (S20d) stops before the next, changing nothing: no
