@@ -145,9 +145,9 @@ let package = Package(
         // The cloud-vector generator's core, since S26b's pin move (S29a, FRUS-Explorer#1979), with upstream's
         // dependencies: `CloudVectorsRunner.run(tagger:cloudLenses:environment:)` counts with the tagger its host
         // gives, which S29d's run gives the web's, and `run()`, NaturalLanguage's, is unavailable here, saying why.
-        // Its suites leave out CloudVectorsGeneratorTests.swift: one of its 58 tests calls NaturalLanguage's own
-        // `accumulate`s, unguarded, which are unavailable here, so the file does not build on Linux, and its other
-        // tests, which tag nothing, go with it. On Linux the hosted runs' suite runs alone.
+        // Its suites build whole since S27c's pin move (FRUS-Explorer#1983, which made the core shared code): the
+        // one test that calls NaturalLanguage's own `accumulate`s is behind `canImport(NaturalLanguage)`, as the
+        // kit's tagging suites are, so CloudVectorsGeneratorTests.swift's other tests run here too.
         .target(
             name: "CloudVectorsGeneratorCore",
             dependencies: ["WordCloudKit", "GeneratorKit"],
@@ -158,7 +158,6 @@ let package = Package(
             name: "CloudVectorsGeneratorTests",
             dependencies: ["CloudVectorsGeneratorCore", "WordCloudKit"],
             path: "\(upstream)/CloudVectorsGeneratorTests",
-            exclude: ["CloudVectorsGeneratorTests.swift"],
             swiftSettings: swift6
         ),
         // The whole of FTS5Store. It replaces session 0's FTS5Schema target, which compiled only its
@@ -200,10 +199,13 @@ let package = Package(
         // side-loaded volume's header with it, behind `canImport`. Since S26b's pin move (upstream #1980)
         // it has SemanticVectorsKit, as upstream's has, behind `canImport` the same way: Related Documents'
         // semantic axis and Project Home's reach, which moved in, read the bundled tiers and a host's shards.
+        // Since S27c's pin move (upstream #1987) it has WordCloudKit, as upstream's has, behind `canImport`
+        // too: the word cloud's count, its keyness ranking, Collocates and the shared-word chips, which moved
+        // in, count with the tagger their host gives.
         .target(
             name: "FRUSCoreKit",
             dependencies: [
-                "SourceNoteKit", "FTS5Store", "TEIHeaderKit", "SemanticVectorsKit",
+                "SourceNoteKit", "FTS5Store", "TEIHeaderKit", "SemanticVectorsKit", "WordCloudKit",
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
                 .target(name: "CSQLite", condition: .when(platforms: [.linux])),
             ],
@@ -216,11 +218,12 @@ let package = Package(
         // whatever needs the app is inside `#if !SWIFT_PACKAGE`. Since upstream #1575 two of them hash
         // with CryptoKit, swift-crypto's Crypto on Linux. They read the app's data files and manifest
         // from the submodule's FRUSExplorer/Resources by #filePath. Since S26b's pin move the semantic
-        // axis's suites import SemanticVectorsKit, behind `canImport`, as upstream's target gives them.
+        // axis's suites import SemanticVectorsKit, behind `canImport`, as upstream's target gives them, and
+        // since S27c's the word cloud's, keyness's and Collocates' suites import WordCloudKit the same way.
         .testTarget(
             name: "FRUSCoreKitTests",
             dependencies: [
-                "FRUSCoreKit", "FTS5Store", "SourceNoteKit", "SemanticVectorsKit",
+                "FRUSCoreKit", "FTS5Store", "SourceNoteKit", "SemanticVectorsKit", "WordCloudKit",
                 .target(name: "CSQLite", condition: .when(platforms: [.linux])),
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
             ],
@@ -332,13 +335,15 @@ let package = Package(
         // generator's core, whose `SourceExplorerExportRunner.exportRecord` builds the record the
         // export gives a source note by the generator's own reading, apart from the kit's
         // `SourceExplorerResolution`, and the five cores it reads, each with upstream's dependencies
-        // and settings, with the generator's own tests. The parity harness alone links them, and no
-        // image a release ships holds it: the server needs none of them. A file that imports both
-        // FRUSCoreKit and these cores sees two each of CentralFilesIndex, CollectionAuthorityIndex,
-        // CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll, SourceProvenanceIndex (public
-        // in the kit since FRUS-Explorer#1899) and VolumeSourcesIndex, and names them by module; and
-        // CountrySeriesIndex and GeoKeyNormalizer, internal to the kit, are the cores' alone there, but
-        // twice over where the file imports the kit `@testable`.
+        // and settings, with the generator's own tests, and since S27c's pin move each core's own
+        // tests, with upstream's dependencies, the six being shared code since FRUS-Explorer#1983. The
+        // parity harness alone links them, and no image a release ships holds it: the server needs none
+        // of them. A file that imports both FRUSCoreKit and these cores sees two each of
+        // CentralFilesIndex, CollectionAuthorityIndex, CountryRoll, LotFileEntry, NumericalFileIndex,
+        // NumericalFileRoll, SourceProvenanceIndex (public in the kit since FRUS-Explorer#1899) and
+        // VolumeSourcesIndex, and names them by module; and CountrySeriesIndex and GeoKeyNormalizer,
+        // internal to the kit, are the cores' alone there, but twice over where the file imports the
+        // kit `@testable`.
         .target(
             name: "LotClaimantsIndexGeneratorCore",
             dependencies: ["GeneratorKit", "SourceNoteKit"],
@@ -383,6 +388,36 @@ let package = Package(
             name: "SourceExplorerExportGeneratorTests",
             dependencies: ["SourceExplorerExportGeneratorCore"],
             path: "\(upstream)/SourceExplorerExportGeneratorTests",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "LotClaimantsIndexGeneratorTests",
+            dependencies: ["LotClaimantsIndexGeneratorCore"],
+            path: "\(upstream)/LotClaimantsIndexGeneratorTests",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "CentralFilesIndexGeneratorTests",
+            dependencies: ["CentralFilesIndexGeneratorCore", "SourceNoteKit"],
+            path: "\(upstream)/CentralFilesIndexGeneratorTests",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "VolumeSourcesIndexGeneratorTests",
+            dependencies: ["VolumeSourcesIndexGeneratorCore", "SourceNoteKit"],
+            path: "\(upstream)/VolumeSourcesIndexGeneratorTests",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "CollectionAuthorityGeneratorTests",
+            dependencies: ["CollectionAuthorityGeneratorCore"],
+            path: "\(upstream)/CollectionAuthorityGeneratorTests",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "SourceProvenanceIndexGeneratorTests",
+            dependencies: ["SourceProvenanceIndexGeneratorCore"],
+            path: "\(upstream)/SourceProvenanceIndexGeneratorTests",
             swiftSettings: swift6
         ),
 

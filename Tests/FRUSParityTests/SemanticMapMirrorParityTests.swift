@@ -1,5 +1,6 @@
 // What the server and the browser app mirror of the app's semantic map (PLAN's S28b), held to the app's source at the
-// pin, line beside line, until S28a moves the map's rules into the kit: the Regions lens's sixteen-slot palette and a
+// pin, line beside line, the lens, the labels and the export in the kit's `FRUSCoreKit/Semantic` since S27c's pin move
+// (S28a, FRUS-Explorer#1985), until S28c's rows call them: the Regions lens's sixteen-slot palette and a
 // region's slot in it (`SemanticMapColouring`), and the ground, the sprite, the projection and the blending the Metal
 // renderer draws them with (`SemanticMapRenderer`), which the web's WebGL2 renderer draws as; the camera's scale, its fit
 // and its pan (`SemanticMapCamera`, `SemanticMapRenderer`) and the Mac's zoom steps (`SemanticMapSpikeView`); the regions'
@@ -11,11 +12,11 @@ import Foundation
 import Testing
 
 @Suite struct SemanticMapMirrorParityTests {
-    static let lens = "Semantic/Map/SemanticMapLens.swift"
+    static let lens = "kit:FRUSCoreKit/Semantic/SemanticMapLens.swift"
     static let renderer = "Semantic/Map/SemanticMapRenderer.swift"
-    static let labels = "Semantic/Map/SemanticMapLabels.swift"
+    static let labels = "kit:FRUSCoreKit/Semantic/SemanticMapLabels.swift"
     static let view = "Semantic/Map/SemanticMapSpikeView.swift"
-    static let export = "Semantic/Map/SemanticMapExport.swift"
+    static let export = "kit:FRUSCoreKit/Semantic/SemanticMapExport.swift"
     static let menu = "App/FRUSExplorerApp.swift"
     static let artifacts = "kit:SemanticVectorsKit/SemanticMapArtifacts.swift"
     static let rules = "web:analytics/semanticMapRules.ts"
@@ -171,8 +172,9 @@ import Testing
     @Test func theWordsAreTheApps() throws {
         let sources = NoteViewParityTests.Sources()
         let view = try sources.app(Self.view)
-        let lens = try sources.app(Self.lens)
-        let export = try sources.app(Self.export)
+        // The kit's files, by the paths the pairs name without their prefix (`Sources.app` reads `FRUSCoreKit/` from the root).
+        let lens = try sources.app(String(Self.lens.dropFirst("kit:".count)))
+        let export = try sources.app(String(Self.export.dropFirst("kit:".count)))
         let menu = try sources.app(Self.menu)
         let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
         let block = try NoteViewParityTests.block("semanticAnalytics", of: copy)

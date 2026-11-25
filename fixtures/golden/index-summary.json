@@ -675,9 +675,9 @@
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0.001,
       "frus_documents.vocab_col" : 0.021,
-      "frus_documents.vocab_instance" : 1.085,
-      "frus_documents.vocab_row" : 0.03,
-      "integrity" : 0.034,
+      "frus_documents.vocab_instance" : 1.087,
+      "frus_documents.vocab_row" : 0.029,
+      "integrity" : 0.027,
       "page_ranges" : 0.003,
       "page_ranges.sequence" : 0.003,
       "person_cluster_candidate" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 1.225,
+      "total" : 1.217,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0.001,
@@ -737,8 +737,8 @@
       "sqlite" : "3.45.1",
       "timeZone" : "Etc/UTC"
     },
-    "sourceDigest" : "6ad778e072afa560e59be810e3de1e8dbdae1a280da829f3610c76f489096253",
+    "sourceDigest" : "e3d96d5fd38989d4569e27656b876608bbdf0de0ae4f6e9d293fc2037cf60100",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "0b839bdebd13f6e2ae228b5d8240809b48a1a16c"
+    "upstreamCommit" : "efd73ecb0ced989eb9531576a6bc1c1f4e97560b"
   }
 }

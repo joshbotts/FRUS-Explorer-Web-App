@@ -99,7 +99,7 @@ public struct EncoderSettings: Sendable {
     public var bundled: SearchModel?
     public var bundledProblem: String?
     /// How long the encoder stays loaded after its last query: the app's 180 seconds
-    /// (`SemanticQuerySearcher.encoderIdleSeconds`).
+    /// (`SemanticOnDeviceEncoder.encoderIdleSeconds`).
     public var idleTimeout: Duration
     /// The longest the server waits for a start's health, and for a query's answer.
     public var startTimeout: Duration

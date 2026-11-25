@@ -39,8 +39,9 @@ import Testing
         #expect(try Self.dockerArgument("MODEL_SHA256") == bundled.sha256)
         #expect(try Self.dockerArgument("MODEL_BYTES") == String(SearchModel.publishedBytes))
 
-        // The app's store and fetcher, as its source declares them.
-        let store = try Self.read("FRUSExplorer/Semantic/SemanticModelStore.swift", in: Self.app)
+        // The app's store and fetcher, as its source declares them: the store in SemanticVectorsKit since S27c's pin
+        // move (FRUS-Explorer#1982), the fetcher in the app.
+        let store = try Self.read("SemanticVectorsKit/SemanticModelStore.swift", in: Self.app)
         let bytes = try #require(store.firstMatch(of: /static let publishedBytes = ([0-9_]+)\n/)?.1)
         #expect(Int(bytes.replacingOccurrences(of: "_", with: "")) == SearchModel.publishedBytes)
         #expect(store.contains(#"static let fileName = "\#(SearchModel.fileName)""#))
@@ -81,7 +82,8 @@ import Testing
     @Test func theQueryLimitPromptAndIdleWindowAreTheApps() throws {
         let encoder = try Self.read("FRUSExplorer/Semantic/SemanticQueryEncoder.swift", in: Self.app)
         #expect(encoder.contains("static let maxTokens = \(SearchModel.maxTokens)\n"))
-        let searcher = try Self.read("FRUSExplorer/Semantic/SemanticQuerySearcher.swift", in: Self.app)
+        // The idle window is the app's encoder's, `SemanticOnDeviceEncoder`, since S27c's pin move (FRUS-Explorer#1982).
+        let searcher = try Self.read("FRUSExplorer/Semantic/SemanticQuerySearcher+App.swift", in: Self.app)
         #expect(searcher.contains("static let encoderIdleSeconds: UInt64 = \(EncoderSettings.appIdleTimeout.components.seconds)\n"))
         let index = try JSONSerialization.jsonObject(with: Data(contentsOf: RepositoryFiles.resources.appendingPathComponent(SearchModel.indexFile)))
         let provenance = try #require((index as? [String: Any])?["provenance"] as? [String: Any])
