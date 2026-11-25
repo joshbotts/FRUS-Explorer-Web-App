@@ -219,8 +219,11 @@ export class SemanticMapRenderer {
     return this.count;
   }
 
-  /** Draws every point through `camera` into the canvas's drawing buffer, whose size the caller has set. */
-  draw(camera: MapCamera): void {
+  /**
+   * Draws every point through `camera` into the canvas's drawing buffer, whose size the caller has set, each point
+   * `size` of the buffer's pixels across, the map's own by default.
+   */
+  draw(camera: MapCamera, size = pointSize): void {
     const gl = this.gl;
     if (gl.isContextLost()) return;
     const width = gl.drawingBufferWidth;
@@ -231,7 +234,7 @@ export class SemanticMapRenderer {
     const [scaleX, scaleY] = cameraScale(camera, height > 0 ? width / height : 1);
     gl.uniform2f(this.centre, camera.centre[0], camera.centre[1]);
     gl.uniform2f(this.scale, scaleX, scaleY);
-    gl.uniform1f(this.pointSizeAt, pointSize);
+    gl.uniform1f(this.pointSizeAt, size);
     gl.clear(gl.COLOR_BUFFER_BIT);
     // Points are drawn once each has its slot: never with a lens of another count.
     if (this.count > 0 && this.slotCount === this.count) gl.drawArrays(gl.POINTS, 0, this.count);
@@ -241,6 +244,11 @@ export class SemanticMapRenderer {
   get maximumSide(): number {
     const dimensions = this.gl.getParameter(this.gl.MAX_VIEWPORT_DIMS) as Int32Array | null;
     return dimensions ? Math.min(dimensions[0] ?? 4096, dimensions[1] ?? 4096) : 4096;
+  }
+
+  /** Gives the context back to the browser at once, after `dispose()`, for a canvas drawn once and let go: a figure's plate. */
+  release(): void {
+    this.gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 
   /** Lets go of what the renderer made on the GPU. */

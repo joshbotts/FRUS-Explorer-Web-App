@@ -3243,6 +3243,93 @@ dialog.cross-volume {
   text-align: left;
 }
 
+/* The map's tools (S28e): Lasso and Export beside Color by; the lasso as it is drawn, closed, in the app's white and
+   wash; the slice's scale over its points, in the names' type and shadow; a card's actions, its saved line and a
+   neighbour's score. */
+.semantic-map-tools {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.semantic-map-tools button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.semantic-map-frame[data-lassoing='true'] {
+  cursor: crosshair;
+}
+
+.semantic-map-lasso {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.semantic-map-lasso polygon {
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.semantic-slice-tick,
+.semantic-slice-pole,
+.semantic-slice-gutter {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  forced-color-adjust: none;
+}
+
+.semantic-slice-tick {
+  color: rgba(255, 255, 255, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+.semantic-slice-pole {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.semantic-slice-gutter {
+  color: rgba(255, 178, 89, 0.9);
+}
+
+.semantic-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.semantic-card-save {
+  margin-top: 0.5rem;
+}
+
+.semantic-card-saved {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.semantic-card-score {
+  margin-left: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.semantic-card .se-chip {
+  display: inline-block;
+  margin-top: 0.375rem;
+}
+
 .semantic-regions .analytics-table {
   max-height: 75vh;
 }

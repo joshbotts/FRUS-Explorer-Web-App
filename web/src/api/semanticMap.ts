@@ -1,11 +1,14 @@
 // The semantic map (PLAN's S28b): the bundled map's 314,616 points, one binary answer of six bytes a point, and its 140
 // regions, read on the server through SemanticVectorsKit and refused there, both alike, when the map's files and the
 // bundled vectors disagree. Neither changes while the server runs, so each is fetched once a session.
-import { infiniteQueryOptions, keepPreviousData, queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, keepPreviousData, type QueryClient, queryOptions } from '@tanstack/react-query';
+import type { AnalyticsPlate } from './analytics';
 import type { ArchivalScope } from './archivalAnalytics';
 import { servedPath } from './base';
-import { ApiError, getJSON } from './client';
+import { ApiError, getFile, getJSON } from './client';
 import { appendScope } from './personAnalytics';
+import type { CorpusCoverage, WorkingCorpus } from './searchSets';
+import { change } from './userData';
 
 /** A region of the map, as the map's index has it. */
 export interface SemanticMapRegion {
@@ -319,4 +322,204 @@ export function semanticMapRegionPages(region: number, layout: string, scope: Se
     staleTime: Infinity,
     retry: false,
   });
+}
+
+// ─── The map's tools (PLAN's S28e) ───────────────────────────────────────────
+// The lasso, a region's save, the two-pole axis and its slice, Nearest in language and the export, each the kit's on the
+// server (`SemanticMapPicking`, `SemanticMapCapture`, `SemanticAxis`, `SemanticMapPoles`, `SemanticMapSlice`,
+// `SemanticMapExport`) over the same map, and S26d's semantic source for the nearest.
+
+/** The two volumes an axis runs between: the document's volume chosen "from here", then the one "…to here". */
+export interface SemanticMapPoles {
+  from: string;
+  to: string;
+}
+
+/** Why two poles draw no slice (`SemanticMapPoles.Refusal`), in the app's words. */
+export interface SemanticMapPoleRefusal {
+  reason: 'sameVolume' | 'noSummary' | 'tooAlike';
+  notice: string;
+}
+
+/** `GET /api/v1/semantic/map/slice`: two poles' slice, its scale, its ticks and its caveat; or their refusal. */
+export interface SemanticMapSlice {
+  from: string;
+  to: string;
+  refusal?: SemanticMapPoleRefusal;
+  /** Half the slice's grid. */
+  gridExtent?: number;
+  scale?: { minYear: number; maxYear: number; undatedCount: number };
+  /** Each year the side names, at its place on the slice's grid. */
+  ticks?: { year: number; y: number }[];
+  /** The undated volumes' row on the grid, when any document is in it. */
+  gutterY?: number;
+  caveat?: string;
+}
+
+/** A slice's poles as a request's parameters, none for the map's own plane. */
+export function sliceParams(poles: SemanticMapPoles | undefined, params = new URLSearchParams()): URLSearchParams {
+  if (poles) {
+    params.set('from', poles.from);
+    params.set('to', poles.to);
+  }
+  return params;
+}
+
+export function semanticMapSliceQuery(poles: SemanticMapPoles) {
+  return queryOptions({
+    queryKey: ['semanticMap', 'slice', poles.from, poles.to],
+    queryFn: ({ signal }) => getJSON<SemanticMapSlice>('/api/v1/semantic/map/slice', sliceParams(poles), signal),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/** A slice's points, six bytes a point as the map's are, with the poles they are for. */
+export function semanticMapSlicePointsQuery(poles: SemanticMapPoles) {
+  return queryOptions({
+    queryKey: ['semanticMap', 'slicePoints', poles.from, poles.to],
+    queryFn: async ({ signal }) => {
+      const url = `${servedPath('/api/v1/semantic/map/slice/points')}?${sliceParams(poles).toString()}`;
+      const response = await fetch(url, { signal, headers: { Accept: 'application/octet-stream' } });
+      if (!response.ok) throw await ApiError.from(response);
+      return { poles, points: await response.arrayBuffer() };
+    },
+    staleTime: Infinity,
+    gcTime: 60_000,
+    structuralSharing: false,
+    retry: false,
+  });
+}
+
+/** The point nearest a point of a slice's grid, among the slice's points, under the scope; or none. */
+export async function semanticMapSlicePick(x: number, y: number, tolerance: number, scope: SemanticMapScopeAsk, poles: SemanticMapPoles): Promise<SemanticMapPoint | undefined> {
+  const params = sliceParams(poles, scopeParams(scope));
+  params.set('x', String(x));
+  params.set('y', String(y));
+  params.set('tolerance', String(tolerance));
+  return (await getJSON<{ point?: SemanticMapPoint }>('/api/v1/semantic/map/slice/pick', params)).point;
+}
+
+/** What a lasso caught (`POST /api/v1/semantic/map/lasso`), as the app's lasso card shows it. */
+export interface SemanticMapLassoCapture {
+  /** Every document of the scope inside it, and those a corpus keeps, 7,500 at most. */
+  total: number;
+  kept: number;
+  /** The regions it caught most of, most first. */
+  regionNames: string[];
+  /** What the served index holds of the kept documents; absent while none is served. */
+  coverage?: CorpusCoverage;
+}
+
+export interface SemanticMapLassoAnswer {
+  /** None for an unscoped lasso that caught nothing. */
+  capture?: SemanticMapLassoCapture;
+  scoped: boolean;
+}
+
+/** A lasso's path on the grid, each point to the hundredth of a grid unit, which the server holds the scan to. */
+export type LassoPath = readonly (readonly [number, number])[];
+
+function lassoBody(path: LassoPath): [number, number][] {
+  return path.map(([x, y]) => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]);
+}
+
+function lassoParams(scope: SemanticMapScopeAsk, poles: SemanticMapPoles | undefined): string {
+  return sliceParams(poles, scopeParams(scope)).toString();
+}
+
+/** What a lasso drawn on the grid encloses, under the scope, among the points drawn. */
+export async function semanticMapLasso(path: LassoPath, scope: SemanticMapScopeAsk, poles: SemanticMapPoles | undefined, signal?: AbortSignal): Promise<SemanticMapLassoAnswer> {
+  const query = lassoParams(scope, poles);
+  const url = servedPath('/api/v1/semantic/map/lasso');
+  const response = await fetch(query ? `${url}?${query}` : url, {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ polygon: lassoBody(path) }),
+  });
+  if (!response.ok) throw await ApiError.from(response);
+  return (await response.json()) as SemanticMapLassoAnswer;
+}
+
+/** The reader's time zone, in which a saved corpus's name says when it was saved. */
+function timeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A lasso saved as a working corpus, as the app's card saves it. */
+export async function saveLassoCorpus(client: QueryClient, path: LassoPath, scope: SemanticMapScopeAsk, poles: SemanticMapPoles | undefined): Promise<WorkingCorpus> {
+  const query = lassoParams(scope, poles);
+  const saved = (await change<WorkingCorpus>(client, 'POST', `/api/v1/me/working-corpora/lasso${query ? `?${query}` : ''}`, {
+    polygon: lassoBody(path),
+    timeZone: timeZone(),
+  }))!;
+  void client.invalidateQueries({ queryKey: ['workingCorpora'] });
+  return saved;
+}
+
+/** A region saved as a working corpus under the scope, as the app's region card saves it. */
+export async function saveRegionCorpus(client: QueryClient, region: number, layout: string, scope: SemanticMapScopeAsk): Promise<WorkingCorpus> {
+  const query = scopeParams(scope).toString();
+  const saved = (await change<WorkingCorpus>(client, 'POST', `/api/v1/me/working-corpora/region${query ? `?${query}` : ''}`, {
+    region,
+    layout,
+    timeZone: timeZone(),
+  }))!;
+  void client.invalidateQueries({ queryKey: ['workingCorpora'] });
+  return saved;
+}
+
+/** A point's ten nearest in language (`GET /api/v1/semantic/map/nearest`), from the volumes the server serves. */
+export interface SemanticMapNearest {
+  document: string;
+  neighbours: { volumeId: string; documentId: string; title: string; score: number; percent: number }[];
+  /** Why there are none: no index served, the anchor's vectors missing, or none found. */
+  empty?: 'noIndex' | 'noShard' | 'none';
+}
+
+export function semanticMapNearestQuery(key: string) {
+  return queryOptions({
+    queryKey: ['semanticMap', 'nearest', key],
+    queryFn: ({ signal }) => getJSON<SemanticMapNearest>('/api/v1/semantic/map/nearest', new URLSearchParams({ document: key }), signal),
+    // The served index decides what may be listed, so a card opened again later asks again.
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** The reader's time zone as a parameter, in which the method block writes the export's moment. */
+function zoned(params: URLSearchParams): URLSearchParams {
+  params.set('timeZone', timeZone() || 'UTC');
+  return params;
+}
+
+/** The regions' CSV under the scope with the kit's method block, named as the app names it. */
+export function semanticMapCSV(scope: SemanticMapScopeAsk, lens: string): Promise<{ blob: Blob; name: string }> {
+  const params = scopeParams(scope);
+  params.set('lens', lens);
+  return getFile(`/api/v1/semantic/map/export?${zoned(params).toString()}`, 'FRUS-Analytics-Semantic-map-regions.csv');
+}
+
+/** An exported figure's caption band, and the names over its plate, laid out for it. */
+export interface SemanticMapFigure {
+  plate: AnalyticsPlate;
+  /** The plate's rectangle in points. */
+  width: number;
+  height: number;
+  labels: SemanticMapLabel[];
+}
+
+/** The figure of the view on screen: its camera, the lens and scope drawn, and the slice, if one is. */
+export function semanticMapFigure(scope: SemanticMapScopeAsk, lens: string, camera: SemanticMapCameraAnswer, poles: SemanticMapPoles | undefined): Promise<SemanticMapFigure> {
+  const params = sliceParams(poles, scopeParams(scope));
+  params.set('lens', lens);
+  params.set('x', String(camera.x));
+  params.set('y', String(camera.y));
+  params.set('halfExtent', String(camera.halfExtent));
+  return getJSON<SemanticMapFigure>('/api/v1/semantic/map/plate', zoned(params));
 }

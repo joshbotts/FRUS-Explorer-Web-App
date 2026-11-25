@@ -11,6 +11,11 @@
 // web's path from there to a point; with it focused, Shift and an arrow move the view an eighth of it, + and − zoom
 // it by the Mac's step and 0 fits it, and Escape closes the card the page shows. The canvas and the names are hidden
 // from screen readers, as the app's are: the list box is their map, and the zoom is said in a status line.
+//
+// Since S28e it draws a slice as it draws the map, its points the slice's, with the slice's scale over them, the app's
+// `sliceScaleOverlay`: the years up the side, the poles at the two ends and the undated volumes' row; and no names, as
+// the app hides them there. With Lasso on, a drag draws a lasso, closed as it is drawn and thinned at the app's four
+// points, whose path the page is given in the grid's own coordinates when the pointer lifts.
 import { useQuery } from '@tanstack/react-query';
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import {
@@ -25,6 +30,7 @@ import {
   carried,
   clampCamera,
   doubleClickZoom,
+  extendedLasso,
   fitCamera,
   gridPoint,
   labelAt,
@@ -63,6 +69,15 @@ export interface MapFocus {
   readonly serial: number;
 }
 
+/** A slice's scale, as the page has it from the server: the years and the gutter on its grid, and its poles. */
+export interface SliceScale {
+  readonly from: string;
+  readonly to: string;
+  readonly ticks: readonly { year: number; y: number }[];
+  readonly gutterY?: number;
+  readonly undatedCount: number;
+}
+
 export function SemanticMap({
   points,
   gridExtent,
@@ -82,6 +97,12 @@ export function SemanticMap({
   onEscape,
   onUnavailable,
   keysRef,
+  layoutKey = 'map',
+  names = true,
+  slice,
+  lassoing = false,
+  onLasso,
+  viewRef,
 }: {
   /** The server's answer: six bytes a point. */
   points: ArrayBuffer;
@@ -113,6 +134,18 @@ export function SemanticMap({
   onUnavailable: (reason: string) => void;
   /** The list box, the canvas's one stop, where the page sends the keyboard back when a card closes. */
   keysRef?: RefObject<HTMLDivElement | null>;
+  /** The layout drawn, the map's or a slice's: a new one is drawn whole, its camera fitted, as the app's `setSlice` frames it. */
+  layoutKey?: string;
+  /** Whether the regions' names are drawn: not on a slice, where a region's centre is no place. */
+  names?: boolean;
+  /** The slice's scale, drawn over its points. */
+  slice?: SliceScale;
+  /** Whether a drag draws a lasso instead of moving the map. */
+  lassoing?: boolean;
+  /** A lasso drawn: its path in the grid's own coordinates, three points or more. */
+  onLasso?: (path: [number, number][]) => void;
+  /** Where the page reads the view on screen, its camera and its drawing buffer's height, for the figure it exports. */
+  viewRef?: RefObject<{ camera: MapCamera; pixelHeight: number } | null>;
 }) {
   const helpId = useId();
   const prefix = useId();
@@ -133,6 +166,26 @@ export function SemanticMap({
   const [settled, setSettled] = useState<SemanticMapView | undefined>(undefined);
   const [active, setActive] = useState<number | undefined>(undefined);
   const [keysFocused, setKeysFocused] = useState(false);
+  // The lasso being drawn, in the view's CSS pixels, closed as it is drawn; empty when none is.
+  const [lassoPath, setLassoPath] = useState<(readonly [number, number])[]>([]);
+  // The stroke under way, with the layout it began on: one the layout or the setting has changed under is let go.
+  const drawing = useRef<{ layout: string; points: (readonly [number, number])[] } | null>(null);
+
+  // A new layout, the map's or a slice's, is fitted whole, and its names are asked for again, as the app frames the map
+  // or the slice it has laid out (`frameAll(extent:)`); a lasso half drawn on the last one is let go.
+  const [layoutSeen, setLayoutSeen] = useState(layoutKey);
+  if (layoutKey !== layoutSeen) {
+    setLayoutSeen(layoutKey);
+    setCamera(fitCamera(gridExtent));
+    setSettled(undefined);
+    setLassoPath([]);
+  }
+  // Lasso off drops a stroke under way.
+  const [lassoSeen, setLassoSeen] = useState(lassoing);
+  if (lassoing !== lassoSeen) {
+    setLassoSeen(lassoing);
+    setLassoPath([]);
+  }
 
   // The view drawn now, once the drawing buffer has the frame's size: never at the canvas's first 300 by 150.
   const drawNow = useEffectEvent(() => {
@@ -141,6 +194,7 @@ export function SemanticMap({
     if (!drawn || !view || !sized.current) return;
     drawn.draw(latest.current);
     view.dataset.view = viewKey(latest.current, gridExtent);
+    if (viewRef) viewRef.current = { camera: latest.current, pixelHeight: canvas.current?.height ?? 0 };
   });
   // One frame for however many changes come before the next animation frame.
   const requestDraw = useEffectEvent(() => {
@@ -243,13 +297,13 @@ export function SemanticMap({
     return () => window.clearTimeout(timer);
   }, [camera, gridExtent]);
   useEffect(() => {
-    if (viewSize.width <= 0 || viewSize.height <= 0) return;
+    if (!names || viewSize.width <= 0 || viewSize.height <= 0) return;
     const timer = window.setTimeout(
       () => setSettled({ x: camera.centre[0], y: camera.centre[1], halfExtent: camera.halfExtent, width: viewSize.width, height: viewSize.height }),
       labelDelay,
     );
     return () => window.clearTimeout(timer);
-  }, [camera, viewSize]);
+  }, [camera, viewSize, names]);
 
   // The page's reveal or focus brings the camera to it, once a serial: the view adjusted as the page draws, not after.
   const [focusSeen, setFocusSeen] = useState<number | undefined>(undefined);
@@ -261,9 +315,9 @@ export function SemanticMap({
   // The names for the view at rest: the kit's layout, for this camera, size and scope, the last view's meanwhile.
   const labels = useQuery({
     ...semanticMapLabelsQuery(settled ?? { x: 0, y: 0, halfExtent: 1, width: 1, height: 1 }, scope),
-    enabled: settled !== undefined,
+    enabled: names && settled !== undefined,
   });
-  const shown = labels.data;
+  const shown = names ? labels.data : undefined;
 
   // Where each name is drawn now: as laid out, or carried with the map from the view it was laid out for.
   const laidOutHere =
@@ -294,7 +348,8 @@ export function SemanticMap({
   );
   const activeRegion = keysFocused ? regions[activeIndex] : undefined;
   const ringedLabel = activeRegion ? drawnLabels.find((label) => label.id === activeRegion.id) : undefined;
-  const ringedCentre = activeRegion && !ringedLabel ? centres.get(activeRegion.id) : undefined;
+  // A region's centre is a place on the map's plane alone, so a slice rings none.
+  const ringedCentre = names && activeRegion && !ringedLabel ? centres.get(activeRegion.id) : undefined;
 
   // The wheel zooms about the pointer, so the page must not scroll under it: a listener that is not passive.
   useEffect(() => {
@@ -387,6 +442,15 @@ export function SemanticMap({
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     press.current = pointers.current.size === 1 ? { x: event.clientX, y: event.clientY, moved: false } : null;
+    // With Lasso on, one pointer draws; a second lets the stroke go and pinches.
+    if (lassoing && pointers.current.size === 1) {
+      const at = within(event);
+      drawing.current = { layout: layoutKey, points: [[at.x, at.y]] };
+      setLassoPath(drawing.current.points);
+    } else {
+      drawing.current = null;
+      setLassoPath([]);
+    }
   }
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -401,6 +465,21 @@ export function SemanticMap({
     const started = press.current;
     if (started && Math.hypot(event.clientX - started.x, event.clientY - started.y) > clickSlop) started.moved = true;
     const view = size.current;
+    if (held.size === 1 && drawing.current) {
+      held.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (!lassoing || drawing.current.layout !== layoutKey) {
+        drawing.current = null;
+        setLassoPath([]);
+        return;
+      }
+      const at = within(event);
+      const next = extendedLasso(drawing.current.points, [at.x, at.y]);
+      if (next.length !== drawing.current.points.length) {
+        drawing.current = { layout: layoutKey, points: next };
+        setLassoPath(next);
+      }
+      return;
+    }
     if (held.size === 1) {
       const dx = event.clientX - last.x;
       const dy = event.clientY - last.y;
@@ -423,6 +502,16 @@ export function SemanticMap({
 
   function onPointerEnd(event: PointerEvent<HTMLDivElement>) {
     pointers.current.delete(event.pointerId);
+    const stroke = drawing.current;
+    drawing.current = null;
+    if (!stroke) return;
+    setLassoPath([]);
+    // A press that did not move is a click, which picks; a stroke closes on its first point, as the app's does; and one
+    // begun on another layout, or before Lasso was turned off, is let go.
+    if (event.type !== 'pointerup' || press.current?.moved !== true || stroke.points.length < 3) return;
+    if (!lassoing || stroke.layout !== layoutKey) return;
+    const view = size.current;
+    onLasso?.(stroke.points.map(([x, y]) => gridPoint(latest.current, view, x, y)));
   }
 
   // A press that did not move: a click on a drawn name opens its region, and anywhere else picks the point nearest it.
@@ -474,7 +563,9 @@ export function SemanticMap({
         data-lens={lens}
         data-scope={scopeKey}
         data-labels={drawnLabels.length}
-        data-names={shown ? (laidOutHere ? 'laid-out' : 'carried') : undefined}
+        data-names={!names ? 'none' : shown ? (laidOutHere ? 'laid-out' : 'carried') : undefined}
+        data-layout={layoutKey}
+        data-lassoing={lassoing ? 'true' : undefined}
         data-marker={marker ? `${marker[0]} ${marker[1]}` : undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -498,7 +589,14 @@ export function SemanticMap({
           ))}
           {centreAt && <span className="semantic-map-ring" style={{ left: `${centreAt[0]}px`, top: `${centreAt[1]}px` }} />}
           {markerAt && <span className="semantic-map-marker" style={{ left: `${markerAt[0]}px`, top: `${markerAt[1]}px` }} />}
+          {slice && viewSize.width > 0 && <SliceOverlay slice={slice} camera={camera} size={viewSize} gridExtent={gridExtent} />}
         </div>
+        {lassoPath.length > 1 && (
+          // Closed while drawn, as the app draws it, since what it holds is decided against the closed shape.
+          <svg className="semantic-map-lasso" aria-hidden="true" width={viewSize.width} height={viewSize.height}>
+            <polygon points={lassoPath.map(([x, y]) => `${x},${y}`).join(' ')} />
+          </svg>
+        )}
         <div
           ref={keysRef}
           role="listbox"
@@ -531,5 +629,38 @@ export function SemanticMap({
         {words.mapHelp}
       </p>
     </div>
+  );
+}
+
+/**
+ * The slice's scale over its points (`sliceScaleOverlay`): each year the server names at its row on the slice's grid,
+ * through the camera the points are drawn through, at the left edge while it is in view; the poles at the two ends of
+ * the axis they define; and the undated volumes' row, when anything is in it.
+ */
+function SliceOverlay({ slice, camera, size, gridExtent }: { slice: SliceScale; camera: MapCamera; size: { width: number; height: number }; gridExtent: number }) {
+  const inView = (y: number) => y > 8 && y < size.height - 8;
+  const gutter = slice.undatedCount > 0 && slice.gutterY !== undefined ? viewPoint(camera, size, [-gridExtent, slice.gutterY])[1] : undefined;
+  return (
+    <>
+      {slice.ticks.map((tick) => {
+        const y = viewPoint(camera, size, [-gridExtent, tick.y])[1];
+        return inView(y) ? (
+          <span key={tick.year} className="semantic-slice-tick" style={{ left: '24px', top: `${y}px` }}>
+            {tick.year}
+          </span>
+        ) : null;
+      })}
+      <span className="semantic-slice-pole" style={{ left: '56px', top: `${size.height - 14}px` }}>
+        {words.axis.low(slice.from)}
+      </span>
+      <span className="semantic-slice-pole" style={{ left: `${size.width - 56}px`, top: `${size.height - 14}px` }}>
+        {words.axis.high(slice.to)}
+      </span>
+      {gutter !== undefined && inView(gutter) && (
+        <span className="semantic-slice-gutter" style={{ left: '44px', top: `${gutter}px` }}>
+          {words.axis.gutter(slice.undatedCount)}
+        </span>
+      )}
+    </>
   );
 }

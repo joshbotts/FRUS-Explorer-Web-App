@@ -3,16 +3,21 @@
 // and an answer of the wrong length refused before anything is drawn. Since S28c: the lens picker and the scope menu
 // with its presidencies, each choice in the address; the keyboard's list of the regions, in the app's words; a link's
 // request revealing its document's card, with Open Document, or saying that it has no place on the map; and a region's
-// card, the kit's rows from the server, whose documents each show their point. jsdom has no WebGL, so the canvas is
-// the browser suite's: here the renderer stands in, drawing nothing.
+// card, the kit's rows from the server, whose documents each show their point. Since S28e, the map's tools: the axis's
+// two poles from points' cards, the slice in the address and Back to the map, a refusal in the app's words; a region's
+// save; a point's nearest in language; a lasso's card and its save; and the regions' CSV. jsdom has no WebGL, so the
+// canvas is the browser suite's: here the renderer stands in, drawing nothing.
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  SemanticMapLassoAnswer,
+  SemanticMapNearest,
   SemanticMapPoint,
   SemanticMapReadingContext,
   SemanticMapRegionCard,
   SemanticMapRegions,
   SemanticMapScope,
+  SemanticMapSlice,
 } from '../api/semanticMap';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 
@@ -28,10 +33,16 @@ vi.mock('./semanticMapRenderer', () => ({
     setScope() {}
     draw() {}
     dispose() {}
+    release() {}
     get maximumSide() {
       return 4096;
     }
   },
+}));
+
+const saved = vi.hoisted(() => ({ files: [] as { name: string }[] }));
+vi.mock('../shell/saveFile', () => ({
+  saveFile: (_file: Blob, name: string) => saved.files.push({ name }),
 }));
 
 afterEach(() => {
@@ -43,6 +54,7 @@ afterEach(() => {
 beforeEach(() => {
   webGL2.supported = false;
   webGL2.draws = false;
+  saved.files = [];
 });
 
 const regions: SemanticMapRegions = {
@@ -342,5 +354,357 @@ describe('Semantic Analytics', () => {
       .filter((url) => url.pathname === '/api/v1/semantic/map/regions/1')
       .map((url) => `${url.searchParams.get('offset')}+${url.searchParams.get('limit')}`);
     expect(offsets).toEqual(['0+50', '50+50']);
+  });
+});
+
+describe('the map’s tools (S28e)', () => {
+  const me = { userId: 'owner', displayName: 'Owner', auth: 'none', roles: ['reader', 'curator', 'admin'], userData: true, csrfToken: 't' };
+  const far: SemanticMapPoint = {
+    ...point,
+    row: 7,
+    volumeId: 'frus1969-76v12',
+    documentId: 'd45',
+    x: -500,
+    y: 600,
+    headline: 'Foreign Relations, 1969–1976, Volume XII · d45',
+    ids: 'frus1969-76v12 · d45',
+    title: undefined,
+    served: false,
+  };
+  const nearest: SemanticMapNearest = {
+    document: 'frus1961-63v06/d1',
+    neighbours: [
+      { volumeId: 'frus1961-63v06', documentId: 'd2', title: '2. Letter From President Kennedy to Chairman Khrushchev', score: 0.8712, percent: 87 },
+      { volumeId: 'frus1969-76ve09p1', documentId: 'd10', title: '10. Memorandum of Conversation', score: 0.6049, percent: 60 },
+    ],
+  };
+  const slice: SemanticMapSlice = {
+    from: 'frus1961-63v06',
+    to: 'frus1969-76v12',
+    gridExtent: 30_000,
+    scale: { minYear: 1862, maxYear: 1988, undatedCount: 0 },
+    ticks: [{ year: 1875, y: -24_000 }, { year: 1925, y: -2_000 }, { year: 1975, y: 20_000 }],
+    caveat: 'Left to right is how far each document leans from frus1961-63v06 toward frus1969-76v12. The reading is approximate.',
+  };
+  /** A point of the slice's: row 4, d1's, at 1,000 and 2,000; the rest at the middle. */
+  function slicePoints() {
+    const bytes = new ArrayBuffer(6 * 10);
+    const view = new DataView(bytes);
+    view.setInt16(4 * 6, 1_000, true);
+    view.setInt16(4 * 6 + 2, 2_000, true);
+    return new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } });
+  }
+  const reveals = (url: URL) =>
+    url.searchParams.get('document') === 'frus1961-63v06/d1'
+      ? { lens: 'cluster', reveal: { key: 'frus1961-63v06/d1', revealed: true, point, camera: { x: 120, y: 210, halfExtent: 900 }, volumeTitle: 'x' } }
+      : url.searchParams.get('document') === 'frus1969-76v12/d45'
+        ? { lens: 'cluster', reveal: { key: 'frus1969-76v12/d45', revealed: true, point: far, camera: { x: -500, y: 600, halfExtent: 900 }, volumeTitle: 'x' } }
+        : { lens: 'cluster' };
+
+  it('sets the axis’s two poles from points’ cards, lays out the slice in the address, and goes back to the map', async () => {
+    drawing();
+    const server = serve({
+      '/api/v1/semantic/map/regions/1': card,
+      '/api/v1/semantic/map/request': reveals,
+      '/api/v1/semantic/map/nearest': nearest,
+      '/api/v1/semantic/map/slice': slice,
+      '/api/v1/semantic/map/slice/points': slicePoints,
+    });
+    const { router } = renderAt('/analytics/semantic?document=frus1961-63v06%2Fd1');
+    const card1 = await screen.findByRole('region', { name: point.headline });
+    // What a slice adds, until one is drawn, and the two ends, the high one once the low is set.
+    expect(within(card1).getByText(/^On the map no direction has a meaning\./)).toBeTruthy();
+    const to = within(card1).getByRole('button', { name: '…to here' }) as HTMLButtonElement;
+    expect(to.disabled).toBe(true);
+    fireEvent.click(within(card1).getByRole('button', { name: 'Axis: from here' }));
+    const axis = await screen.findByRole('region', { name: 'Axis' });
+    expect(within(axis).getByText('frus1961-63v06')).toBeTruthy();
+    expect(within(axis).getByText(/^Select a document in a different volume and choose “…to here”\./)).toBeTruthy();
+    expect(to.disabled).toBe(false);
+    // Another volume's document, from a region's card, as the high end: the server lays the slice out.
+    const keys = screen.getByRole('listbox', { name: 'Semantic map' });
+    fireEvent.focus(keys);
+    fireEvent.keyDown(keys, { key: 'Enter' });
+    const region = await screen.findByRole('region', { name: 'Region' });
+    fireEvent.click(await within(region).findByRole('button', { name: 'Show on the map: Foreign Relations, 1969–1976, Volume XII · d45' }));
+    const card45 = await screen.findByRole('region', { name: far.headline });
+    fireEvent.click(within(card45).getByRole('button', { name: '…to here' }));
+    await waitFor(() => expect(router.state.location.search).toEqual({ document: 'frus1961-63v06/d1', from: 'frus1961-63v06', to: 'frus1969-76v12' }));
+    expect(await within(axis).findByText('frus1961-63v06 → frus1969-76v12')).toBeTruthy();
+    expect(await screen.findByText(slice.caveat ?? '')).toBeTruthy();
+    await waitFor(() => expect(document.querySelector('.semantic-map-frame')?.getAttribute('data-layout')).toBe('slice:frus1961-63v06|frus1969-76v12'));
+    // No names on a slice; its scale is drawn over the canvas, which jsdom gives no size (the browser suite reads it).
+    expect(document.querySelector('.semantic-map-frame')?.getAttribute('data-names')).toBe('none');
+    const asked = server.mock.calls.map(([url]) => new URL(url, 'http://localhost')).find((url) => url.pathname === '/api/v1/semantic/map/slice');
+    expect(asked?.searchParams.get('from')).toBe('frus1961-63v06');
+    expect(asked?.searchParams.get('to')).toBe('frus1969-76v12');
+    // Back to the map: the poles cleared, the map's plane again, and the keyboard on the map.
+    fireEvent.click(within(axis).getByRole('button', { name: 'Back to the map' }));
+    await waitFor(() => expect(router.state.location.search).toEqual({ document: 'frus1961-63v06/d1' }));
+    expect(screen.queryByRole('region', { name: 'Axis' })).toBeNull();
+    expect(document.activeElement).toBe(keys);
+    await waitFor(() => expect(document.querySelector('.semantic-map-frame')?.getAttribute('data-layout')).toBe('map'));
+    expect(screen.getByText('Layout preserves local similarity; distances between far regions are not meaningful.')).toBeTruthy();
+  });
+
+  it('opens a slice the address names, and shows a document at its place on the slice', async () => {
+    drawing();
+    serve({ '/api/v1/semantic/map/request': reveals, '/api/v1/semantic/map/nearest': nearest, '/api/v1/semantic/map/slice': slice, '/api/v1/semantic/map/slice/points': slicePoints });
+    renderAt('/analytics/semantic?document=frus1961-63v06%2Fd1&from=frus1961-63v06&to=frus1969-76v12');
+    expect(await screen.findByRole('region', { name: point.headline })).toBeTruthy();
+    const map = document.querySelector('.semantic-map-frame');
+    await waitFor(() => expect(map?.getAttribute('data-marker')).toBe('1000 2000'));
+    expect(map?.getAttribute('data-layout')).toBe('slice:frus1961-63v06|frus1969-76v12');
+    // On a slice, a point's card no longer says what a slice adds.
+    expect(screen.queryByText(/^On the map no direction has a meaning\./)).toBeNull();
+  });
+
+  it('refuses two ends in one volume in the app’s words, and keeps the low end', async () => {
+    drawing();
+    serve({
+      '/api/v1/semantic/map/request': reveals,
+      '/api/v1/semantic/map/nearest': nearest,
+      '/api/v1/semantic/map/slice': {
+        from: 'frus1961-63v06',
+        to: 'frus1961-63v06',
+        refusal: { reason: 'sameVolume', notice: 'An axis runs between two volumes, and both of these documents are in the same one. Pick a document from a different volume as the second end.' },
+      },
+    });
+    const { router } = renderAt('/analytics/semantic?document=frus1961-63v06%2Fd1');
+    const card1 = await screen.findByRole('region', { name: point.headline });
+    fireEvent.click(within(card1).getByRole('button', { name: 'Axis: from here' }));
+    fireEvent.click(within(card1).getByRole('button', { name: '…to here' }));
+    const axis = await screen.findByRole('region', { name: 'Axis' });
+    expect(await within(axis).findByText(/^An axis runs between two volumes, and both of these documents are in the same one\./)).toBeTruthy();
+    expect(within(axis).getByRole('status').textContent).toMatch(/^An axis runs between two volumes/);
+    expect(within(axis).getByText('frus1961-63v06')).toBeTruthy();
+    expect(router.state.location.search).toEqual({ document: 'frus1961-63v06/d1' });
+    // The low end stands, so the high end may be chosen again.
+    expect((within(card1).getByRole('button', { name: '…to here' }) as HTMLButtonElement).disabled).toBe(false);
+    // Clearing the axis takes the notice with it.
+    fireEvent.click(within(axis).getByRole('button', { name: 'Clear axis and return to the map' }));
+    expect(screen.queryByRole('region', { name: 'Axis' })).toBeNull();
+  });
+
+  it('lists a point’s nearest in language, each showing its point, and says why there are none', async () => {
+    drawing();
+    const server = serve({
+      '/api/v1/semantic/map/request': reveals,
+      '/api/v1/semantic/map/nearest': (url: URL) =>
+        url.searchParams.get('document') === 'frus1961-63v06/d1' ? nearest : { document: url.searchParams.get('document'), neighbours: [], empty: 'noShard' },
+      '/api/v1/semantic/map/regions/1': card,
+    });
+    renderAt('/analytics/semantic?document=frus1961-63v06%2Fd1');
+    const card1 = await screen.findByRole('region', { name: point.headline });
+    const list = await within(card1).findByRole('list', { name: 'Nearest in language' });
+    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      '2. Letter From President Kennedy to Chairman Khrushchev87%',
+      '10. Memorandum of Conversation60%',
+    ]);
+    expect(within(card1).getByText(/^Drawn only from volumes on this server/)).toBeTruthy();
+    fireEvent.click(within(list).getByRole('button', { name: '10. Memorandum of Conversation' }));
+    await waitFor(() =>
+      expect(
+        server.mock.calls.some(([url]) => new URL(url, 'http://localhost').searchParams.get('document') === 'frus1969-76ve09p1/d10'),
+      ).toBe(true),
+    );
+    // A point whose vectors the server lacks says so.
+    const keys = screen.getByRole('listbox', { name: 'Semantic map' });
+    fireEvent.focus(keys);
+    fireEvent.keyDown(keys, { key: 'Enter' });
+    const region = await screen.findByRole('region', { name: 'Region' });
+    fireEvent.click(await within(region).findByRole('button', { name: 'Show on the map: Foreign Relations, 1969–1976, Volume XII · d45' }));
+    const card45 = await screen.findByRole('region', { name: far.headline });
+    expect(await within(card45).findByText('Finding nearest documents needs this volume’s vectors, which are not on this server.')).toBeTruthy();
+  });
+
+  it('saves a region as a working corpus where the server keeps user data, and says where it is', async () => {
+    drawing();
+    const server = serve({
+      '/api/v1/me': me,
+      '/api/v1/semantic/map/regions/1': { ...card, total: 9_000, kept: 7_500 },
+      'POST /api/v1/me/working-corpora/region': {
+        id: 'c1',
+        name: 'berlin soviet access — Nov 25, 2026 at 9:41 AM',
+        documentCount: 7_500,
+        wasTruncatedAtCapture: true,
+        totalMatchCountAtCapture: 9_000,
+        truncationWarns: true,
+        isMeaningCapture: false,
+      },
+    });
+    renderAt('/analytics/semantic?volume=frus1961-63v06');
+    const keys = await screen.findByRole('listbox', { name: 'Semantic map' });
+    fireEvent.focus(keys);
+    fireEvent.keyDown(keys, { key: 'Enter' });
+    const region = await screen.findByRole('region', { name: 'Region' });
+    fireEvent.click(await within(region).findByRole('button', { name: 'Save as Working Corpus' }));
+    const line = await within(region).findByText('Saved as “berlin soviet access — Nov 25, 2026 at 9:41 AM”. Find it under Working Corpora, where it can scope a search.');
+    await waitFor(() => expect(document.activeElement).toBe(line));
+    expect(within(region).getByText('Saved the first 7,500 of 9,000.')).toBeTruthy();
+    expect(within(region).queryByRole('button', { name: 'Save as Working Corpus' })).toBeNull();
+    const [url, init] = server.mock.calls.find(([, init]) => init?.method === 'POST') ?? [];
+    const asked = new URL(url ?? '', 'http://localhost');
+    expect(asked.pathname).toBe('/api/v1/me/working-corpora/region');
+    expect(asked.searchParams.get('volume')).toBe('frus1961-63v06');
+    expect(JSON.parse(String(init?.body))).toMatchObject({ region: 1, layout: regions.layoutIdentity });
+  });
+
+  it('offers no save on a server that keeps no user data', async () => {
+    drawing();
+    serve({ '/api/v1/me': { ...me, userData: false }, '/api/v1/semantic/map/regions/1': card });
+    renderAt('/analytics/semantic');
+    const keys = await screen.findByRole('listbox', { name: 'Semantic map' });
+    fireEvent.focus(keys);
+    fireEvent.keyDown(keys, { key: 'Enter' });
+    const region = await screen.findByRole('region', { name: 'Region' });
+    expect(await within(region).findByText('3 documents in the series')).toBeTruthy();
+    expect(within(region).queryByRole('button', { name: 'Save as Working Corpus' })).toBeNull();
+  });
+
+  it('draws a lasso by pointer with Lasso on, says what it caught as the app’s card does, and saves it', async () => {
+    drawing();
+    // jsdom captures no pointer.
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', { value: () => undefined, configurable: true, writable: true });
+    const caught: SemanticMapLassoAnswer = {
+      scoped: false,
+      capture: {
+        total: 9_120,
+        kept: 7_500,
+        regionNames: ['berlin soviet', 'spanish salazar'],
+        coverage: { indexedCount: 80, totalCount: 7_500, missingVolumeIds: ['frus1969-76v12'], isComplete: false },
+      },
+    };
+    const server = serve({
+      '/api/v1/me': me,
+      'POST /api/v1/semantic/map/lasso': caught,
+      'POST /api/v1/me/working-corpora/lasso': { id: 'c2', name: 'berlin soviet, spanish salazar — Nov 25, 2026 at 9:42 AM', documentCount: 7_500 },
+    });
+    renderAt('/analytics/semantic');
+    await screen.findByRole('listbox', { name: 'Semantic map' });
+    const lasso = screen.getByRole('button', { name: 'Lasso' });
+    expect(lasso.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(lasso);
+    expect(lasso.getAttribute('aria-pressed')).toBe('true');
+    const frame = document.querySelector('.semantic-map-frame') as HTMLElement;
+    expect(frame.getAttribute('data-lassoing')).toBe('true');
+    fireEvent.pointerDown(frame, { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1, clientX: 10, clientY: 10 });
+    for (const [x, y] of [[12, 11], [60, 10], [60, 60], [10, 60]]) {
+      fireEvent.pointerMove(frame, { pointerId: 1, pointerType: 'mouse', buttons: 1, clientX: x, clientY: y });
+    }
+    fireEvent.pointerUp(frame, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 10, clientY: 60 });
+    const card = await screen.findByRole('region', { name: 'Lasso' });
+    expect(within(card).getByRole('heading', { level: 2, name: '9,120 documents' })).toBeTruthy();
+    expect(within(card).getByText('berlin soviet · spanish salazar')).toBeTruthy();
+    expect(within(card).getByRole('img', { name: 'Source: computed by this app.' }).textContent).toContain('This app\'s model');
+    expect(within(card).getByText('Saving the first 7,500 of 9,120.')).toBeTruthy();
+    expect(within(card).getByText('80 of 7,500 documents indexed on this server')).toBeTruthy();
+    // The stroke as it was sent: thinned at four pixels, its first point, then three more, the second dropped.
+    const sent = server.mock.calls.find(([url, init]) => init?.method === 'POST' && String(url).includes('/semantic/map/lasso'));
+    expect((JSON.parse(String(sent?.[1]?.body)) as { polygon: number[][] }).polygon).toHaveLength(4);
+    fireEvent.click(within(card).getByRole('button', { name: 'Save as Working Corpus' }));
+    const line = await within(card).findByText('Saved as berlin soviet, spanish salazar — Nov 25, 2026 at 9:42 AM');
+    await waitFor(() => expect(document.activeElement).toBe(line.closest('p')));
+    // Lasso off drops the card, as the app's toggle does.
+    fireEvent.click(lasso);
+    expect(screen.queryByRole('region', { name: 'Lasso' })).toBeNull();
+  });
+
+  it('says why a slice the address names could not be drawn, and draws the map', async () => {
+    drawing();
+    serve({
+      '/api/v1/semantic/map/slice': slice,
+      '/api/v1/semantic/map/slice/points': new ProblemAnswer(503, 'SEMANTIC_MAP_UNAVAILABLE', 'The semantic map could not be read: a test.'),
+    });
+    renderAt('/analytics/semantic?from=frus1961-63v06&to=frus1969-76v12');
+    const axis = await screen.findByRole('region', { name: 'Axis' });
+    expect(await within(axis).findByText('The semantic map could not be read: a test.')).toBeTruthy();
+    expect(within(axis).queryByText(/^Select a document in a different volume/)).toBeNull();
+    expect(document.querySelector('.semantic-map-frame')?.getAttribute('data-layout')).toBe('map');
+  });
+
+  it('never draws a slice again once the map has been, while the next slice comes', async () => {
+    drawing();
+    const other: SemanticMapSlice = { ...slice, from: 'frus1969-76v12', to: 'frus1961-63v06' };
+    serve({
+      '/api/v1/semantic/map/request': reveals,
+      '/api/v1/semantic/map/nearest': nearest,
+      '/api/v1/semantic/map/slice': (url: URL) => (url.searchParams.get('from') === 'frus1961-63v06' ? slice : other),
+      // The second slice's points never come.
+      '/api/v1/semantic/map/slice/points': (url: URL) => (url.searchParams.get('from') === 'frus1961-63v06' ? slicePoints() : new Promise(() => undefined)),
+    });
+    const { router } = renderAt('/analytics/semantic?document=frus1961-63v06%2Fd1&from=frus1961-63v06&to=frus1969-76v12');
+    const map = await waitFor(() => {
+      const frame = document.querySelector('.semantic-map-frame');
+      expect(frame?.getAttribute('data-layout')).toBe('slice:frus1961-63v06|frus1969-76v12');
+      return frame;
+    });
+    const axis = await screen.findByRole('region', { name: 'Axis' });
+    expect(within(axis).getByRole('status').textContent).toBe('Laid out from frus1961-63v06 to frus1969-76v12.');
+    expect(within(axis).getByText('Up the side, the years 1862 to 1988.')).toBeTruthy();
+    fireEvent.click(within(axis).getByRole('button', { name: 'Back to the map' }));
+    await waitFor(() => expect(map?.getAttribute('data-layout')).toBe('map'));
+    // The next slice, laid out but its points on their way: the map stays drawn, and the card says it is coming.
+    await router.navigate({ to: '/analytics/semantic', search: { document: 'frus1961-63v06/d1', from: 'frus1969-76v12', to: 'frus1961-63v06' } });
+    const coming = await screen.findByRole('region', { name: 'Axis' });
+    await waitFor(() => expect(within(coming).getByRole('status').textContent).toBe('Laying out the slice…'));
+    expect(map?.getAttribute('data-layout')).toBe('map');
+  });
+
+  it('drops a lasso’s answer still on its way when Lasso is turned off, and says why a lasso could not be read', async () => {
+    drawing();
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', { value: () => undefined, configurable: true, writable: true });
+    let answer: (value: SemanticMapLassoAnswer) => void = () => undefined;
+    let fail = false;
+    serve({
+      'POST /api/v1/semantic/map/lasso': () =>
+        fail
+          ? new ProblemAnswer(400, 'INVALID_PARAMETER', 'polygon: each point is two finite numbers on the map’s grid')
+          : new Promise<SemanticMapLassoAnswer>((resolve) => {
+              answer = resolve;
+            }),
+    });
+    renderAt('/analytics/semantic');
+    await screen.findByRole('listbox', { name: 'Semantic map' });
+    const lasso = screen.getByRole('button', { name: 'Lasso' });
+    const frame = document.querySelector('.semantic-map-frame') as HTMLElement;
+    const draw = () => {
+      fireEvent.pointerDown(frame, { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1, clientX: 10, clientY: 10 });
+      for (const [x, y] of [[60, 10], [60, 60], [10, 60]]) fireEvent.pointerMove(frame, { pointerId: 1, pointerType: 'mouse', buttons: 1, clientX: x, clientY: y });
+      fireEvent.pointerUp(frame, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 10, clientY: 60 });
+    };
+    fireEvent.click(lasso);
+    draw();
+    await waitFor(() => expect(screen.getAllByRole('status').some((status) => status.textContent === 'Gathering what the lasso enclosed…')).toBe(true));
+    fireEvent.click(lasso);
+    answer({ scoped: false, capture: { total: 3, kept: 3, regionNames: ['berlin soviet'] } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole('region', { name: 'Lasso' })).toBeNull();
+    // A lasso the server refuses says why, as an alert.
+    fail = true;
+    fireEvent.click(lasso);
+    draw();
+    expect(await screen.findByText('polygon: each point is two finite numbers on the map’s grid')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toMatch(/^The lasso could not be read\./);
+  });
+
+  it('exports the regions’ CSV under the scope with the lens drawn', async () => {
+    drawing();
+    const server = serve({
+      '/api/v1/semantic/map/export': () =>
+        new Response('# Semantic map regions\nRegion,Terms\n', {
+          headers: { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="FRUS-Analytics-Semantic-map-regions-2026-11-25.csv"' },
+        }),
+    });
+    renderAt('/analytics/semantic?volume=frus1961-63v06&lens=era');
+    await screen.findByRole('listbox', { name: 'Semantic map' });
+    fireEvent.click(screen.getByRole('button', { name: 'Export map data' }));
+    expect(await screen.findByRole('menuitem', { name: 'Figure (PNG)…' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Chart data (CSV)…' }));
+    await waitFor(() => expect(saved.files).toEqual([{ name: 'FRUS-Analytics-Semantic-map-regions-2026-11-25.csv' }]));
+    const asked = server.mock.calls.map(([url]) => new URL(url, 'http://localhost')).find((url) => url.pathname === '/api/v1/semantic/map/export');
+    expect(asked?.searchParams.get('volume')).toBe('frus1961-63v06');
+    expect(asked?.searchParams.get('lens')).toBe('era');
+    expect(asked?.searchParams.get('timeZone')).toBeTruthy();
   });
 });
