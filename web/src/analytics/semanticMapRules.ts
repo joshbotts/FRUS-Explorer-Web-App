@@ -244,6 +244,9 @@ export interface SemanticSearch {
   document?: string;
   region?: number;
   layout?: string;
+  /** Since S28e, a slice's two poles, the volumes it runs from and to (`axisNegativeVolumeID`, `axisPositiveVolumeID`). */
+  from?: string;
+  to?: string;
 }
 
 function text(value: unknown): string | undefined {
@@ -264,5 +267,35 @@ export function validateSemanticSearch(raw: Record<string, unknown>): SemanticSe
   // A region by its id alone, in its canonical spelling: an id is a whole number of the layout it was named in.
   const region = text(raw.region);
   if (region !== undefined && /^(0|[1-9]\d{0,4})$/.test(region)) search.region = Number(region);
+  // A slice's poles travel both or neither, as the request's: a lone pole is a gesture in progress, not an analysis.
+  const from = text(raw.from);
+  const to = text(raw.to);
+  if (from !== undefined && to !== undefined) {
+    search.from = from;
+    search.to = to;
+  }
   return search;
+}
+
+// ─── The map's tools (PLAN's S28e) ──────────────────────────────────────────
+
+/**
+ * How far the pointer must move, in CSS pixels on either axis, before a lasso's stroke takes another point
+ * (`extendLasso(to:)`): a pointer reports a point a frame, and the containment test walks every edge.
+ */
+export const lassoStep = 4;
+
+/** The stroke with `point` added, unless it is within the step of the last point on both axes. */
+export function extendedLasso(path: readonly (readonly [number, number])[], point: readonly [number, number]): (readonly [number, number])[] {
+  const last = path[path.length - 1];
+  if (last && Math.abs(last[0] - point[0]) < lassoStep && Math.abs(last[1] - point[1]) < lassoStep) return [...path];
+  return [...path, point];
+}
+
+/** A point's place in a points answer, six bytes a point, int16 x and y little-endian: the map's or a slice's. */
+export function pointAt(points: ArrayBuffer, row: number): [number, number] | undefined {
+  const offset = row * 6;
+  if (!Number.isInteger(row) || row < 0 || offset + 4 > points.byteLength) return undefined;
+  const view = new DataView(points, offset, 4);
+  return [view.getInt16(0, true), view.getInt16(2, true)];
 }

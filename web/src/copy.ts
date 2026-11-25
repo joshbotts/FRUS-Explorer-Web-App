@@ -1383,6 +1383,8 @@ export const copy = {
         tier: 'joined',
         spoken: "Source: FRUS joined to the State Department's decimal classification schedule.",
       },
+      // S28e: the lasso's capture, whose membership is the map's model's reading (`ProvenanceSource.appModel`).
+      appModel: { label: "This app's model", tier: 'computed', spoken: 'Source: computed by this app.' },
     } as Record<string, { label: string; tier: 'frusOnly' | 'joined' | 'computed'; spoken: string }>,
   },
   /**
@@ -2809,6 +2811,59 @@ export const copy = {
       `Semantic map: ${regions.toLocaleString('en-US')} regions covering ${documents.toLocaleString('en-US')} documents. ${between.toLocaleString('en-US')} more sit between regions and are not listed. Position shows similarity, not time — distances between far-apart regions are not meaningful.`,
     table: 'Semantic map regions',
     columns: { region: 'Region', terms: 'Terms', documents: 'Documents' },
+    // S28e: the lasso, a region's save, the two-pole axis and its slice, Nearest in language and the export.
+    lasso: {
+      toggle: 'Lasso',
+      help: 'With Lasso on, drag around points to gather them; turn it off to drag the map again.',
+      title: 'Lasso',
+      dismiss: 'Dismiss',
+      documents: (count: number) => (count === 1 ? '1 document' : `${count.toLocaleString('en-US')} documents`),
+      emptyInScope: 'Nothing in scope here',
+      emptyInScopeDetail: 'Everything you enclosed is outside the current scope. Widen the scope, or draw around the coloured documents.',
+      truncated: (kept: number, total: number) => `Saving the first ${kept.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}.`,
+      save: 'Save as Working Corpus',
+      saved: (name: string) => `Saved as ${name}`,
+      gathering: 'Gathering what the lasso enclosed…',
+    },
+    regionSave: {
+      save: 'Save as Working Corpus',
+      saved: (name: string) => `Saved as “${name}”. Find it under Working Corpora, where it can scope a search.`,
+      truncated: (kept: number, total: number) => `Saved the first ${kept.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}.`,
+    },
+    axis: {
+      title: 'Axis',
+      clear: 'Clear axis and return to the map',
+      back: 'Back to the map',
+      from: 'Axis: from here',
+      to: '…to here',
+      poles: (from: string, to: string) => `${from} → ${to}`,
+      needsSecondPole:
+        'Select a document in a different volume and choose “…to here”. The map will then display every document in the series by where it falls between your chosen documents’ enclosing volumes.',
+      whatItAdds:
+        'On the map no direction has a meaning. A slice gives one that does: left to right becomes how far each document “leans” between two volumes you pick, with time running up the side. Any two volumes should produce a spread, so read it as a contrast you are interested in investigating — not one the corpus found.',
+      low: (volume: string) => `← ${volume}`,
+      high: (volume: string) => `${volume} →`,
+      gutter: (count: number) => `undated (${count.toLocaleString('en-US')})`,
+      laying: 'Laying out the slice…',
+    },
+    nearest: {
+      loading: 'Finding nearest documents…',
+      header: 'Nearest in language',
+      score: (percent: number) => `${percent}%`,
+      fence: 'Drawn only from volumes on this server — the map shows the whole series, so there may be nearer documents in volumes it does not serve.',
+      noShard: 'Finding nearest documents needs this volume’s vectors, which are not on this server.',
+      none: 'No nearest documents were found among the volumes on this server.',
+      noIndex: 'Nearest documents are drawn from the volumes this server serves, and it serves none yet.',
+      failed: 'The nearest documents could not be found.',
+    },
+    export: {
+      label: 'Export',
+      accessibleLabel: 'Export map data',
+      csv: 'Chart data (CSV)…',
+      png: 'Figure (PNG)…',
+      failed: 'Export Failed',
+      renderError: 'The figure could not be rendered.',
+    },
   },
   /**
    * Person Analytics (S24g), in the app's words: its title and Mode, the add field, the chips, By decade and Values,

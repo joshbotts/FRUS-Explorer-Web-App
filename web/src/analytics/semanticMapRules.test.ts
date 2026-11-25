@@ -1,21 +1,25 @@
 // The semantic map's rules (PLAN's S28b, S28c): the colours a key's swatch and the legend give, and the camera: the
 // app's scale, the shader's projection and its inverse, the zoom about a point that stays put, the pan by pointer and by
 // keyboard, the limits and the zoom in words; since S28c a pick's tolerance from the view, a click on a drawn name, a
-// name carried with the map, a camera from the server and the address.
+// name carried with the map, a camera from the server and the address; since S28e a lasso's stroke, a point's place in
+// a points answer and a slice's poles in the address.
 import { describe, expect, it } from 'vitest';
 import {
   cameraFrom,
   cameraScale,
   carried,
   clampCamera,
+  extendedLasso,
   fitCamera,
   gridPoint,
   isFitted,
   labelAt,
+  lassoStep,
   magnification,
   onGround,
   panned,
   pickTolerance,
+  pointAt,
   steppedCamera,
   swatchColour,
   validateSemanticSearch,
@@ -160,5 +164,42 @@ describe('the address', () => {
     expect(validateSemanticSearch({ volumes: ['a', '', 'b'], scopeLabel: 'Mine' })).toEqual({ volumes: ['a', 'b'], scopeLabel: 'Mine' });
     for (const region of ['012', '-1', '1.5', 'x', '123456', '']) expect(validateSemanticSearch({ region })).toEqual({});
     expect(validateSemanticSearch({ region: 0 })).toEqual({ region: 0 });
+  });
+
+  it('carries a slice’s two poles, both or neither (S28e)', () => {
+    expect(validateSemanticSearch({ from: 'frus1961-63v06', to: 'frus1969-76ve09p1' })).toEqual({ from: 'frus1961-63v06', to: 'frus1969-76ve09p1' });
+    expect(validateSemanticSearch({ from: 'frus1961-63v06' })).toEqual({});
+    expect(validateSemanticSearch({ to: 'frus1969-76ve09p1', lens: 'era' })).toEqual({ lens: 'era' });
+    expect(validateSemanticSearch({ from: '', to: 'frus1969-76ve09p1' })).toEqual({});
+  });
+});
+
+describe('the map’s tools (S28e)', () => {
+  it('thins a lasso’s stroke as the app does, taking a point only four pixels or more from the last on an axis', () => {
+    let path: (readonly [number, number])[] = [[10, 10]];
+    path = extendedLasso(path, [13, 13]);
+    expect(path).toEqual([[10, 10]]);
+    path = extendedLasso(path, [14, 11]);
+    expect(path).toEqual([[10, 10], [14, 11]]);
+    path = extendedLasso(path, [14, 7]);
+    expect(path).toEqual([[10, 10], [14, 11], [14, 7]]);
+    expect(extendedLasso([], [1, 2])).toEqual([[1, 2]]);
+    expect(lassoStep).toBe(4);
+  });
+
+  it('reads a point’s place from a points answer, six bytes a point', () => {
+    const bytes = new ArrayBuffer(12);
+    const view = new DataView(bytes);
+    view.setInt16(0, -19_710, true);
+    view.setInt16(2, -219, true);
+    view.setUint16(4, 115, true);
+    view.setInt16(6, 30_000, true);
+    view.setInt16(8, -30_000, true);
+    view.setUint16(10, 0xffff, true);
+    expect(pointAt(bytes, 0)).toEqual([-19_710, -219]);
+    expect(pointAt(bytes, 1)).toEqual([30_000, -30_000]);
+    expect(pointAt(bytes, 2)).toBeUndefined();
+    expect(pointAt(bytes, -1)).toBeUndefined();
+    expect(pointAt(bytes, 0.5)).toBeUndefined();
   });
 });

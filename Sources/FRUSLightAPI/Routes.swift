@@ -83,6 +83,10 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     let mapReading = SemanticMapRoutes.add(to: router, map: map, provider: provider, resources: resources)
     // Browse's clusters (PLAN's S28d), over the map's reading, saved as a working corpus where the server keeps user data.
     ClustersRoutes.add(to: router, reading: mapReading, provider: provider, resources: resources, userData: userData)
+    // The map's tools (PLAN's S28e): the lasso, the two-pole axis, Nearest in language and the export, the saves where
+    // the server keeps user data.
+    SemanticMapToolsRoutes.add(to: router, reading: mapReading, vectors: vectors, provider: provider, resources: resources,
+                               userData: userData)
     // Archival Analytics and About the Series (PLAN's S24h).
     ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     AboutSeriesRoutes.add(to: router, provider: provider, resources: resources)

@@ -243,6 +243,11 @@ export class SemanticMapRenderer {
     return dimensions ? Math.min(dimensions[0] ?? 4096, dimensions[1] ?? 4096) : 4096;
   }
 
+  /** Gives the context back to the browser at once, after `dispose()`, for a canvas drawn once and let go: a figure's plate. */
+  release(): void {
+    this.gl.getExtension('WEBGL_lose_context')?.loseContext();
+  }
+
   /** Lets go of what the renderer made on the GPU. */
   dispose(): void {
     const gl = this.gl;
