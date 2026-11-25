@@ -34,15 +34,16 @@ export function SearchBy({ mode, onChange }: { mode: SearchMode; onChange: (mode
 
 /**
  * The Meaning mode's strip, which replaces the Query Inspector's, as the Mac's does: no expression ran, and the strip
- * says what a search by meaning is, where it ranked, and every count its run owes the reader, the kit's sentences joined.
+ * says what a search by meaning is, where it ranked, and every count its run owes the reader, the kit's sentences joined:
+ * a search by meaning's, or a ranking's of the list it ranked (S27e).
  */
-export function MeaningStrip({ meaning }: { meaning: MeaningRunSummary }) {
+export function MeaningStrip({ strip }: { strip: readonly string[] }) {
   return (
     <section className="meaning-strip" aria-label={copy.meaningSearch.strip}>
       <span className="meaning-glyph" aria-hidden="true">
         ✦
       </span>
-      <p>{meaning.strip.join(' ')}</p>
+      <p>{strip.join(' ')}</p>
     </section>
   );
 }

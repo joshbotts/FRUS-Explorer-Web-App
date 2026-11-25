@@ -230,6 +230,8 @@ enum MeaningSearchWords {
         ("this device's index", "this server's index"),
         ("on this device", "on this server"),
         ("volumes you have not downloaded", "volumes this server does not serve"),
+        // A held list's row, of a Meaning list with one hit beyond the library (PLAN's S27e).
+        ("a volume you have not downloaded", "a volume this server does not serve"),
         ("the app has no match data", "the server has no match data"),
     ]
 
@@ -283,12 +285,17 @@ enum MeaningSearchRoutes {
         let encoding: any SemanticQueryEncoding
         let vectors: SemanticVectors
         let shards: any SemanticShardSource
+        /// The ceiling a keyword list held for a layer is fetched under (PLAN's S27e): the 7,500 rows the Mac's window
+        /// keeps of a search, above which a question ranks the list's whole match; a test lowers it to cut the fixtures.
+        let ceiling: Int
 
-        init(encoder: QueryEncoder, vectors: SemanticVectors, shards: (any SemanticShardSource)? = nil) {
+        init(encoder: QueryEncoder, vectors: SemanticVectors, shards: (any SemanticShardSource)? = nil,
+             ceiling: Int = SearchRequest.retainedLimit) {
             self.encoder = encoder
             encoding = ServerQueryEncoding(encoder: encoder)
             self.vectors = vectors
             self.shards = shards ?? vectors
+            self.ceiling = ceiling
         }
     }
 

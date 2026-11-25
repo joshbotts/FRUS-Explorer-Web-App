@@ -237,6 +237,41 @@ export const copy = {
     beyondNotServed: 'Volume not on this server — its documents are shown without titles.',
   },
   /**
+   * Search Within These Results (S27e), in the words of the app's `SearchLayerDirection`, `SearchLayerBaseRow` and
+   * `SearchLayerCopy`: the command that holds the list on screen, named by what it will do, with the Mac's toolbar help;
+   * the field's prompt while a list is held; the held list's row, its Swap and its close button; what a screen reader
+   * hears as a list is left; and Save this search's line while one is held. The sentences that count a list or a layer
+   * are the kit's, from the server. `held` names the row while the server is asked: the web's own.
+   */
+  searchLayer: {
+    start: { wordsInMatches: 'Find Words in These Matches', rankByMeaning: 'Rank These Results by a Question' },
+    prompt: { wordsInMatches: 'Words to find in these matches…', rankByMeaning: 'A question to rank these results by…' },
+    help: {
+      wordsInMatches: 'Find words in these closest matches. They keep their order, and only those that contain your words stay listed.',
+      rankByMeaning: 'Rank these results by a question. Every result stays listed, the closest first.',
+      rankWholeMatch: (ceiling: number) =>
+        `Rank every result of this search by a question, not only those loaded. The closest ${ceiling.toLocaleString('en-US')} are listed.`,
+    },
+    held: 'The list you are searching within',
+    swap: 'Swap',
+    swapLabel: 'Swap the two searches',
+    leave: 'Stop searching within these results',
+    leaveHelp: 'Show the list you were searching within again, as it was',
+    left: 'Stopped searching within these results',
+    saveSearchUnavailable: 'Not while searching within results. Save as Working Corpus keeps these results.',
+  },
+  /**
+   * The Semantic matches (experimental) under a keyword search that found nothing (S27e), in the words of the app's
+   * `SemanticSearchFallbackView`; the caption and the empty card's sentence are the kit's, from the server.
+   */
+  meaningFallback: {
+    title: 'Semantic matches (experimental)',
+    searching: 'Searching by meaning…',
+    emptyTitle: 'No semantic matches yet',
+    tooLong: 'This search is too long for the model. Try a shorter phrasing.',
+    failed: 'Semantic search could not run. Try again.',
+  },
+  /**
    * Saved searches (S17e), in the words of the Mac's Save Search sheet (`SaveSearchSheet`), its toolbar's two
    * bookmark buttons and its Saved Searches sheet (`SavedSearchesView`), with the NEW capsule and "+N since last
    * run". The sheet's empty line, which names the Mac's bookmark button, and the line for what a Mac's saved

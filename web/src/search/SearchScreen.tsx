@@ -15,13 +15,17 @@
 // chip, under the app's strip in place of the Query Inspector's, and those in volumes this server does not
 // serve apart under them; its rows are paged, ordered, checklisted and saved as a working corpus, and the
 // trail records it, as a keyword search's are, and the readings and facets, which read a keyword match, wait
-// for Keywords.
+// for Keywords. Since S27e the list on screen is held and searched within, as the app's Search Within These Results
+// holds one: words found in a Meaning list, or a keyword list or a browse ranked by a question, each the kit's on the
+// server, under the row that names the list, with its Swap and its way back; and under a keyword search that found
+// nothing, the app's Semantic matches (experimental), the nearest by meaning across the whole series.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, type RefObject, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
 import { concordanceQuery, inspectQuery, searchQuery, timelineQuery, volumesQuery } from '../api/endpoints';
 import { meaningQuery, type MeaningSearchResult, serverStatusQuery } from '../api/meaning';
+import { heldQuery, type LayerDirection, layerQuery, type LayeredSearchResult, type LayerSummary } from '../api/searchWithin';
 import type { ConcordanceOrder, DocumentType, SearchResultList, SortOrder, UserTag, Volume } from '../api/types';
 import { recordRun, type SavedSearch } from '../api/searchSets';
 import { meQuery, searchTagsQuery, tagsQuery } from '../api/userData';
@@ -57,7 +61,9 @@ import { rowChipLimit, tagChips, tagFilterLabel } from './tagRules';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { applyOrder } from '../research/listOrder';
 import { useListOrder, useLoggingEnabled } from '../settings/syncedPreferences';
-import { recordSearchRun } from './searchHistory';
+import { giveAnchorBack, recordListRun, recordSearchRun, setAnchorAside } from './searchHistory';
+import { heldList, holdList, keepAnchor, withinField } from './heldLists';
+import { HeldListRow, LayerEmpty, MeaningFallback } from './SearchWithin';
 import { Snippet } from './Snippet';
 
 const route = getRouteApi('/search');
@@ -65,14 +71,25 @@ const route = getRouteApi('/search');
 export function SearchScreen() {
   const state = route.useSearch();
   const navigate = route.useNavigate();
+  // A list held (S27e), which the address names by its search, and that search, as the screen showed it. While one is
+  // held its own rows show until the field has words, then the layer's.
+  const within = state.within;
+  const held = within !== undefined ? heldList(within) : undefined;
+  const heldName = withinField(within);
+  const fieldEmpty = (state.keywords ?? '').trim() === '';
+  const listState: SearchState | undefined =
+    held && fieldEmpty ? { ...held.base, sort: state.sort, offset: state.offset, limit: state.limit } : undefined;
+  const layered = held !== undefined && !fieldEmpty;
   // Checklist Mode's reviewed results leave the pages, once the checklist is this search's: another
   // search's marks hide nothing while it settles on this one, as the Mac settles it as a search runs.
+  // While a list is held, the checklist is its search's, whose marks last through every layer and the way back.
   const checklist = useChecklist();
-  const anchor = anchorFor(state);
+  const checklistState = held?.base ?? state;
+  const anchor = anchorFor(checklistState);
   const anchorKey = JSON.stringify(anchor);
   const settled = checklist.on && checklist.anchor !== undefined && isSameSearch(checklist.anchor, anchor);
   const reviewed = useMemo(() => (settled ? [...hiddenKeys(checklist)].sort() : []), [settled, checklist]);
-  const settle = useEffectEvent(() => checklistStore.settle(state));
+  const settle = useEffectEvent(() => checklistStore.settle(checklistState));
   useEffect(() => settle(), [anchorKey]);
   // Search by meaning, where the server says it searches by meaning (S27d). A link that asks for Meaning waits for
   // the server's word, and on a server that does not, whose admin has turned its encoder off, searches by keywords,
@@ -81,30 +98,41 @@ export function SearchScreen() {
   const offersMeaning = status.data?.semantic?.searchByMeaning === true;
   const modeSettled = state.by !== 'meaning' || status.data !== undefined || status.isError;
   const byMeaning = state.by === 'meaning' && offersMeaning;
-  const engine: SearchMode = byMeaning ? 'meaning' : 'keywords';
+  // While a list is held the field runs the other engine inside it: words in a Meaning list, a question over a keyword
+  // list or a browse (S27e).
+  const direction: LayerDirection | undefined = held ? (held.base.by === 'meaning' ? 'wordsInMatches' : 'rankByMeaning') : undefined;
+  const engine: SearchMode = direction ? (direction === 'wordsInMatches' ? 'keywords' : 'meaning') : byMeaning ? 'meaning' : 'keywords';
+  // The search whose rows are on screen when no layer is: the one asked for, or the held list's own, through its engine.
+  const rowsState = listState ?? state;
+  const rowsByMeaning = listState ? listState.by === 'meaning' && offersMeaning : !held && byMeaning;
   // A search by meaning asks a question: with no words it asks nothing, and shows nothing, as the Mac's lists none.
-  const asksMeaning = byMeaning && (state.keywords ?? '').trim() !== '';
-  const keywordQuery = searchQuery(state, reviewed);
-  const keywordResults = useQuery({ ...keywordQuery, enabled: keywordQuery.enabled && modeSettled && !byMeaning });
-  const meaningResults = useQuery(meaningQuery(state, reviewed, asksMeaning));
-  const results: UseQueryResult<SearchResultList, unknown> = byMeaning ? meaningResults : keywordResults;
+  const asksMeaning = rowsByMeaning && (rowsState.keywords ?? '').trim() !== '' && !layered;
+  const keywordQuery = searchQuery(rowsState, reviewed);
+  const keywordResults = useQuery({ ...keywordQuery, enabled: keywordQuery.enabled && modeSettled && !rowsByMeaning && !layered });
+  const meaningResults = useQuery(meaningQuery(rowsState, reviewed, asksMeaning));
+  const layerResults = useQuery(layerQuery(state, heldName, reviewed, layered && (engine === 'keywords' || offersMeaning)));
+  const heldSummary = useQuery(heldQuery(heldName));
+  const results: UseQueryResult<SearchResultList, unknown> = layered ? layerResults : rowsByMeaning ? meaningResults : keywordResults;
+  const layer = layered ? (results.data as LayeredSearchResult | undefined)?.layer : undefined;
   // The search whose rows are on screen, and the engine that found them: until the next search's arrive, the last
   // one's stay, and a mark made of them would be kept under the next and hide its documents, so marks wait for them,
   // as the Mac's `canMarkReviewed` makes them wait (#1683). Each engine keeps its own last rows, so rows the other
   // engine found for this search say nothing of those shown (S27d).
-  const [rowsAnchor, setRowsAnchor] = useState<{ anchor: ChecklistAnchor; engine: SearchMode } | null>(null);
+  // A held list's own rows and a layer's are lists of their own too (S27e).
+  const rowsEngine = held ? `${layered ? 'layer' : 'list'} ${within}` : engine;
+  const [rowsAnchor, setRowsAnchor] = useState<{ anchor: ChecklistAnchor; engine: string } | null>(null);
   if (
     results.data &&
     !results.isPlaceholderData &&
-    (rowsAnchor === null || rowsAnchor.engine !== engine || JSON.stringify(rowsAnchor.anchor) !== anchorKey)
+    (rowsAnchor === null || rowsAnchor.engine !== rowsEngine || JSON.stringify(rowsAnchor.anchor) !== anchorKey)
   ) {
-    setRowsAnchor({ anchor, engine });
+    setRowsAnchor({ anchor, engine: rowsEngine });
   }
   const canMark =
     settled &&
     checklist.anchor !== undefined &&
     rowsAnchor !== null &&
-    rowsAnchor.engine === engine &&
+    rowsAnchor.engine === rowsEngine &&
     isSameSearch(checklist.anchor, rowsAnchor.anchor);
   const volumes = useQuery(volumesQuery);
   const queryClient = useQueryClient();
@@ -115,9 +143,11 @@ export function SearchScreen() {
   const userTags = keepsUserData ? tags.data?.items : undefined;
   const logging = useLoggingEnabled();
   // Each run the screen shows goes into the trail (S17f), as the Mac's window records each it completes, by the
-  // engine it ran through (S27d).
-  const record = useEffectEvent(() => recordSearchRun(queryClient, state, engine));
-  const shownRun = results.data && !results.isPlaceholderData ? JSON.stringify({ ...searchFields(state), engine }) : undefined;
+  // engine it ran through (S27d), and a layer inside the list it ran within (S27e). A held list's own rows shown again
+  // are no run: the app puts them back from memory.
+  const record = useEffectEvent(() => recordSearchRun(queryClient, state, engine, layered ? heldName : undefined));
+  const shownRun =
+    results.data && !results.isPlaceholderData && (!held || layered) ? JSON.stringify({ ...searchFields(state), engine, within }) : undefined;
   useEffect(() => {
     if (keepsUserData && shownRun !== undefined) record();
   }, [keepsUserData, shownRun]);
@@ -141,7 +171,9 @@ export function SearchScreen() {
     // The same search again leaves the URL as it is, so it asks the server again itself: after a
     // refusal or a server fault, or once an index is ready. So does the account of a search that
     // found nothing.
-    if (keywords === state.keywords && state.offset === undefined && byMeaning) {
+    if (keywords === state.keywords && state.offset === undefined && layered) {
+      void queryClient.refetchQueries({ queryKey: layerQuery(state, heldName, reviewed, true).queryKey, exact: true });
+    } else if (keywords === state.keywords && state.offset === undefined && byMeaning) {
       void queryClient.refetchQueries({ queryKey: meaningQuery(state, reviewed, true).queryKey, exact: true });
     } else if (keywords === state.keywords && state.offset === undefined) {
       void queryClient.refetchQueries({ queryKey: searchQuery(state, reviewed).queryKey, exact: true });
@@ -184,6 +216,95 @@ export function SearchScreen() {
         offset: undefined,
       }),
     });
+  }
+
+  // Search Within These Results (S27e). What a screen reader hears as a list is held, left or swapped, and the search
+  // box, which takes the focus as a list is held, as the app's field takes the keyboard.
+  const [layerAnnouncement, setLayerAnnouncement] = useState('');
+  const [announcesHold, setAnnouncesHold] = useState(false);
+  if (announcesHold && heldSummary.data) {
+    setLayerAnnouncement(heldSummary.data.accessibilityLabel);
+    setAnnouncesHold(false);
+  }
+  const [boxFocus, setBoxFocus] = useState(0);
+
+  /**
+   * Holds the list on screen and turns the field to the other engine, as the app's command does: the rows stay, the field
+   * empties and asks for words or a question, the row that names the list takes Search by's place, and nothing is searched
+   * until the reader types. The trail's anchor is set aside with the list, and a ranking is read closest first.
+   */
+  function holdTheList(direction: LayerDirection) {
+    const base: SearchState = { ...state, panel: undefined, reading: undefined, timelineMode: undefined, offset: undefined };
+    const name = holdList(base, reviewed, setAnchorAside());
+    setLayerAnnouncement('');
+    setAnnouncesHold(true);
+    setBoxFocus((count) => count + 1);
+    void navigate({
+      search: {
+        ...base,
+        keywords: undefined,
+        within: name,
+        by: direction === 'rankByMeaning' ? 'meaning' : undefined,
+        sort: direction === 'rankByMeaning' ? undefined : base.sort,
+      },
+    });
+  }
+
+  /** Leaves the held list: its search's rows come back as they were, with its order, its engine and its trail anchor. */
+  function leaveTheList() {
+    if (!held) return;
+    giveAnchorBack(held.anchor, held.base, held.base.by === 'meaning' ? 'meaning' : 'keywords');
+    setLayerAnnouncement(copy.searchLayer.left);
+    void navigate({ search: { ...held.base, offset: undefined } });
+  }
+
+  /**
+   * Swaps the held list and the search inside it, as the app's Swap does: the layer's words or question become a list of
+   * their own, through their engine, under the filters and the corpus in force, which is held, and the list's own words or
+   * question run inside it. The new list's search is a search of its own in the trail, and its checklist starts over.
+   */
+  function swapTheLayer(swap: NonNullable<LayerSummary['swap']>) {
+    if (!held) return;
+    const listEngine: SearchMode = swap.direction === 'rankByMeaning' ? 'keywords' : 'meaning';
+    const base: SearchState = {
+      ...state,
+      within: undefined,
+      keywords: swap.listQuery,
+      by: listEngine === 'meaning' ? 'meaning' : undefined,
+      sort: held.base.sort,
+      offset: undefined,
+    };
+    const name = holdList(base, [], undefined, true);
+    setAnchorAside();
+    if (keepsUserData) void recordListRun(queryClient, base, listEngine).then((anchor) => keepAnchor(name, anchor));
+    setLayerAnnouncement(swap.help);
+    void navigate({
+      search: {
+        ...base,
+        within: name,
+        keywords: swap.layerQuery,
+        by: swap.direction === 'rankByMeaning' ? 'meaning' : undefined,
+        sort: swap.direction === 'rankByMeaning' ? undefined : base.sort,
+      },
+    });
+  }
+
+  // A swap's new list that found nothing holds nothing, as the app's swap ends with nothing to hold: its own search shows.
+  const emptySwap = held?.fromSwap === true && heldSummary.data !== undefined && heldSummary.data.rows === 0;
+  const endTheSwap = useEffectEvent(() => {
+    if (!held) return;
+    giveAnchorBack(held.anchor, held.base, held.base.by === 'meaning' ? 'meaning' : 'keywords');
+    void navigate({ search: { ...held.base, offset: undefined }, replace: true });
+  });
+  useEffect(() => {
+    if (emptySwap) endTheSwap();
+  }, [emptySwap]);
+
+  /** Words found nowhere in a Meaning list searched for across the whole library: the list is let go, the words stay. */
+  function searchTheLibrary() {
+    if (!held) return;
+    giveAnchorBack(held.anchor, held.base, held.base.by === 'meaning' ? 'meaning' : 'keywords');
+    void navigate({ search: { ...state, within: undefined, by: undefined, offset: undefined } });
   }
 
   /** Opens or closes the panel in place of the history entry, so Back leaves the search. */
@@ -279,15 +400,36 @@ export function SearchScreen() {
         userTags={userTags}
         update={update}
         onSearch={search}
-        engine={offersMeaning ? engine : undefined}
+        engine={offersMeaning || held ? engine : undefined}
         onEngine={setMode}
+        counting={
+          layered ? { state, engine, within: heldName } : { state: rowsState, engine: rowsByMeaning ? 'meaning' : 'keywords' }
+        }
+        boxFocus={boxFocus}
+        held={
+          held && direction
+            ? {
+                row: (
+                  <HeldListRow
+                    summary={heldSummary.data}
+                    swap={layer?.swap}
+                    canSwap={!results.isFetching}
+                    onSwap={() => layer?.swap && swapTheLayer(layer.swap)}
+                    onLeave={leaveTheList}
+                  />
+                ),
+                prompt: heldSummary.data?.fieldPrompt ?? copy.searchLayer.prompt[direction],
+              }
+            : undefined
+        }
         aids={
           keepsUserData && (
             <>
               <button
                 type="button"
-                title={copy.savedSearches.saveHelp}
-                disabled={(state.keywords ?? '').trim() === ''}
+                // A search within a held list is not saved, as the app's is not: Save as Working Corpus keeps its results.
+                title={held ? copy.searchLayer.saveSearchUnavailable : copy.savedSearches.saveHelp}
+                disabled={(state.keywords ?? '').trim() === '' || held !== undefined}
                 onClick={(event) => open('saveSearch', event.currentTarget)}
               >
                 <span aria-hidden="true">☆ </span>
@@ -302,20 +444,31 @@ export function SearchScreen() {
         }
       />
       {keepsUserData && <CorpusBanner state={state} onLeave={() => update({ workingCorpusId: undefined })} />}
-      {state.keywords !== undefined && !byMeaning && !searchesAnywhere(state) && (
+      {/* Mounted with the held list, so that what it says as the list is held, swapped or left is heard. */}
+      {(held !== undefined || layerAnnouncement !== '') && (
+        <p className="visually-hidden" role="status">
+          {layerAnnouncement}
+        </p>
+      )}
+      {state.keywords !== undefined && !held && !byMeaning && !searchesAnywhere(state) && (
         // As the Mac's window says it, rather than search nowhere.
         <p className="error" role="alert">
           {copy.search.emptyScope}
         </p>
       )}
-      {state.keywords !== undefined && (byMeaning ? asksMeaning : searchesAnywhere(state)) && (
-        <div className={panelOpen && !byMeaning ? 'search-body with-facets' : 'search-body'}>
+      {(held !== undefined || (state.keywords !== undefined && (byMeaning ? asksMeaning : searchesAnywhere(state)))) && (
+        <div className={panelOpen && !byMeaning && !held ? 'search-body with-facets' : 'search-body'}>
           <Results
-            state={state}
+            state={listState ?? state}
             titles={titles}
             userTags={userTags}
             results={results}
-            byMeaning={byMeaning}
+            byMeaning={rowsByMeaning && !layered}
+            layer={layer}
+            held={held !== undefined}
+            offersFallback={offersMeaning && !held}
+            onSearchLibrary={searchTheLibrary}
+            onBack={leaveTheList}
             reviewed={reviewed}
             checklist={
               checklist.on
@@ -341,6 +494,23 @@ export function SearchScreen() {
             }
             actions={
               <>
+                {/* Search Within These Results, titled by what it will do, as the app's command is: words found in a
+                    Meaning list, or a keyword list or a browse ranked by a question, which needs the Meaning engine. */}
+                {!held && shown && shown.total - (shown.hidden ?? 0) > 0 && (engine === 'meaning' || offersMeaning) && (
+                  <button
+                    type="button"
+                    // Not while a search runs, whose rows are not yet the ones on screen.
+                    disabled={results.isFetching}
+                    title={
+                      engine === 'keywords' && shown.total >= retainedLimit
+                        ? copy.searchLayer.help.rankWholeMatch(retainedLimit)
+                        : copy.searchLayer.help[engine === 'meaning' ? 'wordsInMatches' : 'rankByMeaning']
+                    }
+                    onClick={() => holdTheList(engine === 'meaning' ? 'wordsInMatches' : 'rankByMeaning')}
+                  >
+                    {copy.searchLayer.start[engine === 'meaning' ? 'wordsInMatches' : 'rankByMeaning']}
+                  </button>
+                )}
                 {keepsUserData && (
                   <button
                     type="button"
@@ -358,7 +528,7 @@ export function SearchScreen() {
                   aria-label={copy.checklist.toggleName}
                   onClick={() => {
                     setAnnouncement('');
-                    checklistStore.setOn(!checklist.on, state);
+                    checklistStore.setOn(!checklist.on, checklistState);
                   }}
                 >
                   <span aria-hidden="true">☑ </span>
@@ -374,8 +544,9 @@ export function SearchScreen() {
             onTimelineMode={setTimelineMode}
             onAlign={setAlign}
             facets={
-              // The facets count a keyword match, so they wait for Keywords.
-              !byMeaning && (
+              // The facets count a keyword match, so they wait for Keywords, and for no list held.
+              !byMeaning &&
+              !held && (
                 <button
                   type="button"
                   className="facets-toggle"
@@ -391,12 +562,17 @@ export function SearchScreen() {
               )
             }
           />
-          {panelOpen && !byMeaning && <FacetPanel state={state} total={shown?.total} panel={facetPanel} onSearch={narrowTo} />}
+          {panelOpen && !byMeaning && !held && <FacetPanel state={state} total={shown?.total} panel={facetPanel} onSearch={narrowTo} />}
         </div>
       )}
       {sheet === 'saveSearch' && <SaveSearchDialog state={state} onClose={closed} />}
       {sheet === 'savedSearches' && <SavedSearchesDialog onRecall={recall} onClose={closed} />}
-      {sheet === 'saveCorpus' && <SaveCorpusDialog state={state} reviewed={reviewed} engine={engine} onClose={closed} />}
+      {sheet === 'saveCorpus' &&
+        (layered ? (
+          <SaveCorpusDialog state={state} reviewed={reviewed} engine={engine} within={heldName} onClose={closed} />
+        ) : (
+          <SaveCorpusDialog state={rowsState} reviewed={reviewed} engine={rowsByMeaning ? 'meaning' : 'keywords'} onClose={closed} />
+        ))}
     </section>
   );
 }
@@ -415,6 +591,9 @@ function SearchEntry({
   onSearch,
   engine,
   onEngine,
+  counting,
+  boxFocus,
+  held,
   aids,
 }: {
   state: SearchState;
@@ -427,11 +606,20 @@ function SearchEntry({
   /** The engine the search runs through, where the server searches by meaning and offers the choice (S27d). */
   engine?: SearchMode;
   onEngine: (mode: SearchMode) => void;
+  /** The rows My Tags counts over: the search's, a held list's own, or a layer's inside it (S27e). */
+  counting: TagCounting;
+  /** Changed to give the search box the focus, as holding a list does. */
+  boxFocus: number;
+  /** While a list is held (S27e): the row that names it, in Search by's place, and the field's prompt. */
+  held?: { row: ReactNode; prompt: string };
   /** The controls beside the search box's aids: Save this search and Saved searches. */
   aids?: ReactNode;
 }) {
   // A filter's token removes itself, so focus goes to the search box rather than nowhere.
   const searchBox = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (boxFocus > 0) searchBox.current?.focus();
+  }, [boxFocus]);
   // Going to another search shows its text; the box is not remounted for it, so a search made from
   // it keeps its focus.
   const [text, setText] = useState(state.keywords ?? '');
@@ -445,7 +633,8 @@ function SearchEntry({
   const byMeaning = engine === 'meaning';
   return (
     <>
-      {engine && <SearchBy mode={engine} onChange={onEngine} />}
+      {/* While a list is held, the row that names it takes Search by's place: the field runs the other engine inside it. */}
+      {held ? held.row : engine && <SearchBy mode={engine} onChange={onEngine} />}
       <SearchForm
         inputRef={searchBox}
         text={text}
@@ -453,6 +642,7 @@ function SearchEntry({
         onSubmit={onSearch}
         aids={aids}
         byMeaning={byMeaning}
+        placeholder={held ? held.prompt : byMeaning ? copy.meaningSearch.placeholder : undefined}
       />
       <Filters
         state={state}
@@ -462,6 +652,7 @@ function SearchEntry({
         update={update}
         onCleared={() => searchBox.current?.focus()}
         byMeaning={byMeaning}
+        counting={counting}
       />
       {/* A search by meaning compiles no expression: its strip, with the results, takes the inspector's place. */}
       {!byMeaning && (
@@ -478,6 +669,7 @@ function SearchForm({
   onSubmit,
   aids,
   byMeaning,
+  placeholder,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
   /** The box's text, which the search entry holds. */
@@ -485,8 +677,10 @@ function SearchForm({
   onTextChange: (text: string) => void;
   onSubmit: (keywords: string) => void;
   aids?: ReactNode;
-  /** Whether the search runs by meaning, whose box asks for a question and whose tip says the syntax is the keywords'. */
+  /** Whether the search runs by meaning, whose tip says the syntax is the keywords'. */
   byMeaning: boolean;
+  /** What the box asks for: a question in Meaning mode, and inside a held list words or a question for it. */
+  placeholder?: string;
 }) {
   const inputId = useId();
 
@@ -505,7 +699,7 @@ function SearchForm({
           type="search"
           value={text}
           onChange={(event) => onTextChange(event.target.value)}
-          placeholder={byMeaning ? copy.meaningSearch.placeholder : undefined}
+          placeholder={placeholder}
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"
@@ -535,6 +729,7 @@ function Filters({
   update,
   onCleared,
   byMeaning,
+  counting,
 }: {
   state: SearchState;
   titles: Map<string, string>;
@@ -543,8 +738,10 @@ function Filters({
   update: (changes: Partial<SearchState>) => void;
   /** Called when a chip or a token has cleared its filter, and so removed itself. */
   onCleared: () => void;
-  /** Whether the search runs by meaning, which reads none of Search in's places, and whose rows My Tags does not count. */
+  /** Whether the search runs by meaning, which reads none of Search in's places. */
   byMeaning: boolean;
+  /** The rows My Tags counts over. */
+  counting: TagCounting;
 }) {
   // Search in has notes and summaries to choose only where the server keeps them; a scope a link
   // turned off is shown anywhere, so that it can be turned on again. A search by meaning reads none of
@@ -617,7 +814,7 @@ function Filters({
           })}
         </div>
       )}
-      {userTags !== undefined && userTags.length > 0 && <MyTags state={state} tags={userTags} update={update} byMeaning={byMeaning} />}
+      {userTags !== undefined && userTags.length > 0 && <MyTags state={state} tags={userTags} update={update} counting={counting} />}
       {keepsUserData && <ScopeFilter update={update} />}
       {keepsUserData && <CorpusFilter state={state} update={update} />}
       {(state.yearKeys ||
@@ -742,25 +939,37 @@ function SearchIn({ state, update }: { state: SearchState; update: (changes: Par
  * on a document must carry, and beside each how many of the results carry it, counted once the list
  * is opened, as the Mac counts them when its filter opens, never before.
  */
+/**
+ * The rows My Tags counts over: a search's, through its engine, as the Mac counts a Meaning list's keys (S27d), or a
+ * layer's inside the list it ran within (S27e).
+ */
+interface TagCounting {
+  state: SearchState;
+  engine: SearchMode;
+  within?: string;
+}
+
 function MyTags({
   state,
   tags: byName,
   update,
-  byMeaning,
+  counting,
 }: {
   state: SearchState;
   tags: UserTag[];
   update: (changes: Partial<SearchState>) => void;
-  /** Whether the search runs by meaning, whose rows the counts are of, as the Mac counts a Meaning list's (S27d). */
-  byMeaning: boolean;
+  counting: TagCounting;
 }) {
   // In the reader's own order (S17f), as the app's My Tags filter lists them.
   const { tagOrder } = useListOrder();
   const tags = applyOrder(byName, tagOrder, (tag) => tag.id);
   const [open, setOpen] = useState(false);
+  const asked = counting.state;
   const counted =
-    open && state.keywords !== undefined && (byMeaning ? (state.keywords ?? '').trim() !== '' : searchesAnywhere(state));
-  const counts = useQuery(searchTagsQuery(state, counted, byMeaning ? 'meaning' : 'keywords'));
+    open &&
+    asked.keywords !== undefined &&
+    (counting.engine === 'meaning' || counting.within !== undefined ? (asked.keywords ?? '').trim() !== '' : searchesAnywhere(asked));
+  const counts = useQuery(searchTagsQuery(asked, counted, counting.engine, counting.within));
   const shown = counted && counts.data !== undefined && !counts.isError ? counts.data : undefined;
   const chosen = new Set(state.userTagIds ?? []);
   function toggle(id: string, on: boolean) {
@@ -828,6 +1037,11 @@ function Results({
   userTags,
   results,
   byMeaning,
+  layer,
+  held,
+  offersFallback,
+  onSearchLibrary,
+  onBack,
   narrowedFrom,
   onReading,
   onTimelineMode,
@@ -843,6 +1057,15 @@ function Results({
   results: UseQueryResult<SearchResultList, unknown>;
   /** Whether the rows are a search by meaning's, a `MeaningSearchResult` with the run's account (S27d). */
   byMeaning: boolean;
+  /** A layer's account, when the rows are a layer's inside a held list (S27e). */
+  layer: LayerSummary | undefined;
+  /** Whether a list is held, inside which the readings, which read a keyword match, wait. */
+  held: boolean;
+  /** Whether a keyword search that found nothing offers the nearest by meaning, as the app's fallback does (S27e). */
+  offersFallback: boolean;
+  /** A layer that found nothing: its words searched across the whole library, or the way back to the list. */
+  onSearchLibrary: () => void;
+  onBack: () => void;
   /** The count the last facet narrowed from, while the panel shows it. */
   narrowedFrom: number | undefined;
   onReading: (reading: Reading) => void;
@@ -866,7 +1089,7 @@ function Results({
   const last = list ? list.offset + list.items.length : 0;
   // A search by meaning's account of its run, and its rows read as a list alone: the readings read a keyword match.
   const meaning = byMeaning ? (list as MeaningSearchResult | undefined)?.meaning : undefined;
-  const reading: Reading = byMeaning ? 'list' : (state.reading ?? 'list');
+  const reading: Reading = byMeaning || held ? 'list' : (state.reading ?? 'list');
   // A row marked reviewed leaves the list once the page has loaded again, and its button with it: the
   // focus goes to the Mark Reviewed of the row that takes its place, or past the last to Mark Page Reviewed.
   const listElement = useRef<HTMLOListElement>(null);
@@ -886,7 +1109,9 @@ function Results({
       <h2 id="results-heading" className="visually-hidden">
         {copy.search.results}
       </h2>
-      {meaning && !failed && <MeaningStrip meaning={meaning} />}
+      {meaning && !failed && <MeaningStrip strip={meaning.strip} />}
+      {/* A ranking's account, in the Meaning strip's sentences, of the list it ranked (S27e). */}
+      {layer?.strip && !failed && <MeaningStrip strip={layer.strip} />}
       <div className="results-header">
         <p className="count" role="status">
           {failed ? '' : list ? (
@@ -894,11 +1119,14 @@ function Results({
               {/* A search by meaning's list is the shape of its answer, the closest matches, not a count of a match;
                   one that listed no row says the heading over its matches beyond the library, where it found some, as
                   the app's finished search says it (A11Y-2). */}
-              {meaning
-                ? list.total === 0
-                  ? (meaning.beyondHeader ?? copy.meaningSearch.noResults)
-                  : copy.meaningSearch.closest(Math.max(0, list.total - hidden))
-                : copy.search.count(list.total, list.countBasis)}
+              {/* A layer's header is the app's sentence for it: what its words or question kept of the list (S27e). */}
+              {layer
+                ? layer.header
+                : meaning
+                  ? list.total === 0
+                    ? (meaning.beyondHeader ?? copy.meaningSearch.noResults)
+                    : copy.meaningSearch.closest(Math.max(0, list.total - hidden))
+                  : copy.search.count(list.total, list.countBasis)}
               {narrowedFrom !== undefined && <> · {copy.search.narrowedFrom(narrowedFrom)}</>}
               {list.items.length > 0 && <> · {copy.search.showing(first, last)}</>} ·{' '}
               {copy.search.coverage(list.coverage.indexedVolumes, list.coverage.manifestVolumes)}
@@ -910,7 +1138,7 @@ function Results({
         {list && !failed && <SortOrders state={state} list={list} />}
         {/* Each reading reads what a search found, so the picker waits for a match, as the Mac's does, and for
             Keywords, as the readings read a keyword match. */}
-        {list && !failed && !byMeaning && <ReadingPicker reading={reading} disabled={list.total === 0} onChange={onReading} />}
+        {list && !failed && !byMeaning && !held && <ReadingPicker reading={reading} disabled={list.total === 0} onChange={onReading} />}
         {actions}
         {facets}
       </div>
@@ -926,7 +1154,7 @@ function Results({
           loggingNotice={checklist.loggingNotice}
         />
       )}
-      {list && !failed && isPartialEvidence(list.total) && (
+      {list && !failed && !layer && isPartialEvidence(list.total) && (
         // As the Mac's window says it on every page: an order, a page or a reading of what a search
         // keeps is of its most relevant 7,500, not of the whole match.
         <div className="over-cap">
@@ -958,12 +1186,18 @@ function Results({
             </div>
           ) : list.items.length === 0 && list.total === 0 ? (
             // A search that found nothing says so in any reading, as the Mac's window does; a search by meaning in its
-            // own words, never blaming a term (S27d).
-            results.isPlaceholderData ? null : meaning ? (
+            // own words, never blaming a term (S27d); a layer what it looked in, with its ways on (S27e).
+            results.isPlaceholderData ? null : layer?.empty ? (
+              <LayerEmpty empty={layer.empty} onSearchLibrary={onSearchLibrary} onBack={onBack} />
+            ) : meaning ? (
               <MeaningEmpty meaning={meaning} />
             ) : (state.keywords ?? '').trim() !== '' ? (
-              // Only once the search shown is this one, as the Mac's window waits for its search.
-              <ZeroResult state={state} />
+              // Only once the search shown is this one, as the Mac's window waits for its search; under the account of
+              // the terms that found nothing, the nearest by meaning, as the app's fallback offers them (S27e).
+              <>
+                <ZeroResult state={state} />
+                {offersFallback && <MeaningFallback state={state} />}
+              </>
             ) : (
               <p>{copy.search.none}</p>
             )
@@ -984,6 +1218,10 @@ function Results({
             <ol ref={listElement} className="result-list" aria-label={copy.search.results} start={first}>
               {list.items.map((item, index) => (
                 <li key={`${item.volumeId}/${item.documentId}`} className="result">
+                  {/* A ranking's rows it could not rank follow the ranked ones, under the line that counts them (S27e). */}
+                  {layer?.unrankedTail?.firstKey === `${item.volumeId}/${item.documentId}` && (
+                    <p className="unranked-line">{layer.unrankedTail.line}</p>
+                  )}
                   <h3>
                     <Link to="/doc/$volumeId/$documentId" params={{ volumeId: item.volumeId, documentId: item.documentId }}>
                       {item.displayTitle}

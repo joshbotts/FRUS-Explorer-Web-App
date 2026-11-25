@@ -14,6 +14,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
                  leads: ProjectLeadsQueue? = nil,
                  library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, teiCheck: TEIChangeCheck? = nil,
                  encoder: QueryEncoder = .none, vectors: SemanticVectors? = nil, base: BasePath = .root,
+                 searchCeiling: Int = SearchRequest.retainedLimit,
                  logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
     // With user data on, each stack attaches the user store's search database, for each user's half of
     // a search (S17d).
@@ -25,7 +26,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     let vectors = vectors ?? SemanticVectors(resources: resources.directory, shards: state.configuration.semanticShards)
     let map = SemanticMapFiles(vectors: vectors)
     // Search by meaning's engine (PLAN's S27d): the encoder and the vectors, which the trail and a capture run it with too.
-    let meaning = MeaningSearchRoutes.MeaningEngine(encoder: encoder, vectors: vectors)
+    let meaning = MeaningSearchRoutes.MeaningEngine(encoder: encoder, vectors: vectors, ceiling: searchCeiling)
     // Every GET route answers HEAD too, so HEAD /readyz says what GET says rather than falling to
     // the browser app's fallback.
     let router = Router(context: APIRequestContext.self, options: .autoGenerateHeadEndpoints)
@@ -61,6 +62,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     SearchRoutes.add(to: router, provider: provider, resources: resources, users: users)
     // Search by meaning (PLAN's S27d), the kit's Meaning engine over the served index, the vectors and the encoder.
     MeaningSearchRoutes.add(to: router, provider: provider, resources: resources, users: users, engine: meaning)
+    // Search Within These Results and the fallback (PLAN's S27e), the kit's held list and composer over the same engine.
+    SearchWithinRoutes.add(to: router, provider: provider, resources: resources, users: users, engine: meaning)
     FacetRoutes.add(to: router, provider: provider, resources: resources, users: users)
     ReadingRoutes.add(to: router, provider: provider, resources: resources, users: users)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)

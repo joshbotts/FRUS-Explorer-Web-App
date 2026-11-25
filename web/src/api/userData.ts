@@ -64,12 +64,13 @@ export function documentTagsQuery(volumeId: string, documentId: string) {
  * when the filter is opened, never before. Another search's counts never stand in while the next
  * load, as the Mac's toggles show none while they count.
  */
-export function searchTagsQuery(state: SearchState, enabled: boolean, engine: 'keywords' | 'meaning' = 'keywords') {
+export function searchTagsQuery(state: SearchState, enabled: boolean, engine: 'keywords' | 'meaning' = 'keywords', within?: string) {
   const search = filterFields(state);
-  // A search by meaning's are counted over the rows it listed (S27d).
-  const asked = engine === 'meaning' ? { ...search, mode: engine } : search;
+  // A search by meaning's are counted over the rows it listed (S27d), and a layer's over its rows inside the list it
+  // names (S27e).
+  const asked = within !== undefined ? { ...search, within } : engine === 'meaning' ? { ...search, mode: engine } : search;
   return queryOptions<SearchTagCounts, unknown, SearchTagCounts, unknown[]>({
-    queryKey: ['searchTags', search, engine],
+    queryKey: ['searchTags', search, engine, within],
     queryFn: ({ signal }) => getJSON<SearchTagCounts>('/api/v1/me/search/tags', formEncode(asked), signal),
     enabled,
     staleTime: 5 * 60_000,

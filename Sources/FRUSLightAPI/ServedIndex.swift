@@ -57,6 +57,10 @@ public final class ServedIndex: Sendable {
     public let recent = RecentSearches()
     /// The searches by meaning run lately over this index (PLAN's S27d), each kept for its user, question and parameters.
     let meaning = MeaningRuns()
+    /// Search Within These Results' held lists and layers run lately over this index, and the fallback's runs (PLAN's S27e).
+    let held = KeptValues<HeldList>()
+    let layers = KeptValues<LayerRun>()
+    let fallbacks = KeptValues<FallbackRun>()
     /// The People screen's list of this index's person rollup, read once (People.swift, PLAN's S21g).
     public let people = ServedPeople()
     /// Person Analytics' and Cross-Reference Analytics' series over this index (PLAN's S24g), each computed once for its

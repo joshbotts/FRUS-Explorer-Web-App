@@ -298,7 +298,7 @@ import Testing
 
     /// The Meaning mode's sentences are the kit's, of a server where the kit's speak of a device: each replacement's phrase
     /// is one the kit says, so a pin move that rewords it fails here, and no sentence the server gives offers a download.
-    @Test func theStripsWordsAreTheKitsInAServersWords() {
+    @Test func theStripsWordsAreTheKitsInAServersWords() throws {
         let locale = Self.locale
         let kit = [
             SemanticUnscoredCopy.unscored(candidates: 12, volumes: 3, downloading: 0, locale: locale),
@@ -311,6 +311,9 @@ import Testing
             SemanticUnscoredCopy.emptyInsideSet(setSize: 5, ranked: 0, filteredOut: 0, volumes: 2, downloading: 0, locale: locale),
             SemanticModeStripCopy.opening(setSize: 0, locale: locale),
             SemanticModeStripCopy.beyondHeader(count: 2),
+            // A held list's row (PLAN's S27e): its Meaning list's hits beyond the library, which no layer searches.
+            try #require(SearchWithinParityTests.leftOut(notDownloaded: 1)),
+            try #require(SearchWithinParityTests.leftOut(notDownloaded: 2)),
         ] + SemanticModeStripCopy.parts(
             disclosure: SemanticSearchBackend.Disclosure(unscoredCandidates: 0, unscoredVolumes: 0, downloadingVolumes: 0, filtersApplied: true,
                                                          filteredOut: 2, beyondUncheckedByFilters: true),
@@ -392,8 +395,9 @@ import Testing
             #"description = loaded == 1 ? "Meaning search — the closest match" : String(format: WorkingCorpusProvenance.meaningSearch, Self.grouped(loaded))"#,
             #"? "This document is the closest match a Meaning search found, not every document on your subject. Counts taken inside this corpus are counts inside that set.""#,
             #": "These documents are the closest matches a Meaning search found, not every document on your subject. Counts taken inside this corpus are counts inside that set.""#,
-            "var isCapturePartial: Bool { isMeaning || didHitFetchLimit || insideTruncatedCorpus }",
-            "var totalMatchCount: Int? { isMeaning ? nil : total }",
+            // A layer's rows say what they record by the app's layered routes (PLAN's S27e), `SearchWithinParityTests`'.
+            "var isCapturePartial: Bool { layer?.isCapturePartial ?? (isMeaning || didHitFetchLimit || insideTruncatedCorpus) }",
+            "var totalMatchCount: Int? { layer.map(\\.totalMatchCount) ?? (isMeaning ? nil : total) }",
         ], file: "WorkingCorpora.swift")
         // The kit reads the sentence back as a Meaning search's, and says its line so.
         let capture = CorpusCapture(meaning: [], reviewed: [], sourceQuery: "q", narrowing: [])

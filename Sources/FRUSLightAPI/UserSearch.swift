@@ -127,7 +127,8 @@ struct SearchUsers: Sendable {
 /// search that ran, its tag filter included (`SearchService.userTagCounts(parameters:tagIds:documentKeys:)`,
 /// the keyword route); with `mode=meaning`, over the rows a search by meaning listed, the run the served
 /// index keeps, as the Mac counts them over a Meaning list's keys (`UserTagCountScope.resultKeys`, PLAN's
-/// S27d). A tag none of them carries counts 0, which is an answer worth showing, as the Mac's says.
+/// S27d); and with `within`, over the rows of a layer of Search Within These Results, inside the list it names (PLAN's
+/// S27e). A tag none of them carries counts 0, which is an answer worth showing, as the Mac's says.
 public struct SearchTagCounts: Codable, Equatable, Sendable {
     public struct Tag: Codable, Equatable, Sendable {
         public var id: String
@@ -148,8 +149,9 @@ enum SearchTagRoutes {
         // address can be read as it stands, as /search/inspect reads it; and the engine it ran through.
         me.get("/search/tags") { request, context -> SearchTagCounts in
             let form = try FormQuery(request.uri.query)
-            let request = try SearchRequest(form: form, alsoTaking: ["mode"])
+            let request = try SearchRequest(form: form, alsoTaking: ["mode", "within"])
             let byMeaning = try HistoryRoutes.isMeaning(try form.single("mode"))
+            let within = try form.single("within").map { try HeldListRequest($0) }
             let user = try context.requireUser()
             let search = try await SearchUsers.user(user.id, searching: request.parameters, in: services.store)
             let store = services.store
@@ -157,7 +159,17 @@ enum SearchTagRoutes {
             let served = try await provider.served()
             let counts: [String: Int]
             do {
-                if byMeaning {
+                if let within {
+                    // A layer's rows, as the Mac counts a held list's layer: words found over the match gated to the list,
+                    // which is their rows, and a ranking over its rows' keys.
+                    let run = try await context.whileClientConnected {
+                        try await SearchWithinRoutes.run(request, within: within, searcher: .of(user.id, in: store),
+                                                         provider: provider, resources: resources, engine: meaning)
+                    }
+                    counts = try await served.search(for: search).service.userTagCounts(
+                        parameters: run.gated, tagIds: tags.map(\.id),
+                        documentKeys: run.rows.map { (volumeId: $0.volumeId, documentId: $0.documentId) })
+                } else if byMeaning {
                     let run = try await context.whileClientConnected {
                         try await MeaningSearchRoutes.run(request, for: user.id, in: store, provider: provider, resources: resources,
                                                           engine: meaning)
