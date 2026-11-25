@@ -7,10 +7,19 @@
 // Its vectors are its own: each value a function of the content's FNV-1a hash and its place, unnormalised,
 // which QueryEncoderTests computes again. Its "model" is a JSON file of settings a test writes:
 //   {"dimensions": 768, "loadMilliseconds": 200, "failStart": false}
+//
+// It ends at SIGINT or SIGTERM as llama-server does (tools/server/server.cpp at docker/Dockerfile's
+// LLAMA_COMMIT): through a handler of its own, neither signal ever unblocked, its main thread keeping the mask
+// it started with while other threads serve. So a signal its start left blocked stays pending in every thread,
+// as it did in llama-server's, and a stop waits out its limit. An asynchronous main would not do: Dispatch
+// parks the main thread in sigsuspend(2) with no signal blocked, which takes any signal the other threads block.
 
 import Foundation
 import Hummingbird
 import NIOCore
+#if canImport(Glibc)
+import Glibc
+#endif
 
 @main
 struct EncoderStandIn {
@@ -20,7 +29,7 @@ struct EncoderStandIn {
         var failStart = false
     }
 
-    static func main() async throws {
+    static func main() {
         var arguments = Array(CommandLine.arguments.dropFirst())
         if arguments == ["--version"] {
             // llama-server writes its version to standard error.
@@ -62,8 +71,29 @@ struct EncoderStandIn {
         if settings.failStart { fail("stand-in: failing to start, as its model asks") }
         say("stand-in: loading \(model) for \(settings.loadMilliseconds) ms, batch \(batch)")
         let loaded = ContinuousClock.now + .milliseconds(settings.loadMilliseconds)
-        let physicalBatch = batch
+        catchStopSignals()
+        Task.detached { [port, batch] in
+            do {
+                try await serve(port: port, key: key, settings: settings, physicalBatch: batch, loaded: loaded)
+            } catch {
+                fail("stand-in: \(error)")
+            }
+            exit(0)
+        }
+        // The main thread waits for a signal, with the mask it started with, as llama-server's runs its loop.
+        while true { pause() }
+    }
 
+    /// SIGINT and SIGTERM end it at once, as llama-server's handler ends its loop, after which it exits with
+    /// status 0. Neither signal is unblocked, as llama-server unblocks neither.
+    static func catchStopSignals() {
+        signal(SIGINT) { _ in _exit(0) }
+        signal(SIGTERM) { _ in _exit(0) }
+    }
+
+    /// Answers as llama-server does, from 127.0.0.1 at `port`, until SIGINT or SIGTERM ends the process. The
+    /// server is given no signal to shut down on, since Dispatch's handler for one would replace the one above.
+    static func serve(port: Int, key: String, settings: Settings, physicalBatch: Int, loaded: ContinuousClock.Instant) async throws {
         let router = Router()
         router.add(middleware: KeyCheck(key: key))
         router.get("/health") { _, _ -> Response in
@@ -103,7 +133,7 @@ struct EncoderStandIn {
         }
         let app = Application(router: router, configuration: .init(address: .hostname("127.0.0.1", port: port), serverName: "stand-in"))
         say("stand-in: server is listening on http://127.0.0.1:\(port)")
-        try await app.runService()
+        try await app.run()
     }
 
     /// The stand-in's tokens: one a word, and the model's two special tokens when asked for.

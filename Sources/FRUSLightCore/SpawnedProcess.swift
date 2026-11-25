@@ -11,6 +11,14 @@
 // descriptors. Foundation's main has the fix (swiftlang/swift-corelibs-foundation#5472, May 2026), which
 // neither 6.4.3 nor the 6.4 branch has. Here the child closes every descriptor past its three itself, with
 // closefrom, so the parent lists none.
+//
+// A child also starts with no signal blocked and every signal's action its default, as Swift Testing's spawner
+// starts its children, where posix_spawn passes the calling thread's mask on unless told otherwise, as it did
+// for `Process`. Every start here runs on a Dispatch worker, which blocks nearly every signal, SIGTERM and SIGINT
+// among them. llama-server catches both with a handler of its own and never unblocks them, so that, given a
+// worker's mask, every thread of it blocked SIGTERM, a stop's SIGTERM stayed pending, and each stop waited out
+// its limit and ended it by SIGKILL: in the image, the idle stop took ten seconds, and `docker compose stop`
+// killed the server before the encoder's stop was through, the rest of its shutdown undone.
 
 import Dispatch
 import Foundation
@@ -49,8 +57,9 @@ final class SpawnedProcess: @unchecked Sendable {
 
     /// Starts `executable` with `arguments` and `environment` alone, as `Process` started it: in a process
     /// group of its own, reading /dev/null, its output and its errors both written to `output`, a pipe's end
-    /// the caller closes once this returns, and its signal mask the calling thread's. Every other descriptor
-    /// is closed by the child itself. `terminationHandler` is called once it has ended, on the thread that
+    /// the caller closes once this returns. Every other descriptor is closed by the child itself, and it starts
+    /// with no signal blocked and every signal's action its default, whatever the calling thread blocks and
+    /// this process catches or ignores. `terminationHandler` is called once it has ended, on the thread that
     /// waited for it.
     static func run(_ executable: URL, arguments: [String], environment: [String: String], output: Int32,
                     terminationHandler: (@Sendable (SpawnedProcess) -> Void)? = nil) throws -> SpawnedProcess {
@@ -70,13 +79,21 @@ final class SpawnedProcess: @unchecked Sendable {
         try SpawnError.check(posix_spawn_file_actions_adddup2(&actions, output, STDERR_FILENO), "posix_spawn_file_actions_adddup2")
         try SpawnError.check(posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0),
                              "posix_spawn_file_actions_addopen")
+        // No signal blocked, and every signal's action its default but SIGKILL's and SIGSTOP's, which none changes.
+        var noSignals = sigset_t()
+        sigemptyset(&noSignals)
+        try SpawnError.check(posix_spawnattr_setsigmask(&attributes, &noSignals), "posix_spawnattr_setsigmask")
+        var allSignals = sigset_t()
+        sigfillset(&allSignals)
+        try SpawnError.check(posix_spawnattr_setsigdefault(&attributes, &allSignals), "posix_spawnattr_setsigdefault")
+        let signals = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF
         #if canImport(Glibc)
         // Every other descriptor, closed in the child by close_range(2) (glibc 2.34): nothing is listed here.
         try SpawnError.check(posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1),
                              "posix_spawn_file_actions_addclosefrom_np")
-        let flags = Int16(POSIX_SPAWN_SETPGROUP)
+        let flags = Int16(POSIX_SPAWN_SETPGROUP | signals)
         #else
-        let flags = Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT)
+        let flags = Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | signals)
         #endif
         try SpawnError.check(posix_spawnattr_setflags(&attributes, flags), "posix_spawnattr_setflags")
         let argv: [UnsafeMutablePointer<CChar>?] = ([executable.path] + arguments).map { strdup($0) } + [nil]

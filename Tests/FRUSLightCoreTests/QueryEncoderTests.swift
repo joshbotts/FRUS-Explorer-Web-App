@@ -3,8 +3,8 @@
 // query, with a key of its own; a query is the kit's prompt and the reader's words, its vector normalised as
 // the app's; it stops when idle and comes back after it is killed; a query past the app's 2,048 tokens and a
 // server with the encoder off are refused in their words; a model that is not the bundled index's, or a start
-// that fails, says why; the child stops with the server; and it starts while the server holds thousands of
-// descriptors, none of which its child holds.
+// that fails, says why; the child stops with the server, by SIGTERM at once, since it starts with no signal
+// blocked; and it starts while the server holds thousands of descriptors, none of which its child holds.
 
 import FRUSLightTestSupport
 import Foundation
@@ -240,6 +240,31 @@ import Glibc
         #expect(QueryEncoder.residentBytes(of: Int32(pid)).map { $0 > 1_000_000 } == true)
         await encoder.shutdown()
         #expect(QueryEncoder.runningProcesses(binary: settings.binary, model: settings.model).isEmpty)
+    }
+
+    /// The child starts with no signal blocked, whatever the thread that starts it blocks, so that a stop ends
+    /// it by SIGTERM at once. The actor's executor is a Dispatch worker, which blocks nearly every signal, and
+    /// posix_spawn passes the caller's mask on unless told otherwise. llama-server catches SIGTERM with a handler
+    /// of its own and never unblocks it, so that, started so, it never saw a stop's SIGTERM: in the image, each
+    /// stop waited out `stopTimeout` and ended it by SIGKILL, and `docker compose stop` killed the server first.
+    /// The stand-in ends at SIGTERM as llama-server does, its main thread keeping the mask it started with; a
+    /// stop within 10 of its 30 seconds never reached the SIGKILL.
+    @Test func aStopEndsTheChildBySIGTERMAtOnce() async throws {
+        let directory = try TemporaryDirectory()
+        var settings = try StandInEncoder.settings(in: directory.url)
+        settings.stopTimeout = .seconds(30)
+        let encoder = QueryEncoder(settings: settings)
+        _ = try await encoder.embed("détente")
+        let pid = try #require(await encoder.report().pid)
+        let status = try String(contentsOfFile: "/proc/\(pid)/status", encoding: .utf8)
+        let blocked = status.split(separator: "\n").first { $0.hasPrefix("SigBlk:") }?
+            .dropFirst("SigBlk:".count).trimmingCharacters(in: .whitespaces)
+        #expect(blocked == "0000000000000000", "the child started with signals blocked: \(blocked ?? "none read")")
+        let began = ContinuousClock.now
+        await encoder.shutdown()
+        let took = ContinuousClock.now - began
+        #expect(took < .seconds(10), "the stop took \(took): SIGKILL ended the child, its SIGTERM unseen")
+        #expect(!Self.isAlive(pid))
     }
 
     /// The encoder's starts while the server holds 2,000 descriptors, in a process of their own (an exit test),
