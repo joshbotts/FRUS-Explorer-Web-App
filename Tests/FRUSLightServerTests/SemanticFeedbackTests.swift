@@ -32,14 +32,16 @@ import Testing
     }
 
     /// The semantic vectors over the fixture shards, with what a server reads once already read: the bundled pair,
-    /// through this store, and `fixture`'s subject index and the lexical axis's stop words. A live test's client waits
-    /// 20 s for each answer, and a debug build decoding these under the whole target's load can take longer than that
-    /// (CI's x86_64 runner did, on the first list's request), so a live test reads them before its server starts.
+    /// through this store, and `fixture`'s subject index and the lexical axis's stop words, and since S29g the shared words'
+    /// references and the web's tagger, which the list's pass reads. A live test's client waits 20 s for each answer, and a
+    /// debug build decoding these under the whole target's load can take longer than that (CI's x86_64 runner did, on the
+    /// first list's request), so a live test reads them before its server starts.
     static func warmed(_ fixture: UserDataFixture) async throws -> SemanticVectors {
         let resources = fixture.server.resources
         let vectors = SemanticVectors(resources: resources.directory, shards: RepositoryFiles.semanticShards)
         _ = try await vectors.bundle().get()
         _ = try await Blocking.run { resources.documentSubjectIndex != nil && !RelatedDocumentsRoutes.lexicalStopwords(resources).isEmpty }
+        _ = try await Blocking.run { (RelatedDocumentsRoutes.sharedTermsLists(resources).references, WordCloudLive.tagger.identity) }
         return vectors
     }
 

@@ -12,8 +12,12 @@
 // kit's `ProjectLeadsAggregator` makes of the kit's rankings of its seed, as the app's `ProjectLeadsService`
 // makes them, and a lead dismissed stays hidden while the next fills its place; and its reach is the kit's
 // `SemanticProjectReach` of the same seed. And the server's and the browser app's mirrors of the app's rules and
-// words, held to the app's source.
+// words, held to the app's source. Since PLAN's S29g a row matched by meaning or by wording names the words it shares
+// with the anchor, and the kit's names them in every list here too: its `SemanticSharedTerms` pass over the rows either
+// axis scored, as the app's view runs it, with the language family's references read apart by URL, the web's tagger and
+// the bundled stop lists read here, so that each pair's chips are the kit's.
 
+import FRUSLanguage
 import FRUSLightCore
 import FRUSLightTestSupport
 import FRUSParity
@@ -58,6 +62,59 @@ actor FixtureShards: SemanticShardSource {
     }
 }
 
+/// The web's tagger, its walks given again in this suite apart from the server's `KeptWalks` (PLAN's S29g): each text is
+/// walked once by the tagger, and its words given again in their order for every later list the text is in, each range
+/// made again from its UTF-8 offsets, so that the kit's pass over a list here tags no text twice. A walk is the tagger's, a
+/// function of the text and of what the walk reads; one its reader stopped is not kept.
+final class ReplayedWalks: WordCloudTagger, @unchecked Sendable {
+    private struct Walked {
+        let start: Int
+        let end: Int
+        let lemma: String?
+        let lexicalClass: WordCloudLexicalClass?
+    }
+
+    let tagger = FRUSWordCloudTagger()
+    private let lock = NSLock()
+    private var walks: [String: [Walked]] = [:]
+
+    var identity: WordCloudTokenizerIdentity { tagger.identity }
+    var health: NaturalLanguageHealth { tagger.health }
+
+    func enumerateWords(in text: String, reading: WordCloudTagReading,
+                        using body: (Range<String.Index>, String?, () -> WordCloudLexicalClass?) -> Bool) {
+        let key = "\(reading.rawValue)\u{0}\(text)"
+        lock.lock()
+        let walked = walks[key]
+        lock.unlock()
+        let utf8 = text.utf8
+        if let walked {
+            for word in walked {
+                let range = utf8.index(utf8.startIndex, offsetBy: word.start)..<utf8.index(utf8.startIndex, offsetBy: word.end)
+                guard body(range, word.lemma, { word.lexicalClass }) else { return }
+            }
+            return
+        }
+        var walk: [Walked] = []
+        var whole = true
+        tagger.enumerateWords(in: text, reading: reading) { range, lemma, lexicalClass in
+            let found = reading.contains(.lexicalClasses) ? lexicalClass() : nil
+            walk.append(Walked(start: utf8.distance(from: utf8.startIndex, to: range.lowerBound),
+                               end: utf8.distance(from: utf8.startIndex, to: range.upperBound), lemma: lemma, lexicalClass: found))
+            whole = body(range, lemma, { found })
+            return whole
+        }
+        guard whole else { return }
+        lock.lock()
+        walks[key] = walk
+        lock.unlock()
+    }
+
+    func enumerateNames(in text: String, using body: (Range<String.Index>, WordCloudNameType?) -> Bool) {
+        tagger.enumerateNames(in: text, using: body)
+    }
+}
+
 /// Two of the three fixture volumes indexed by the kit, Kennedy and Khrushchev's letters and North Africa's documents,
 /// once a process, for the off-index leads (PLAN's S26d): the third, 1894's Nicaragua, is off the index, and its shard is
 /// held.
@@ -97,8 +154,9 @@ enum TwoVolumeIndex {
 
     /// What a host has at this pin, read here apart from the server: the fixture index's pipeline, person
     /// store and cross-reference store (FRUS-Explorer#1891, since S23c's pin move), the bundled subject
-    /// index and manifest; the lexical axis's search service and stop lists (S26d, S24e's follow-up); and the
-    /// semantic axis's bundled tier and shards, over the volumes the index holds (S26d).
+    /// index and manifest; the lexical axis's search service and stop lists (S26d, S24e's follow-up); the
+    /// semantic axis's bundled tier and shards, over the volumes the index holds (S26d); and the shared words' stop
+    /// lists, references and tagger (S29g).
     struct Host: @unchecked Sendable {
         let pipeline: IndexingPipeline
         let persons: PersonMentionStore
@@ -111,6 +169,10 @@ enum TwoVolumeIndex {
         let tiers: SemanticBundledTiers
         let shards: FixtureShards
         let indexed: Set<String>
+        /// The bundled stop lists whole, which the shared words' tokenizer reads with the diplomatic one (S29g).
+        let stopwordSet: WordCloudStopwordSet
+        /// The web's tagger, each fixture text walked once for every list this host names the shared words of (S29g).
+        let walks = ReplayedWalks()
 
         static func open() async throws -> Host {
             try await open(try await FixtureIndex.value(), volumes: ParityFixtures.volumes)
@@ -128,15 +190,14 @@ enum TwoVolumeIndex {
                 citedPageMap: try JSONDecoder().decode(CitedPageMap.self,
                                                        from: Data(contentsOf: resources.appendingPathComponent("cited-page-map.json"))))
             // The word cloud's stop lists with the diplomatic one, as the app's engine dependencies give the lexical axis.
-            let stopwords = try WordCloudStopwordSet(contentsOf: resources.appendingPathComponent("word-cloud-stopwords.json"))
-                .active(includeDiplomatic: true)
+            let stopwordSet = try WordCloudStopwordSet(contentsOf: resources.appendingPathComponent("word-cloud-stopwords.json"))
             let tiers = try SemanticBundledTiers(indexAt: resources.appendingPathComponent("semantic-vectors-index.json"),
                                                  binaryAt: resources.appendingPathComponent("semantic-vectors-binary.bin"))
             return Host(pipeline: built.index.pipeline, persons: try PersonMentionStore(readingDatabaseAt: built.copy),
                         crossReferences: crossReferences, subjects: subjects,
                         manifest: Dictionary(catalogue.map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first }),
-                        catalogue: catalogue, search: built.index.service, stopwords: stopwords, tiers: tiers,
-                        shards: FixtureShards(index: tiers.index), indexed: Set(volumes))
+                        catalogue: catalogue, search: built.index.service, stopwords: stopwordSet.active(includeDiplomatic: true),
+                        tiers: tiers, shards: FixtureShards(index: tiers.index), indexed: Set(volumes), stopwordSet: stopwordSet)
         }
 
         /// The kit's semantic source over this host's tier, shards, volumes and pipeline.
@@ -154,8 +215,9 @@ enum TwoVolumeIndex {
                 lexicalStopwords: stopwords, semantic: semantic())
         }
 
-        /// The kit's ranking for `anchor`, as the app's list loads it: the year of the index's date, and
-        /// the shared subjects named on the rows the shared-subjects axis scored.
+        /// The kit's ranking for `anchor`, as the app's list loads it: the year of the index's date, the
+        /// shared subjects named on the rows the shared-subjects axis scored, and the shared words named on the rows the
+        /// semantic or the lexical axis scored (S29g).
         @MainActor
         func ranked(_ anchor: DocumentKey, weights: AxisWeights, scope: Set<String>?, limit: Int = 30) async throws -> RelatedDocumentsResult {
             let dates = try await pipeline.documentDates(for: [(volumeId: anchor.volumeId, documentId: anchor.documentId)])
@@ -170,8 +232,31 @@ enum TwoVolumeIndex {
                     rows[index].axisEvidenceLabel[.sharedSubjects] = found.joined(separator: "\u{1F}")
                 }
             }
+            rows = await namingSharedTerms(rows, anchor: anchor)
             return RelatedDocumentsResult(rows: rows, totalBeforeLimit: result.totalBeforeLimit, poolCutFrom: result.poolCutFrom,
                                           offIndexLeads: result.offIndexLeads)
+        }
+
+        /// The words each row the semantic or the lexical axis scored shares with the anchor, as the app's view names them
+        /// (`attachSemanticEvidence(claimedKey:)`): the kit's pass over those rows, with the family's references read apart
+        /// by URL, the web's tagger at its own verdict, its walks given again (`walks`), and the bundled stop lists, the
+        /// words joined as the kit's chip splits them under each of the two axes that scored the row. Off the main actor,
+        /// which the servers beside it rank on.
+        func namingSharedTerms(_ rows: [RelatedDocumentRow], anchor: DocumentKey) async -> [RelatedDocumentRow] {
+            let vocabularyAxes: [SimilarityAxis] = [.semanticSimilarity, .lexicalSimilarity]
+            let scoredRows = rows.filter { row in vocabularyAxes.contains { row.axisScores[$0] != nil } }
+            guard !scoredRows.isEmpty else { return rows }
+            let evidence = await SemanticSharedTerms.sharedTerms(
+                anchor: anchor, candidates: scoredRows.map(\.key), pipeline: pipeline, references: LanguageReadings.references,
+                languageAnalysis: walks.health, stopwords: stopwordSet, tagger: walks, isolation: nil)
+            var rows = rows
+            for index in rows.indices {
+                guard let found = evidence.terms[rows[index].key], !found.isEmpty else { continue }
+                for axis in vocabularyAxes where rows[index].axisScores[axis] != nil {
+                    rows[index].axisEvidenceLabel[axis] = found.joined(separator: "\u{1F}")
+                }
+            }
+            return rows
         }
 
         /// The kit's leads for a seed, as `ProjectLeadsService.recompute` makes them.
@@ -279,6 +364,11 @@ enum TwoVolumeIndex {
         var meant = 0
         var worded = 0
         var beyond = 0
+        // S29g: rows whose semantic chip names the words they share with the anchor, and those whose chip still says the
+        // match alone; and, with the experimental axes raised, lexical chips that name words.
+        var meantShared = 0
+        var meantAlone = 0
+        var wordedShared = 0
         for (index, document) in documents.enumerated() {
             let all = try #require(read["\(document.compositeString) all"])
             let kit = try await host.ranked(document, weights: .default, scope: nil)
@@ -294,6 +384,9 @@ enum TwoVolumeIndex {
             chipsNamed += all.rows.filter { $0.chips.contains { $0.axis == "sharedSubjects" && $0.text.hasPrefix("subjects: ") } }.count
             cited += all.rows.filter { $0.chips.contains { $0.axis == "crossReference" } }.count
             meant += all.rows.filter { $0.semanticScore != nil && $0.chips.contains { $0.axis == "semanticSimilarity" } }.count
+            let semanticChips = all.rows.flatMap(\.chips).filter { $0.axis == "semanticSimilarity" }.map(\.text)
+            meantAlone += semanticChips.filter { $0.hasPrefix("shares: Semantic match · ") }.count
+            meantShared += semanticChips.filter { $0.hasPrefix("shares: ") && !$0.hasPrefix("shares: Semantic match · ") }.count
             beyond += all.beyondLibrary == nil ? 0 : 1
             guard index.isMultiple(of: 7) else { continue }
             let subseries = host.manifest[document.volumeId]?.subseries ?? ""
@@ -320,7 +413,9 @@ enum TwoVolumeIndex {
             #expect(both.rows.map(Self.row) == kitBoth.rows.map(Self.row), "\(document.compositeString) with both experimental axes raised")
             #expect(Self.beyond(both.beyondLibrary) == Self.beyond(kitBoth.offIndexLeads, titles: host.manifest, served: host.indexed))
             worded += both.rows.filter { $0.chips.contains { $0.axis == "lexicalSimilarity" } }.count
+            wordedShared += both.rows.flatMap(\.chips).filter { $0.axis == "lexicalSimilarity" && $0.text.hasPrefix("shares: ") }.count
         }
+        print("S29g chips: \(meantShared) semantic rows name shared words, \(meantAlone) say the match alone; \(wordedShared) lexical rows name words")
         #expect(rows > 1_000, "the lists hold rows to compare: \(rows)")
         #expect(chipsNamed > 0, "a shared-subjects chip names its subjects")
         #expect(cited > 0, "the cross-reference axis ranks: a row cites the anchor or is cited by it, and says so")
@@ -443,6 +538,53 @@ enum TwoVolumeIndex {
         throw APIParityError("Suggested Next's computation did not end")
     }
 
+    /// The server's kept walks (S29g) are the web's tagger's own: each fixture document's body, walked as the shared words'
+    /// pass walks it, with its lemmas, and a tenth of them with their classes too, gives the tagger's words, ranges,
+    /// lemmas and classes, when first walked and when given again; and walks kept past their limit are let go, the
+    /// least recently given first, and walked again as they were.
+    @Test func theServersKeptWalksAreTheTaggersOwn() async throws {
+        let host = try await Host.open()
+        let documents = try await Self.documents()
+        let texts = try await host.pipeline.documentBodyTextsByKey(
+            forKeys: documents.map { WordCloudDocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) })
+        #expect(texts.count > 300, "the fixture documents' bodies: \(texts.count)")
+        func walk(_ tagger: some WordCloudTagger, _ text: String, _ reading: WordCloudTagReading) -> [String] {
+            var words: [String] = []
+            tagger.enumerateWords(in: text, reading: reading) { range, lemma, lexicalClass in
+                let utf8 = text.utf8
+                let place = "\(utf8.distance(from: utf8.startIndex, to: range.lowerBound))..\(utf8.distance(from: utf8.startIndex, to: range.upperBound))"
+                let kind = reading.contains(.lexicalClasses) ? lexicalClass().map { "\($0)" } ?? "-" : ""
+                words.append("\(place) \(text[range]) \(lemma ?? "-") \(kind)")
+                return true
+            }
+            return words
+        }
+        let tagger = FRUSWordCloudTagger()
+        let kept = KeptWalks(tagger, wordLimit: 1_000_000)
+        var walked = 0
+        for (index, key) in texts.keys.sorted().enumerated() {
+            let text = try #require(texts[key])
+            let readings: [WordCloudTagReading] = index.isMultiple(of: 10) ? [[.lemmas], [.lemmas, .lexicalClasses]] : [[.lemmas]]
+            for reading in readings {
+                let own = walk(tagger, text, reading)
+                #expect(walk(kept, text, reading) == own, "\(key) first walked")
+                #expect(walk(kept, text, reading) == own, "\(key) given again")
+                walked += own.count
+            }
+        }
+        #expect(walked > 300_000 && kept.count.words == walked, "every word kept: \(walked), \(kept.count)")
+        // Under a limit one word short of three texts: the first is let go once the third is kept, and walked again as it
+        // was, when the second, given longest ago now, is let go for it.
+        let three = Array(texts.keys.sorted().prefix(3)).compactMap { texts[$0] }
+        let words = three.map { walk(tagger, $0, [.lemmas]).count }
+        #expect(words.allSatisfy { $0 > 0 })
+        let small = KeptWalks(tagger, wordLimit: words.reduce(0, +) - 1)
+        for text in three { _ = walk(small, text, [.lemmas]) }
+        #expect(small.count.texts == 2 && small.count.words == words[1] + words[2], "\(small.count)")
+        #expect(walk(small, three[0], [.lemmas]) == walk(tagger, three[0], [.lemmas]))
+        #expect(small.count.texts == 2 && small.count.words == words[0] + words[2], "\(small.count)")
+    }
+
     /// The server's mirrors of the app's request, view and service, and the browser app's, as the app's
     /// source writes them.
     @Test func theMirrorsAreTheApps() throws {
@@ -481,7 +623,21 @@ enum TwoVolumeIndex {
             // The two experimental axes' captions, by whether the axis is off.
             "case .semanticSimilarity: return semanticAxisCaption case .lexicalSimilarity: return lexicalAxisCaption",
             "weights[.lexicalSimilarity] == 0 ?", "weights[.semanticSimilarity] == 0 ?",
+            // The shared words (S29g): after the subjects, one pass over the rows either vocabulary axis scored, its words
+            // written under each axis that scored the row, and a row it names none for left as it was.
+            "attachSubjectEvidence() await attachSemanticEvidence(claimedKey: claimedKey)",
+            "let vocabularyAxes: [SimilarityAxis] = [.semanticSimilarity, .lexicalSimilarity]",
+            "let scoredRows = rows.filter { row in vocabularyAxes.contains { row.axisScores[$0] != nil } } guard !scoredRows.isEmpty else { return }",
+            "let evidence = await SemanticSharedTerms.sharedTerms( anchor: request.anchor, candidates: scoredRows.map(\\.key), appState: appState)",
+            #"guard !evidence.terms.isEmpty else { return } for index in rows.indices { guard let found = evidence.terms[rows[index].key], !found.isEmpty else { continue } for axis in vocabularyAxes where rows[index].axisScores[axis] != nil { rows[index].axisEvidenceLabel[axis] = found.joined(separator: "\u{1F}") } }"#,
         ], file: "RelatedDocumentsView.swift")
+        // The app's entry for the pass: the reference at the standard tuning with the diplomatic layer in the verdict's form,
+        // and the bundled stop lists, which the server's gives with the family's references and the web's tagger (S29g).
+        NoteViewParityTests.expect(try ProjectHistoryParityTests.app("RelatedDocuments/SemanticSharedTerms+App.swift"), holds: [
+            "let tuning = WordCloudTuning.standard",
+            "guard case .available(let reference) = BundledKeynessBaseline.baseline( for: lens, tuning: tuning, includeDiplomatic: true, languageAnalysis: languageAnalysis)",
+            "reference: reference, stopwords: WordCloudStopwords.shared, tagger: NaturalLanguageWordCloudTagger())",
+        ], file: "SemanticSharedTerms+App.swift")
         NoteViewParityTests.expect(try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/RelatedDocuments.swift"), holds: [
             "static let defaultLimit = 30",
             "let dates = (try? await served.pipeline.documentDates(for: [(volumeId: anchor.volumeId, documentId: anchor.documentId)])) ?? [:]",
@@ -499,7 +655,16 @@ enum TwoVolumeIndex {
             "semanticScore: row.axisScores[.semanticSimilarity],",
             "verdict: row.axisScores[.semanticSimilarity] == nil ? nil : verdict?.rawValue)",
             "resources.familyClouds.stopwords(in: resources.directory).active(includeDiplomatic: true)",
+            // The shared words after the subjects (S29g), as the app's view names them.
+            "let rows = await namingSharedTerms(namingSharedSubjects(result.rows, anchor: anchor, subjects: subjects), anchor: anchor,",
         ], file: "RelatedDocuments.swift")
+        NoteViewParityTests.expect(try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/RelatedSharedTerms.swift"), holds: [
+            "static let vocabularyAxes: [SimilarityAxis] = [.semanticSimilarity, .lexicalSimilarity]",
+            "let scoredRows = rows.filter { row in vocabularyAxes.contains { row.axisScores[$0] != nil } } guard !scoredRows.isEmpty else { return rows }",
+            #"guard !evidence.terms.isEmpty else { return rows } var rows = rows for index in rows.indices { guard let found = evidence.terms[rows[index].key], !found.isEmpty else { continue } for axis in vocabularyAxes where rows[index].axisScores[axis] != nil { rows[index].axisEvidenceLabel[axis] = found.joined(separator: "\u{1F}") } }"#,
+            "(resources.familyClouds.stopwords(in: resources.directory), resources.familyClouds.references(language: resources.languageDirectory, lists: resources.directory))",
+            "languageAnalysis: tagger.health, stopwords: lists.stopwords, tagger: tagger, isolation: nil)",
+        ], file: "RelatedSharedTerms.swift")
         // The verdicts' log, its file and its screen (S26d): the app's, and the server's mirror.
         let log = try ProjectHistoryParityTests.app("Semantic/SemanticFeedbackLog.swift")
         NoteViewParityTests.expect(log, holds: [

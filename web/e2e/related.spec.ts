@@ -7,7 +7,8 @@
 // server finds them. The test removes its project, its note and the trail, and forgets the tuning.
 // S26d's: the semantic axis's weight is raised by keyboard, a row it scored is marked helpful from its menu, by
 // keyboard, Beyond your library follows the rows, and Settings ▸ Data lists the verdict, over the image's shards;
-// the test clears its verdicts.
+// the test clears its verdicts. S29g's: the keyboard reaches a row matched by meaning and reads its chip, the words it
+// shares with the document, and, with the lexical axis raised by keyboard, the same words under it.
 import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -169,12 +170,13 @@ test('raises the semantic axis’s weight and marks a match by keyboard, and Set
     await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
     await expect(meaning).toBeFocused();
 
-    // A row the semantic axis scored says its match, and carries the app's two verdicts on its menu.
+    // A row the semantic axis scored says its match, by the words it shares with the document or, sharing none, by its
+    // percentage (S29g), and carries the app's two verdicts on its menu.
     const menu = { name: /^Semantic match feedback: / };
     const row = page.locator('ol.related-list > li').filter({ has: page.getByRole('button', menu) }).first();
     const feedback = row.getByRole('button', menu);
     await expect(feedback).toBeVisible();
-    await expect(row.getByText(/Semantic match · \d+%/)).toBeVisible();
+    await expect(row.locator('li.axis-semanticSimilarity')).toContainText('shares: ');
     await tabTo(page, feedback);
     await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: 'Semantic match: helpful' })).toBeFocused();
@@ -197,6 +199,54 @@ test('raises the semantic axis’s weight and marks a match by keyboard, and Set
     await expect(section.getByText('Verdicts recorded')).toBeVisible();
     await expect(section.getByText('Marked helpful')).toBeVisible();
     await expect(section.getByRole('link', { name: 'Download Feedback File' })).toHaveAttribute('download', 'frus-semantic-feedback.json');
+    await axeCheck(page);
+  } finally {
+    await page.goto('research');
+    await reset(page);
+  }
+});
+
+test('reads by keyboard what a row matched by meaning, and then by wording, shares with the document', async ({ page }) => {
+  await page.goto('research');
+  await reset(page);
+  try {
+    await page.goto('related/frus1961-63v06/d1');
+    await expect(page.getByRole('heading', { level: 1, name: 'Related Documents' })).toBeVisible();
+    await expect(page.locator('ol.related-list')).toBeVisible();
+    await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
+
+    // The export's second document is matched by meaning, and shares two words with the first that are no stop words,
+    // "negotiating" and "treaties", which its chip names in their dictionary forms, the rarer first, since the first
+    // prints neither in that form (S29g). The keyboard reaches the row's link, which its chips describe.
+    const title = '2. Memorandum of Conversation';
+    const row = page.locator('ol.related-list > li').filter({ has: page.getByRole('link', { name: title, exact: true }) });
+    const link = row.getByRole('link', { name: title, exact: true });
+    const words = /shares: (negotiate, treaty|treaty, negotiate)$/;
+    await expect(row.locator('li.axis-semanticSimilarity')).toHaveText(/^Semantically similar \(experimental\) shares: /);
+    await expect(row.locator('li.axis-semanticSimilarity')).toHaveText(words);
+    const shared = (await row.locator('li.axis-semanticSimilarity').textContent())!.replace(/^.*shares: /, '');
+    await tabTo(page, link);
+    await expect(link).toBeFocused();
+    await expect(link).toHaveAccessibleDescription(new RegExp(`Semantically similar \\(experimental\\) shares: ${shared}`));
+    await axeCheck(page);
+
+    // The lexical axis, by keyboard: Adjust weights opens, and its slider moves up a step, the list ranked again with it.
+    await tabTo(page, page.getByText('Adjust weights'));
+    await page.keyboard.press('Enter');
+    const wording = page.getByRole('slider', { name: 'Similar wording (experimental)' });
+    await tabTo(page, wording);
+    await page.keyboard.press('ArrowRight');
+    await expect(wording).toHaveValue('0.1');
+    await expect(page).toHaveURL(/weights=lexicalSimilarity%3A0\.1/);
+    await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
+    await expect(wording).toBeFocused();
+
+    // The row's wording is its chip's too: the same words, the one pass naming them under both axes, as the app's does.
+    await expect(row.locator('li.axis-lexicalSimilarity')).toHaveText(`Similar wording (experimental) shares: ${shared}`);
+    await tabTo(page, link);
+    await expect(link).toBeFocused();
+    await expect(link).toHaveAccessibleDescription(new RegExp(`Similar wording \\(experimental\\) shares: ${shared}`));
+    await expect(link).toHaveAccessibleDescription(new RegExp(`Semantically similar \\(experimental\\) shares: ${shared}`));
     await axeCheck(page);
   } finally {
     await page.goto('research');
