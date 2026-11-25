@@ -8,7 +8,7 @@ export interface Crumb {
   volumeId?: string;
   sectionId?: string;
   /** One of Browse's other axes (S17e), Working Corpora or My Scopes, in place of All Volumes. */
-  axis?: 'corpora' | 'scopes' | 'annotations';
+  axis?: 'corpora' | 'scopes' | 'annotations' | 'clusters';
   /** On the Editors’ Annotations axis, a layer's page, with the volume whose page opened it. */
   layer?: string;
   from?: string;
@@ -33,6 +33,10 @@ export function Breadcrumb({ crumbs, current }: { crumbs: Crumb[]; current: stri
               </Link>
             ) : crumb.axis === 'scopes' ? (
               <Link to="/browse/scopes" activeOptions={ownPath}>
+                {crumb.label}
+              </Link>
+            ) : crumb.axis === 'clusters' ? (
+              <Link to="/browse/clusters" activeOptions={ownPath}>
                 {crumb.label}
               </Link>
             ) : crumb.axis === 'annotations' ? (

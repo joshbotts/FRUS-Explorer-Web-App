@@ -80,7 +80,9 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     // reader's own settings where a request acts for one.
     WordCloudRoutes.add(to: router, provider: provider, resources: resources, users: users)
     // The semantic map's points and regions (PLAN's S28b), from the bundled map, read on first use, and its reading (S28c).
-    SemanticMapRoutes.add(to: router, map: map, provider: provider, resources: resources)
+    let mapReading = SemanticMapRoutes.add(to: router, map: map, provider: provider, resources: resources)
+    // Browse's clusters (PLAN's S28d), over the map's reading, saved as a working corpus where the server keeps user data.
+    ClustersRoutes.add(to: router, reading: mapReading, provider: provider, resources: resources, userData: userData)
     // Archival Analytics and About the Series (PLAN's S24h).
     ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     AboutSeriesRoutes.add(to: router, provider: provider, resources: resources)

@@ -23,6 +23,7 @@ import {
   validateAnnotationSearch,
 } from './browse/AnnotationsScreen';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
+import { ClusterScreen, type ClusterSearch, ClustersScreen, validateClusterSearch } from './browse/ClustersScreen';
 import { CorporaScreen, CorpusScreen } from './browse/CorporaScreen';
 import { PeopleScreen } from './people/PeopleScreen';
 import { ScopeEditorScreen, ScopeScreen, ScopesScreen } from './browse/ScopesScreen';
@@ -144,6 +145,21 @@ const scopeEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/browse/scopes/$scopeId/edit',
   component: ScopeEditorScreen,
+});
+
+// Browse's Clusters (PLAN's S28d): the semantic map's regions, largest first, and a region's documents, in the layout
+// its address names.
+const clustersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/clusters',
+  component: ClustersScreen,
+});
+
+const clusterRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/clusters/$clusterId',
+  validateSearch: (raw: Record<string, unknown>): ClusterSearch => validateClusterSearch(raw),
+  component: ClusterScreen,
 });
 
 // Browse's Editors’ Annotations (FRUS-Explorer#1861): the axis, a layer's page, its lists, and a cell's.
@@ -569,6 +585,8 @@ export const routeTree = rootRoute.addChildren([
   scopesRoute,
   scopeRoute,
   scopeEditorRoute,
+  clustersRoute,
+  clusterRoute,
   annotationsRoute,
   annotationLayerRoute,
   annotationDrillRoute,
