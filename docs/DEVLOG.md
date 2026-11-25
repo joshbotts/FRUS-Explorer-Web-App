@@ -132,6 +132,62 @@ Phase 4's row S28e, in wave 8 beside S29g on the language track and S30c on the 
 
 Not started: `PLAN.md`'s row S30d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## CI follow-up: the encoder child's signals
+
+25 November 2026 · branch `claude/great-nightingale-bbddd6` · [#194](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/194) · upstream `efd73ecb`, unchanged
+
+This follow-up is not one of PLAN's rows; the posix_spawn follow-up's session ([#190](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/190)) left it, as a guess to measure before any fix. A child the server starts takes the signal mask of the thread that starts it, and the server starts the encoder from Dispatch workers, which block nearly every signal. Did llama-server, then, start with SIGTERM blocked, so that `Child.stop(within:)` never stopped it by SIGTERM?
+
+The branch was cut from `main` at `22cccd8`, #190's merge. It changes `Sources/FRUSLightCore/SpawnedProcess.swift`, the encoder's stand-in (`Tests/EncoderStandIn/EncoderStandIn.swift`) and QueryEncoderTests. It changes no `Package.swift`, image, `compose.yaml`, workflow, upstream file or install guide.
+
+**Measured before the fix**, in an image of `main`'s server: S29g's local build of the same day, whose encoder still started through Foundation's `Process`, which gives a child the mask `SpawnedProcess` gives (#190's diagnostic). It ran under `compose.yaml`'s hardening, on this Mac's Docker Desktop (engine 29.8.1, Compose v5.5.1, arm64).
+- llama-server's 23 threads all blocked SIGTERM, SIGINT and SIGHUP: SigBlk `fffffffe3bfbea27`, the Dispatch worker's. It caught SIGINT and SIGTERM (SigCgt `0000000100004002`).
+- The server's own process had 32 threads with that mask, and its main thread none: Dispatch parks it in sigsuspend(2), which is where the server takes its own SIGTERM.
+- **The idle stop:** the stop's SIGTERM was pending (ShdPnd `0000000000004000`) from 179.8 s after the query. The child was gone 10.1 s later, by `stopTimeout`'s SIGKILL. A SIGTERM sent by hand was still pending 3 s later.
+- **The server's own stop:** Docker here sent SIGKILL 3 s after its SIGTERM, not the 10 s this follow-up's brief expected, the container having no stop timeout of its own. With the encoder running, four runs of `docker compose stop` all ended in exit 137, Docker's SIGKILL, which came 3.0 s after its SIGTERM in each of the three whose events were read; `docker stop` did the same. With `-t 10` the SIGKILL came at 10.1 s, and the exit was still 137. "The encoder stopped with the server" was never logged. With no encoder running, the server stopped in 0.2 s with status 0.
+- ServiceLifecycle shuts services down one at a time, the last added first: the HTTP server, then `EncoderService`, which waited on the child, then the backup service and the import watcher, which never had their turn.
+
+**Why.** llama.cpp's server at `LLAMA_COMMIT` (`tools/server/server.cpp`) installs its SIGINT and SIGTERM handler with sigaction once its model has loaded, and unblocks neither signal. Started with a Dispatch worker's mask, every thread of it blocks SIGTERM. The signal stays pending, and its handler never runs.
+
+**Why the tests missed it.** The stand-in is a Swift program with an asynchronous main, whose main thread Dispatch parks in sigsuspend(2) with no signal blocked, as the server's (libdispatch's `dispatch_main`). So the stand-in took SIGTERM, whatever mask it started with, and ended gracefully through ServiceLifecycle. A diagnostic started both from a Dispatch worker through `SpawnedProcess`:
+- The stand-in ended 10 ms after SIGTERM. /proc showed its main thread's SigBlk as 0 and its other 16 threads' as the worker's.
+- A C program that catches SIGTERM as llama-server does still had the signal pending after 12 s.
+- With the mask emptied, both ended within 10 ms.
+
+**The fix.** `SpawnedProcess.run` starts a child with no signal blocked (`POSIX_SPAWN_SETSIGMASK`, an empty set) and every signal's action its default (`POSIX_SPAWN_SETSIGDEF`, every signal), as Swift Testing's spawner does. The encoder's two starts take it.
+
+**The stand-in** now ends at SIGINT and SIGTERM as llama-server does. Its main is synchronous, installs a handler of its own, and waits in pause(2), keeping the mask it started with, while a detached task serves. Hummingbird is given no signal to shut down on, since Dispatch's handler would replace the stand-in's. A start's failure, such as a port taken, is still written with its cause, which the encoder's retry reads.
+
+**The test.** QueryEncoderTests' `aStopEndsTheChildBySIGTERMAtOnce()` starts the encoder with a 30 s `stopTimeout`. It reads the child's SigBlk from /proc, which must be empty, then times `shutdown()`, which must end the child within 10 s, before any SIGKILL.
+- With the fix, it passed in 0.2 s, and QueryEncoderTests' 16 tests in 0.8 s.
+- With the fix taken out, it failed on both counts: SigBlk `fffffffe3bfbea27`, and a stop of 30.0 s, which only the SIGKILL ended.
+
+**Measured after the fix**, in an image of this branch, the same way:
+- llama-server's threads blocked nothing: SigBlk `0000000000000000` in all 23. Its SigIgn and SigCgt were as before, since it ignores SIGPIPE and catches SIGINT and SIGTERM itself.
+- **The idle stop:** the child was gone 180.02 s after the query, within the tenth of a second between two looks, its SIGTERM never seen pending. A SIGTERM sent by hand ended it within the 3 s given, after llama.cpp's own "cleaning up before exit".
+- **The server's own stop:** five stops with the encoder running all ended with status 0, in 0.27 to 0.33 s. That was three runs of `docker compose stop`, one with `-t 10` and one `docker stop`. Docker's die event came 0.23 to 0.25 s after its SIGTERM, and "The encoder stopped with the server" was logged each time.
+
+**Suites:** `scripts/swift --postgres test` passed 5,581 tests in 21 targets in 7 min 41 s, the build included, apart from the one named skip: #190's 5,580 and this test. `scripts/compose-smoke` passed over this branch's image in 87 s. That run had neither web/e2e nor the parity stage's image, so check 9's two halves and checks 2 and 8 over the Standalone index were skipped; CI runs them all.
+
+**CI's first run** was at `7cd8d5c`, on the merge with `main` at `eaaad25`, S29g's. Paths, web, the image's two builds and compose passed. Swift failed one test: FRUSLightCoreTests' `ImportCoordinatorTests.aResetRemovesNoIndexMadeLiveAfterItWasAskedFor`, `main`'s race between a reset and a start, which #193 fixes.
+- This branch's QueryEncoderTests passed, the new test in 18.1 s. Under the job's load every test of that suite took 18 to 22 s, the stand-in's start included.
+- Running it again would have tested the same merge. Once #193 merged, GitHub reported this pull request conflicting, since both entries had gone directly above #190's. `main` was merged once, at `56bc8b9`, with this entry put above #193's.
+- The same push corrects the new test's failure message: a stop of between 10 and 30 s fails the test without reaching the SIGKILL, which the message had named.
+
+**Install guide.** `docs/INSTALL.md` says the encoder stops three minutes after the last search by meaning and stops with the server, and gives no time for either. Both now happen at the SIGTERM, so it stays true unchanged.
+
+**Left as it was.**
+- **Docker's grace.** `compose.yaml` sets no `stop_grace_period`, and Docker's grace here was 3 s. The server's stop, the encoder's included, now takes a third of a second of it.
+- **#190's second follow-up.** The tests' own Foundation `Process` calls, in FRUSParity's `Upstream.commit(_:)` and UserStoreRestoreTests, are still to move should a runner's descriptors climb again.
+
+**Delivered here:**
+- children started with no signal blocked and every action its default;
+- the stand-in's llama-server signal handling;
+- the test;
+- this entry.
+
+**Next:** phase 4's rows as PLAN orders them.
+
 ## CI follow-up: the reset and the start's open
 
 25 November 2026 · branch `claude/clever-visvesvaraya-49e906` · [#193](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/193) · upstream `efd73ecb`, unchanged
