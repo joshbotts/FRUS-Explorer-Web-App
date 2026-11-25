@@ -5,6 +5,9 @@
 // weight's step rests; a row opens its document, and Back returns to the list as it was. Then a project
 // with a note on a document has its leads found again by keyboard, Project Home saying so while the
 // server finds them. The test removes its project, its note and the trail, and forgets the tuning.
+// S26d's: the semantic axis's weight is raised by keyboard, a row it scored is marked helpful from its menu, by
+// keyboard, Beyond your library follows the rows, and Settings ▸ Data lists the verdict, over the image's shards;
+// the test clears its verdicts.
 import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -24,6 +27,7 @@ async function reset(page: Page): Promise<void> {
   await send(page, 'PUT', 'api/v1/me/active-project', { projectId: null });
   await removeNotesAndSummaries(page);
   await send(page, 'DELETE', 'api/v1/me/history');
+  await send(page, 'DELETE', 'api/v1/me/semantic-feedback');
   await page.evaluate(() => localStorage.removeItem('frus.related.weights'));
 }
 
@@ -87,9 +91,10 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     await expect.poll(() => page.evaluate(() => localStorage.getItem('frus.related.weights'))).toBe('subseries:0.4');
     // The slider kept its place, and the focus, through the new ranking.
     await expect(proximity).toBeFocused();
-    // The axes this server does not rank by are set aside, and say so; the cross-references it ranks by.
-    await expect(page.getByRole('slider', { name: 'Semantically similar (experimental)' })).toBeDisabled();
-    await expect(page.getByText('This server does not rank by meaning yet.')).toBeVisible();
+    // Every axis ranks since S26d, the experimental ones saying what they are where their sliders are.
+    await expect(page.getByRole('slider', { name: 'Semantically similar (experimental)' })).toBeEnabled();
+    await expect(page.getByText(/^Matches carry a “Semantic match” score/)).toBeVisible();
+    await expect(page.getByRole('slider', { name: 'Similar wording (experimental)' })).toBeEnabled();
     await expect(page.getByRole('slider', { name: 'Cross-references' })).toBeEnabled();
     await axeCheck(page);
     const resetWeights = page.getByRole('button', { name: 'Reset to app defaults' });
@@ -101,7 +106,7 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     await expect(page.getByText('Adjust weights')).toBeFocused();
 
     // A row opens its document, and Back returns to the list as it was. The synthetic export gives d1 no
-    // document of its archival container, so its list is empty there; the rows are the unit tests'.
+    // document of its archival container; its rows are the semantic axis's, over the image's shards.
     if ((await list.count()) > 0) {
       const first = list.getByRole('link').first();
       const title = (await first.textContent()) ?? '';
@@ -138,6 +143,62 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     deliver();
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     // Off Project Home first, so that no read of it meets the project deleted under it.
+    await page.goto('research');
+    await reset(page);
+  }
+});
+
+test('raises the semantic axis’s weight and marks a match by keyboard, and Settings ▸ Data lists the verdict', async ({ page }) => {
+  await page.goto('research');
+  await reset(page);
+  try {
+    await page.goto('related/frus1961-63v06/d1');
+    await expect(page.getByRole('heading', { level: 1, name: 'Related Documents' })).toBeVisible();
+    await expect(page.locator('ol.related-list')).toBeVisible();
+    await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
+
+    // The semantic axis, by keyboard: Adjust weights opens, and its slider moves up a step, ranked again with it.
+    await tabTo(page, page.getByText('Adjust weights'));
+    await page.keyboard.press('Enter');
+    const meaning = page.getByRole('slider', { name: 'Semantically similar (experimental)' });
+    await tabTo(page, meaning);
+    await expect(meaning).toHaveValue('0.5');
+    await page.keyboard.press('ArrowRight');
+    await expect(meaning).toHaveValue('0.6');
+    await expect(page).toHaveURL(/weights=semanticSimilarity%3A0\.6/);
+    await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
+    await expect(meaning).toBeFocused();
+
+    // A row the semantic axis scored says its match, and carries the app's two verdicts on its menu.
+    const menu = { name: /^Semantic match feedback: / };
+    const row = page.locator('ol.related-list > li').filter({ has: page.getByRole('button', menu) }).first();
+    const feedback = row.getByRole('button', menu);
+    await expect(feedback).toBeVisible();
+    await expect(row.getByText(/Semantic match · \d+%/)).toBeVisible();
+    await tabTo(page, feedback);
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: 'Semantic match: helpful' })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Semantic match: not useful' })).toBeVisible();
+    await axeCheck(page);
+    await page.keyboard.press('Enter');
+    await expect(row.getByText('Marked helpful')).toBeVisible();
+    await expect(feedback).toBeFocused();
+
+    // Beyond your library follows the rows: the volumes this server does not serve, each opening its page in Browse.
+    const beyond = page.getByRole('region', { name: 'Beyond your library' });
+    await expect(beyond).toBeVisible();
+    await expect(beyond.getByRole('link').first()).toHaveAttribute('href', /\/browse\/frus/);
+    await axeCheck(page);
+
+    // The verdict is the user's, kept on the server, and Settings ▸ Data lists it.
+    expect(await getJSON<{ total: number; helpful: number }>(page, 'api/v1/me/semantic-feedback')).toMatchObject({ total: 1, helpful: 1 });
+    await page.goto('settings/data');
+    const section = page.getByRole('region', { name: 'Semantic Match Feedback' });
+    await expect(section.getByText('Verdicts recorded')).toBeVisible();
+    await expect(section.getByText('Marked helpful')).toBeVisible();
+    await expect(section.getByRole('link', { name: 'Download Feedback File' })).toHaveAttribute('download', 'frus-semantic-feedback.json');
+    await axeCheck(page);
+  } finally {
     await page.goto('research');
     await reset(page);
   }

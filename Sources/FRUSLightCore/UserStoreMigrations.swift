@@ -4,7 +4,7 @@
 /// starting at 1. Never edit one that has shipped: add another, and with it any change to
 /// `UserStoreSchema`.
 public enum UserStoreMigrations {
-    public static let all: [String] = [one, two, three, four, five, six, seven, eight]
+    public static let all: [String] = [one, two, three, four, five, six, seven, eight, nine]
 
     /// S2: the single user, and corrections as override rows.
     static let one = """
@@ -543,5 +543,29 @@ public enum UserStoreMigrations {
         );
         CREATE INDEX correction_log_by_document ON correction_log (volume_id, document_id);
         CREATE INDEX correction_log_by_override ON correction_log (override_id);
+        """
+
+    /// S26d's: each user's verdicts on Related Documents' semantic matches, the app's two on a row's menu, which the app
+    /// keeps in one file a device (`SemanticFeedbackLog`) and the web for each user, by the owner's answer of 23
+    /// November. A row is the app's entry (`SemanticFeedbackEntry`): the pair, each `volumeId/documentId`, the verdict,
+    /// the calibrated cosine the row was ranked on, the anchor's era as the app's `CoverageEra` banding writes it,
+    /// whether one volume holds both, and the vector generation's provenance digest, with when it was given. A second
+    /// verdict on a pair replaces the first, written after every other, so that `rowid` is the log's order, oldest
+    /// first, and a user keeps the newest 2,000. A user's verdicts go with the user and with the erasure of their
+    /// research; no research export carries them, as the app's carries none: their file is the app's own,
+    /// `frus-semantic-feedback.json`.
+    static let nine = """
+        CREATE TABLE semantic_feedback (
+            user_id TEXT NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+            anchor TEXT NOT NULL,
+            neighbour TEXT NOT NULL,
+            verdict TEXT NOT NULL CHECK (verdict IN ('helpful', 'notHelpful')),
+            cosine REAL,
+            era TEXT,
+            same_volume INTEGER,
+            provenance_digest TEXT,
+            recorded_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, anchor, neighbour)
+        );
         """
 }

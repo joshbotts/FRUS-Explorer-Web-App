@@ -1,7 +1,8 @@
 // An admin's recovery action (PLAN's S20d): erase one user's research, every row the store keeps of
 // theirs in the 23 model types' tables, with their rows of `user_search` and the tag assignments the
-// kit's search reads, their stored keys and the project they worked in, after a confirmation that
-// names the counts. Their account stays as it was, with its name, role, password and sessions, and so
+// kit's search reads, their stored keys, their verdicts on semantic matches (S26d) and the project they
+// worked in, after a confirmation that names the counts. Their account stays as it was, with its name,
+// role, password and sessions, and so
 // do the jobs' rows that name them, which hold none of their research. Written once, on
 // `RelationalUserStore`, in SQL both stores read; the erasure moves the search mark, so no search kept
 // from before it is given again.
@@ -11,8 +12,8 @@ import Foundation
 /// What an erasure removes, table by table.
 public protocol ResearchErasureStore: Sendable {
     /// How many rows of the user's each table an erasure would remove: each of the 23 model types'
-    /// tables a user keeps rows in (`UserStoreSchema.erased`), and `secrets`. A user the store does not
-    /// hold is `AccountStoreError.notFound`.
+    /// tables a user keeps rows in (`UserStoreSchema.erased`), `secrets` and `semantic_feedback`. A user the
+    /// store does not hold is `AccountStoreError.notFound`.
     func researchHoldings(of user: String) throws -> [String: Int]
     /// Removes them, in one transaction, if what the user holds is still `expected`, the holdings the
     /// confirmation named; else `ResearchErasureError.changed`, with what they hold now, and nothing is
@@ -51,6 +52,7 @@ extension RelationalUserStore: ResearchErasureStore {
                 _ = try db.query("DELETE FROM \(table.name) WHERE user_id = ?", [.text(user)])
             }
             _ = try db.query("DELETE FROM \(Self.secretsTable) WHERE user_id = ?", [.text(user)])
+            _ = try db.query("DELETE FROM \(Self.semanticFeedbackTable) WHERE user_id = ?", [.text(user)])
             _ = try db.query("UPDATE users SET active_project_id = NULL WHERE user_id = ?", [.text(user)])
             // What the kit's search reads: app.db's own rows, or the PostgreSQL store's copy of them.
             _ = try db.search.query("DELETE FROM user_search WHERE user_id = ?", [.text(user)])
@@ -64,7 +66,7 @@ extension RelationalUserStore: ResearchErasureStore {
             throw AccountStoreError.notFound(user)
         }
         var held: [String: Int] = [:]
-        for table in UserStoreSchema.erased.map(\.name) + [secretsTable] {
+        for table in UserStoreSchema.erased.map(\.name) + [secretsTable, semanticFeedbackTable] {
             held[table] = Int(try db.scalar("SELECT count(*) FROM \(table) WHERE user_id = ?", [.text(user)])?.integer ?? 0)
         }
         return held

@@ -1,9 +1,11 @@
 // Related Documents (PLAN's S23d), as the app's list shows it, over a stubbed server: the scope, the
-// weights kept for the next list, the rows with their chips, the lines under them, and the list's states.
+// weights kept for the next list, the rows with their chips, the lines under them, and the list's states; since
+// S26d the experimental axes' captions, a semantic row's verdicts, Beyond your library and the missing vectors' line.
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RelatedDocuments } from '../api/related';
+import type { RelatedDocuments, SemanticVerdict } from '../api/related';
+import { me, sent } from '../test/notes';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 
 afterEach(() => {
@@ -25,8 +27,8 @@ const axes: RelatedDocuments['axes'] = [
   { id: 'subseries', name: 'Corpus proximity', weight: 0.3, defaultWeight: 0.3, available: true },
   { id: 'sharedPersons', name: 'Shared people', weight: 0.7, defaultWeight: 0.7, available: true },
   { id: 'sharedSubjects', name: 'Shared subjects', weight: 0.5, defaultWeight: 0.5, available: true },
-  { id: 'semanticSimilarity', name: 'Semantically similar (experimental)', weight: 0.5, defaultWeight: 0.5, available: false },
-  { id: 'lexicalSimilarity', name: 'Similar wording (experimental)', weight: 0, defaultWeight: 0, available: false },
+  { id: 'semanticSimilarity', name: 'Semantically similar (experimental)', weight: 0.5, defaultWeight: 0.5, available: true },
+  { id: 'lexicalSimilarity', name: 'Similar wording (experimental)', weight: 0, defaultWeight: 0, available: true },
 ];
 
 function answer(fields: Partial<RelatedDocuments> = {}): RelatedDocuments {
@@ -55,9 +57,33 @@ function answer(fields: Partial<RelatedDocuments> = {}): RelatedDocuments {
     ],
     totalBeforeLimit: 5,
     poolCut: 'Ranked from the first 120 of 1,063 documents that share this anchor’s archival container. The rest were not scored. Narrow the scope to reach them.',
+    missingShards: [],
     ...fields,
   };
 }
+
+/** A row the semantic axis scored, with the kit's chip. */
+const semanticRow: RelatedDocuments['rows'][number] = {
+  volumeId: 'frus1961-63v06',
+  documentId: 'd4',
+  header: 'Letter From Chairman Khrushchev',
+  isEditorialNote: false,
+  score: 0.9,
+  chips: [{ axis: 'semanticSimilarity', name: 'Semantically similar (experimental)', text: 'shares: Semantic match · 71%' }],
+  semanticScore: 0.71,
+};
+
+const beyond: NonNullable<RelatedDocuments['beyondLibrary']> = {
+  caption: '94 documents in 19 volumes you have not downloaded read as close to this one as the matches ranked above.',
+  documentCount: 94,
+  volumeCount: 19,
+  isCapped: false,
+  documents: [
+    { volumeId: 'frus1961-63v05', documentId: 'd12', volumeTitle: 'Foreign Relations,\n   1961–1963, Volume V', score: 0.66, chip: 'Semantic match · 66%', served: false },
+  ],
+  volumes: [{ volumeId: 'frus1961-63v15', title: 'Berlin Crisis, 1962–1963', count: 14, countText: '14 matching documents' }],
+  moreVolumes: 'and 18 more volumes',
+};
 
 const document = {
   document: { volumeId: 'frus1961-63v06', documentId: 'd1', displayTitle: 'Telegram to Moscow', inIndex: true },
@@ -112,12 +138,13 @@ describe('Related Documents', () => {
     renderAt('/related/frus1961-63v06/d1');
     await screen.findByRole('link', { name: 'Memorandum From the President' });
     expect((screen.getByRole('button', { name: 'Reset to app defaults' }) as HTMLButtonElement).disabled).toBe(true);
-    // The axes this server does not rank by are set aside, and say so; the cross-references it ranks by
-    // since S23c's pin move are not.
+    // Every axis ranks since S26d; the two experimental ones say what they are, as their weights stand.
     const meaning = screen.getByRole('slider', { name: 'Semantically similar (experimental)' }) as HTMLInputElement;
-    expect(meaning.disabled).toBe(true);
-    expect(meaning.getAttribute('aria-describedby')).toBeTruthy();
-    expect(screen.getByText('This server does not rank by meaning yet.')).toBeTruthy();
+    expect(meaning.disabled).toBe(false);
+    expect(globalThis.document.getElementById(meaning.getAttribute('aria-describedby')!)?.textContent).toMatch(/^Matches carry a “Semantic match” score/);
+    const wording = screen.getByRole('slider', { name: 'Similar wording (experimental)' }) as HTMLInputElement;
+    expect(wording.disabled).toBe(false);
+    expect(globalThis.document.getElementById(wording.getAttribute('aria-describedby')!)?.textContent).toMatch(/^Off\. Raise it to also match documents that reuse/);
     const crossReferences = screen.getByRole('slider', { name: 'Cross-references' }) as HTMLInputElement;
     expect(crossReferences.disabled).toBe(false);
     expect(crossReferences.getAttribute('aria-describedby')).toBeNull();
@@ -229,5 +256,164 @@ describe('Related Documents', () => {
     stubServer({ '/readyz': ready, [anchor]: document, [path]: new ProblemAnswer(503, 'INDEX_NOT_READY', 'Waiting for an export.') });
     renderAt('/related/frus1961-63v06/d1');
     expect(await screen.findByText('Preparing your index…')).toBeTruthy();
+  });
+  it('sets the semantic axis aside, saying why, on a server whose vectors are refused', async () => {
+    const refused = axes.map((axis) => (axis.id === 'semanticSimilarity' ? { ...axis, available: false } : axis));
+    stubServer({ '/readyz': ready, [anchor]: document, [path]: answer({ axes: refused }) });
+    renderAt('/related/frus1961-63v06/d1');
+    await screen.findByRole('link', { name: 'Memorandum From the President' });
+    expect((screen.getByRole('slider', { name: 'Semantically similar (experimental)' }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText('This server’s semantic vectors are unavailable, so it does not rank by meaning.')).toBeTruthy();
+  });
+
+  it('gives a row the semantic axis scored the app’s two verdicts, which it then says, and no other row', async () => {
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      [anchor]: document,
+      [path]: answer({ rows: [semanticRow, ...answer().rows] }),
+      'POST /api/v1/me/semantic-feedback': (_url: URL, init?: RequestInit) => ({ ...JSON.parse(String(init?.body)), recordedAt: '2026-11-24T00:00:00.000Z' }),
+    });
+    const user = userEvent.setup();
+    renderAt('/related/frus1961-63v06/d1');
+    const row = (await screen.findByRole('link', { name: 'Letter From Chairman Khrushchev' })).closest('li')!;
+    expect(within(row).getByRole('list', { name: 'Why related' }).textContent).toContain('shares: Semantic match · 71%');
+    const menu = within(row).getByRole('button', { name: 'Semantic match feedback: Letter From Chairman Khrushchev' });
+    expect(menu.textContent).toBe('Feedback');
+    // Only a row the semantic axis scored carries the menu.
+    const other = screen.getByRole('link', { name: 'Memorandum From the President' }).closest('li')!;
+    expect(within(other).queryByRole('button', { name: /Semantic match feedback/ })).toBeNull();
+
+    menu.focus();
+    await user.keyboard('{ArrowDown}');
+    const helpful = screen.getByRole('menuitem', { name: 'Semantic match: helpful' });
+    expect(globalThis.document.activeElement).toBe(helpful);
+    expect(screen.getByRole('menuitem', { name: 'Semantic match: not useful' })).toBeTruthy();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(within(row).getByText('Marked helpful')).toBeTruthy());
+    expect(globalThis.document.activeElement).toBe(menu);
+    const posted = fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/api/v1/me/semantic-feedback') && init?.method === 'POST');
+    expect(posted).toHaveLength(1);
+    expect(sent(posted[0]![1])).toEqual({
+      body: { anchor: 'frus1961-63v06/d1', neighbour: 'frus1961-63v06/d4', verdict: 'helpful' },
+      token: 'token-1',
+    });
+    // The verdict describes the menu's button; it is said politely, outside the list, which is busy while it is ranked.
+    expect(globalThis.document.getElementById(menu.getAttribute('aria-describedby')!)?.textContent).toBe('Marked helpful');
+    const spoken = screen.getByText('Marked helpful: Letter From Chairman Khrushchev');
+    const region = spoken.closest('[aria-live]')!;
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    expect(region.closest('[aria-busy]')).toBeNull();
+    // The same verdict given again is said again: its words are a new node of the region.
+    await user.click(menu);
+    await user.click(screen.getByRole('menuitem', { name: 'Semantic match: helpful' }));
+    await waitFor(() => expect(region.firstElementChild).not.toBe(spoken));
+    expect(region.textContent).toBe('Marked helpful: Letter From Chairman Khrushchev');
+  });
+
+  it('offers no verdict on a server that keeps no user data', async () => {
+    stubServer({ '/readyz': ready, '/api/v1/me': { ...me, userData: false }, [anchor]: document, [path]: answer({ rows: [semanticRow] }) });
+    renderAt('/related/frus1961-63v06/d1');
+    const row = (await screen.findByRole('link', { name: 'Letter From Chairman Khrushchev' })).closest('li')!;
+    expect(within(row).getByRole('list', { name: 'Why related' }).textContent).toContain('Semantic match · 71%');
+    expect(within(row).queryByRole('button', { name: /Semantic match feedback/ })).toBeNull();
+  });
+
+  it('asks again for a list that was coming when a verdict was kept, which was ranked without it', async () => {
+    let kept: SemanticVerdict | undefined;
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      [anchor]: document,
+      [path]: async (url: URL) => {
+        const scope = (url.searchParams.get('scope') ?? 'all') as RelatedDocuments['scope'];
+        // Ranked as the request came: before the verdict was kept, without it.
+        const list = answer({ scope, rows: [kept ? { ...semanticRow, verdict: kept } : semanticRow] });
+        if (scope === 'volume' && !kept) await held;
+        return list;
+      },
+      'POST /api/v1/me/semantic-feedback': (_url: URL, init?: RequestInit) => {
+        kept = JSON.parse(String(init?.body)).verdict;
+        return { ...JSON.parse(String(init?.body)), recordedAt: '2026-11-24T00:00:00.000Z' };
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/related/frus1961-63v06/d1');
+    await screen.findByRole('link', { name: 'Letter From Chairman Khrushchev' });
+    // This volume's list is asked for, and held; the list on show stays, busy, and its row is marked meanwhile.
+    await user.click(screen.getByRole('radio', { name: 'This volume' }));
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes('scope=volume'))).toBe(true));
+    const row = () => screen.getByRole('link', { name: 'Letter From Chairman Khrushchev' }).closest('li')!;
+    await user.click(within(row()).getByRole('button', { name: /Semantic match feedback/ }));
+    await user.click(screen.getByRole('menuitem', { name: 'Semantic match: helpful' }));
+    // This volume's list is asked for again, after the verdict, and comes with it.
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url).includes('scope=volume'))).toHaveLength(2));
+    await waitFor(() => expect(globalThis.document.querySelector('[aria-busy="true"]')).toBeNull());
+    await waitFor(() => expect(within(row()).getByText('Marked helpful')).toBeTruthy());
+    // The list ranked before the verdict comes at last, and changes nothing.
+    release();
+    await new Promise((settled) => setTimeout(settled, 50));
+    expect(within(row()).getByText('Marked helpful')).toBeTruthy();
+  });
+
+  it('says a verdict the server gave a row, and why one was not recorded', async () => {
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      [anchor]: document,
+      [path]: answer({ rows: [{ ...semanticRow, verdict: 'notHelpful' }] }),
+      'POST /api/v1/me/semantic-feedback': new ProblemAnswer(422, 'NOT_A_SEMANTIC_MATCH', 'The semantic axis gives frus1961-63v06/d4 no score.'),
+    });
+    const user = userEvent.setup();
+    renderAt('/related/frus1961-63v06/d1');
+    const row = (await screen.findByRole('link', { name: 'Letter From Chairman Khrushchev' })).closest('li')!;
+    expect(within(row).getByText('Marked not useful')).toBeTruthy();
+    const menu = within(row).getByRole('button', { name: /Semantic match feedback/ });
+    expect(globalThis.document.getElementById(menu.getAttribute('aria-describedby')!)?.textContent).toBe('Marked not useful');
+    await user.click(menu);
+    await user.click(screen.getByRole('menuitem', { name: 'Semantic match: helpful' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('The verdict was not recorded: The semantic axis gives frus1961-63v06/d4 no score.');
+    expect(within(row).getByText('Marked not useful')).toBeTruthy();
+  });
+
+  it('shows Beyond your library after the rows, each volume opening its page in Browse, and the missing vectors’ line', async () => {
+    const served = { volumeId: 'frus1894Nicaragua', documentId: 'd3', volumeTitle: 'Nicaragua', score: 0.61, chip: 'Semantic match · 61%', served: true };
+    stubServer({
+      '/readyz': ready,
+      [anchor]: document,
+      [path]: answer({ beyondLibrary: { ...beyond, documents: [...beyond.documents, served] }, missingShards: ['frus1894Nicaragua'] }),
+    });
+    renderAt('/related/frus1961-63v06/d1');
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Beyond your library' })).closest('section')!;
+    expect(within(section).getByText(beyond.caption)).toBeTruthy();
+    const named = within(section).getByRole('link', { name: 'Document d12 in Foreign Relations, 1961–1963, Volume V' });
+    expect(named.getAttribute('href')).toBe('/browse/frus1961-63v05');
+    const document12 = named.closest('li')!;
+    expect(document12.textContent).toContain('Volume not on this server — its documents are shown without titles.');
+    expect(document12.textContent).toContain('Semantic match · 66%');
+    // A document of a volume this server serves, as a scoped list's leads may name, opens itself.
+    const readable = within(section).getByRole('link', { name: 'Document d3 in Nicaragua' });
+    expect(readable.getAttribute('href')).toBe('/doc/frus1894Nicaragua/d3');
+    expect(readable.closest('li')!.textContent).not.toContain('not on this server');
+    expect(readable.closest('li')!.textContent).toContain('Semantic match · 61%');
+    const volume = within(section).getByRole('link', { name: 'Berlin Crisis, 1962–1963' });
+    expect(volume.getAttribute('href')).toBe('/browse/frus1961-63v15');
+    expect(volume.closest('li')!.textContent).toContain('14 matching documents');
+    expect(within(section).getByText('and 18 more volumes')).toBeTruthy();
+    expect(
+      screen.getByText('One volume this server serves is missing its semantic vectors, so its documents were not matched by meaning.'),
+    ).toBeTruthy();
+  });
+
+  it('says the empty list’s sentence above Beyond your library, where no document of this library is related', async () => {
+    stubServer({ '/readyz': ready, [anchor]: document, [path]: answer({ rows: [], totalBeforeLimit: 0, poolCut: undefined, beyondLibrary: beyond }) });
+    renderAt('/related/frus1961-63v06/d1');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Beyond your library' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'No Related Documents' })).toBeNull();
+    expect(screen.getByText(/^No indexed documents share this document’s archival provenance/)).toBeTruthy();
   });
 });

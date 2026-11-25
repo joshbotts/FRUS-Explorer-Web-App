@@ -245,7 +245,8 @@ import Testing
                 #expect(try await browser.send(.post, "/api/v1/me/tags", #"{"name":"Cuba"}"#).status == .created)
             }
             let counted = try decode(ResearchHoldings.self, try await alice.get("/api/v1/admin/users/bob/research"))
-            #expect(counted.userId == "bob" && counted.total == 1 && counted.holdings.last?.type == "StoredKey")
+            // The stored keys and, since S26d, the verdicts on semantic matches after the 21 tables.
+            #expect(counted.userId == "bob" && counted.total == 1 && counted.holdings.suffix(2).map(\.type) == ["StoredKey", "SemanticFeedbackEntry"])
             #expect(counted.holdings.first { $0.table == "tags" } == ResearchHolding(type: "UserTag", table: "tags", count: 1))
             func confirmation(_ holdings: ResearchHoldings) -> String {
                 "{\"expected\":{" + holdings.holdings.map { "\"\($0.table)\":\($0.count)" }.joined(separator: ",") + "}}"

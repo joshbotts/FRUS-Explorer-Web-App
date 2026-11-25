@@ -1398,8 +1398,11 @@ export const copy = {
   },
   /**
    * Related Documents (PLAN's S23d), in the words of the app's `RelatedDocumentsContent`, its weights' row
-   * (`AxisWeightRow`) and its rail's tile. What a weight says of an axis this server does not rank by yet,
-   * the line while a list is ranked, and the way back to the document are the web's own.
+   * (`AxisWeightRow`) and its rail's tile; since S26d its two experimental axes' captions, its verdicts' menu and
+   * Beyond your library, with the app's search row for a document named there (`SemanticUndownloadedRow`), of a
+   * volume this server does not serve where the app's is not downloaded. What a weight says of an axis this server
+   * cannot rank by, the line while a list is ranked, the way back to the document, the menu's button, a row's
+   * verdict and the line for the volumes whose vectors are missing are the web's own.
    */
   related: {
     title: 'Related Documents',
@@ -1417,12 +1420,38 @@ export const copy = {
     overflow: (count: number) => `${count} more related — raise a weight or narrow the scope to refine.`,
     subjectsUnavailable: 'Subject data is unavailable on this server.',
     notRanked: {
-      lexicalSimilarity: 'This server does not rank by wording yet.',
-      semanticSimilarity: 'This server does not rank by meaning yet.',
+      semanticSimilarity: 'This server’s semantic vectors are unavailable, so it does not rank by meaning.',
     } as Record<string, string>,
+    /** The two experimental axes' captions, where their sliders are (`axisCaption(for:)`): one while off, one while on. */
+    lexicalOff:
+      'Off. Raise it to also match documents that reuse this one’s distinctive wording. Experimental; searches only the volumes indexed on this server, so results vary with its library.',
+    lexicalOn:
+      'Matches share this document’s distinctive wording. Searches only the volumes indexed on this server, so results vary with its library.',
+    semanticOff:
+      'Off. Raise it to also match documents whose meaning an AI model measured as alike, even when they share no words, citations or archive. Experimental, and untested on nineteenth-century prose.',
+    semanticOn:
+      'Matches carry a “Semantic match” score. Consider providing feedback to say whether it helped. Those verdicts are how this axis gets judged.',
     ranking: 'Ranking the related documents…',
     back: (title: string) => `Back to ${title}`,
     chips: 'Why related',
+    /** A row's menu of the app's two verdicts, on a row the semantic axis scored. */
+    feedback: 'Feedback',
+    feedbackFor: (title: string) => `Semantic match feedback: ${title}`,
+    helpful: 'Semantic match: helpful',
+    notHelpful: 'Semantic match: not useful',
+    /** A row's verdict, once given: the app's Settings words for a helpful one, and the other's beside them. */
+    marked: { helpful: 'Marked helpful', notHelpful: 'Marked not useful' } as Record<string, string>,
+    recorded: (marked: string, title: string) => `${marked}: ${title}`,
+    feedbackFailed: (reason: string) => `The verdict was not recorded: ${reason}`,
+    /** Beyond your library (S-3): the section's header, and a document it names, with its volume's line. */
+    beyond: 'Beyond your library',
+    beyondDocument: (documentId: string, volumeTitle: string) => `Document ${documentId} in ${volumeTitle}`,
+    beyondNotServed: 'Volume not on this server — its documents are shown without titles.',
+    /** The served volumes whose vectors are missing from the image, whose documents the axis could not score. */
+    missingShards: (count: number) =>
+      count === 1
+        ? 'One volume this server serves is missing its semantic vectors, so its documents were not matched by meaning.'
+        : `${count.toLocaleString('en-US')} volumes this server serves are missing their semantic vectors, so their documents were not matched by meaning.`,
   },
 
   /**
@@ -1809,6 +1838,14 @@ export const copy = {
     leadsComputing: 'Finding leads…',
     leadsRefreshFailed: (reason: string) => `Suggested Next could not be refreshed: ${reason}`,
     leadsRefreshUnexplained: 'the server stopped it.',
+    /**
+     * Beyond your library at the project's grain (S26d), the app's `beyondLibrarySection` and its rows: of the volumes
+     * this server does not serve where the app's are not downloaded, and of this server where it speaks of this device,
+     * with a count of one in the singular, as the kit's sentence for a document's says it since #1618.
+     */
+    reachTitle: 'Beyond your library',
+    reachCaption: (documents: number, seeds: number) => `${documents.toLocaleString('en-US')} ${documents === 1 ? 'document' : 'documents'} in volumes this server does not serve ${documents === 1 ? 'reads' : 'read'} as close to one of this project's ${seeds.toLocaleString('en-US')} ${seeds === 1 ? 'document' : 'documents'} as that document's nearest neighbours on this server.`,
+    reachVolume: (documents: number, seeds: number) => `${documents.toLocaleString('en-US')} ${documents === 1 ? 'document' : 'documents'} · reached from ${seeds.toLocaleString('en-US')} of yours`,
     leadNew: 'NEW',
     relatedOne: 'Related to 1 of your documents',
     relatedMany: (count: number) => `Related to ${count.toLocaleString('en-US')} of your documents`,
@@ -2994,6 +3031,35 @@ export const copy = {
     },
   },
   /**
+   * Settings ▸ Data's Semantic Match Feedback (PLAN's S26d), in the words of the app's screen of that name
+   * (`SemanticFeedbackView`): the experiment, how to give a verdict, what is recorded, the file and Clear Recorded
+   * Feedback with its question. Where the app keeps the verdicts on the device and prepares a file to share or to mail,
+   * the server keeps them with the user's account and the browser saves the file, which the words say; how to give one
+   * names the web's menu, where the app's is a long press, and the footer's first sentence and the line once cleared
+   * are the web's own.
+   */
+  semanticFeedback: {
+    title: 'Semantic Match Feedback',
+    aboutHeader: 'About this experiment',
+    what: 'The “Semantically similar (experimental)” axis in Related Documents finds documents by an AI model’s scoring of the meaning of their language rather than by citations or archival provenance. It contributes to every Related Documents list unless you lower its weight there. It is still experimental: how well it works on nineteenth-century material is not established, which is what the verdicts below are for.',
+    unknown:
+      'What we do not know is how good it is before 1900. The automatic check we can run relies on the editors’ cross-references, and that citation style only becomes common after 1945 — so it reaches barely 500 early documents out of the whole corpus. Nineteenth-century volumes are exactly where this axis is meant to help most, and exactly where nothing has measured it.',
+    howHeader: 'How to give feedback',
+    how: 'Open the Feedback menu of any related document that shows a Semantic match score, then choose whether the match was helpful. Nineteenth-century verdicts are worth the most.',
+    recordedHeader: 'Recorded with your account',
+    total: 'Verdicts recorded',
+    helpful: 'Marked helpful',
+    footer: (address: string) =>
+      `Kept on this server with your account, and in no research export. Each verdict records the two documents, your judgement, the match score, which release of the vectors it applies to, and when you made it. The server shares none of this on its own: to contribute your verdicts, choose Download Feedback File, then send the file to ${address}.`,
+    download: 'Download Feedback File',
+    clear: 'Clear Recorded Feedback',
+    clearConfirm: 'Delete every recorded verdict on this server?',
+    clearAction: 'Delete Feedback',
+    cancel: 'Cancel',
+    cleared: 'Every recorded verdict was deleted.',
+    loading: 'Loading the verdicts…',
+  },
+  /**
    * Settings ▸ Keys (PLAN's S20c), the web's own pane for the app's Connections: the services' names, the
    * status, About and field lines, the links to a key, Add Key…, Replace Key…, Remove Key, Save,
    * Cancel, Saved, Removed and the question before a removal, in the app's words; the rest are the
@@ -3600,11 +3666,11 @@ export const copy = {
         unavailable:
           'This server cannot match documents by subject, so that part of Related Documents is unavailable. Nothing is wrong with its library.',
         /**
-         * The app's `settings.vectors.footer.v4`, in a server's words: each volume's file is in the image, and its
-         * sentence on Related Documents' panel waits for the row that ranks by meaning there (S26d).
+         * The app's `settings.vectors.footer.v4`, in a server's words: each volume's file is in the image. Its sentence
+         * on Related Documents' panel stands since S26d, which ranks by meaning there.
          */
         footer:
-          'The server can find documents on the same subject even when they use none of the same words. Each volume needs a small extra file for this, which the image holds for every volume. The feature is experimental, and how well it works on nineteenth-century material is not yet established.',
+          'The server can find documents on the same subject even when they use none of the same words. Matches appear in the Related Documents panel, in a section of their own. Each volume needs a small extra file for this, which the image holds for every volume. The feature is experimental, and how well it works on nineteenth-century material is not yet established.',
       },
     },
     users: {
@@ -3665,6 +3731,8 @@ export const copy = {
       erased: (name: string, count: number) =>
         `Erased ${count.toLocaleString('en-US')} ${count === 1 ? 'record' : 'records'} of ${name}’s research.`,
       storedKeys: 'Stored Keys',
+      /** The verdicts on semantic matches (S26d), which an erasure removes with the research. */
+      semanticFeedback: 'Semantic Match Verdicts',
       holding: (count: number, name: string) => `${count.toLocaleString('en-US')} ${name}`,
     },
     backups: {
