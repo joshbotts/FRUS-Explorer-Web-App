@@ -4,7 +4,8 @@
 // Back to a search from a document it opened shows it as it was, as the Mac's window stays. Since
 // S17d it holds Search in, the three scopes the Mac's chips choose, and the user's tags it filters by;
 // since S17e the working corpus it runs inside, and the phrase, prefix and excluded terms a recalled
-// saved search can carry, which the Mac's Advanced fields set.
+// saved search can carry, which the Mac's Advanced fields set; since S27d the engine it runs through, Keywords
+// or Meaning, as the Mac's Search by picker chooses it.
 import type { FormValue } from '../api/form';
 import type { ConcordanceOrder, DocumentType, SearchChange, SortOrder } from '../api/types';
 
@@ -42,6 +43,11 @@ export interface SearchState {
   subjectLabel?: string;
   /** `facets` while the facet panel is open. Not sent. */
   panel?: 'facets';
+  /**
+   * `meaning` while the search runs through the Meaning engine (S27d), as the Mac's Search by picker chooses it; absent
+   * for Keywords, which a search opens on. Not sent: a search by meaning has a resource of its own.
+   */
+  by?: 'meaning';
   /** The reading the results are shown in, as the Mac's Reading picker chooses it; absent for the list. Not sent. */
   reading?: Exclude<Reading, 'list'>;
   /** `list` while the timeline shows its List mode; absent for its chart. Not sent. */
@@ -169,6 +175,7 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     subjectBucketKey,
     subjectLabel: subject ? single(raw.subjectLabel) || undefined : undefined,
     panel: single(raw.panel) === 'facets' ? 'facets' : undefined,
+    by: single(raw.by) === 'meaning' ? 'meaning' : undefined,
     reading: reading === 'timeline' || reading === 'concordance' ? reading : undefined,
     timelineMode: single(raw.timelineMode) === 'list' ? 'list' : undefined,
     align: align === 'rightContext' || align === 'date' || align === 'volume' ? align : undefined,
@@ -237,6 +244,7 @@ export function applySearchChange(state: SearchState, change: SearchChange): Sea
   return {
     ...validateSearch(raw),
     panel: state.panel,
+    by: state.by,
     reading: state.reading,
     timelineMode: state.timelineMode,
     align: state.align,
@@ -279,12 +287,14 @@ export function pageCount(total: number, limit: number): number {
  * The search a saved search recalls, from its query fields, inside the working corpus applied now, as
  * the Mac's window runs a recalled search inside its applied corpus and under no gate of its own
  * (`SearchParameters.runningInside(workingCorpus:)`): it starts at its first page, keeps the order,
- * the page size and the reading shown, and closes the facet panel, as a new search does.
+ * the page size, the reading shown and the engine chosen, as the Mac's picker stays, and closes the
+ * facet panel, as a new search does.
  */
 export function recalledSearch(search: Record<string, string[]>, current: SearchState): SearchState {
   return {
     ...validateSearch(search),
     workingCorpusId: current.workingCorpusId,
+    by: current.by,
     reading: current.reading,
     timelineMode: current.timelineMode,
     align: current.align,

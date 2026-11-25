@@ -9,12 +9,19 @@
 // user's tags, counted over the results, and shows as a token; and a row carries its document's tags.
 // Since S17e a search is saved and recalled, as the Mac's bookmark buttons do; it runs inside a working
 // corpus, named over the results, and its rows are saved as one; a volume scope fills the volume filter;
-// and Checklist Mode hides the results reviewed, kept in the browser's memory for the session.
+// and Checklist Mode hides the results reviewed, kept in the browser's memory for the session. Since S27d
+// a search runs by Keywords or by Meaning, as the Mac's Search by picker chooses, where the server searches
+// by meaning: a search by meaning lists the closest matches the kit's Meaning engine ranked, each with its
+// chip, under the app's strip in place of the Query Inspector's, and those in volumes this server does not
+// serve apart under them; its rows are paged, ordered, checklisted and saved as a working corpus, and the
+// trail records it, as a keyword search's are, and the readings and facets, which read a keyword match, wait
+// for Keywords.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, type RefObject, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
 import { concordanceQuery, inspectQuery, searchQuery, timelineQuery, volumesQuery } from '../api/endpoints';
+import { meaningQuery, type MeaningSearchResult, serverStatusQuery } from '../api/meaning';
 import type { ConcordanceOrder, DocumentType, SearchResultList, SortOrder, UserTag, Volume } from '../api/types';
 import { recordRun, type SavedSearch } from '../api/searchSets';
 import { meQuery, searchTagsQuery, tagsQuery } from '../api/userData';
@@ -25,6 +32,7 @@ import { ChecklistStrip } from './ChecklistStrip';
 import { SavedSearchesDialog, SaveSearchDialog } from './SavedSearches';
 import { CorpusBanner, CorpusFilter, SaveCorpusDialog, ScopeFilter } from './WorkingCorpora';
 import { FacetPanel, useFacetPanelState } from './FacetPanel';
+import { MeaningBeyond, MeaningEmpty, MeaningStrip, SearchBy, type SearchMode } from './MeaningSearch';
 import { inspectorFields, QueryInspectorStrip, ZeroResult } from './QueryInspector';
 import { ConcordanceReading, ReadingPicker, TimelineReading, type TimelineMode } from './Readings';
 import {
@@ -66,15 +74,38 @@ export function SearchScreen() {
   const reviewed = useMemo(() => (settled ? [...hiddenKeys(checklist)].sort() : []), [settled, checklist]);
   const settle = useEffectEvent(() => checklistStore.settle(state));
   useEffect(() => settle(), [anchorKey]);
-  const results = useQuery(searchQuery(state, reviewed));
-  // The search whose rows are on screen: until the next search's arrive, the last one's stay, and a mark
-  // made of them would be kept under the next and hide its documents, so marks wait for them, as the
-  // Mac's `canMarkReviewed` makes them wait (#1683).
-  const [rowsAnchor, setRowsAnchor] = useState<ChecklistAnchor | null>(null);
-  if (results.data && !results.isPlaceholderData && (rowsAnchor === null || JSON.stringify(rowsAnchor) !== anchorKey)) {
-    setRowsAnchor(anchor);
+  // Search by meaning, where the server says it searches by meaning (S27d). A link that asks for Meaning waits for
+  // the server's word, and on a server that does not, whose admin has turned its encoder off, searches by keywords,
+  // the one engine offered there.
+  const status = useQuery(serverStatusQuery);
+  const offersMeaning = status.data?.semantic?.searchByMeaning === true;
+  const modeSettled = state.by !== 'meaning' || status.data !== undefined || status.isError;
+  const byMeaning = state.by === 'meaning' && offersMeaning;
+  const engine: SearchMode = byMeaning ? 'meaning' : 'keywords';
+  // A search by meaning asks a question: with no words it asks nothing, and shows nothing, as the Mac's lists none.
+  const asksMeaning = byMeaning && (state.keywords ?? '').trim() !== '';
+  const keywordQuery = searchQuery(state, reviewed);
+  const keywordResults = useQuery({ ...keywordQuery, enabled: keywordQuery.enabled && modeSettled && !byMeaning });
+  const meaningResults = useQuery(meaningQuery(state, reviewed, asksMeaning));
+  const results: UseQueryResult<SearchResultList, unknown> = byMeaning ? meaningResults : keywordResults;
+  // The search whose rows are on screen, and the engine that found them: until the next search's arrive, the last
+  // one's stay, and a mark made of them would be kept under the next and hide its documents, so marks wait for them,
+  // as the Mac's `canMarkReviewed` makes them wait (#1683). Each engine keeps its own last rows, so rows the other
+  // engine found for this search say nothing of those shown (S27d).
+  const [rowsAnchor, setRowsAnchor] = useState<{ anchor: ChecklistAnchor; engine: SearchMode } | null>(null);
+  if (
+    results.data &&
+    !results.isPlaceholderData &&
+    (rowsAnchor === null || rowsAnchor.engine !== engine || JSON.stringify(rowsAnchor.anchor) !== anchorKey)
+  ) {
+    setRowsAnchor({ anchor, engine });
   }
-  const canMark = settled && checklist.anchor !== undefined && rowsAnchor !== null && isSameSearch(checklist.anchor, rowsAnchor);
+  const canMark =
+    settled &&
+    checklist.anchor !== undefined &&
+    rowsAnchor !== null &&
+    rowsAnchor.engine === engine &&
+    isSameSearch(checklist.anchor, rowsAnchor.anchor);
   const volumes = useQuery(volumesQuery);
   const queryClient = useQueryClient();
   // The user's tags, for the filter, its token and the rows' chips, on a server that keeps user data.
@@ -83,9 +114,10 @@ export function SearchScreen() {
   const tags = useQuery({ ...tagsQuery, enabled: keepsUserData });
   const userTags = keepsUserData ? tags.data?.items : undefined;
   const logging = useLoggingEnabled();
-  // Each run the screen shows goes into the trail (S17f), as the Mac's window records each it completes.
-  const record = useEffectEvent(() => recordSearchRun(queryClient, state));
-  const shownRun = results.data && !results.isPlaceholderData ? JSON.stringify(searchFields(state)) : undefined;
+  // Each run the screen shows goes into the trail (S17f), as the Mac's window records each it completes, by the
+  // engine it ran through (S27d).
+  const record = useEffectEvent(() => recordSearchRun(queryClient, state, engine));
+  const shownRun = results.data && !results.isPlaceholderData ? JSON.stringify({ ...searchFields(state), engine }) : undefined;
   useEffect(() => {
     if (keepsUserData && shownRun !== undefined) record();
   }, [keepsUserData, shownRun]);
@@ -109,7 +141,9 @@ export function SearchScreen() {
     // The same search again leaves the URL as it is, so it asks the server again itself: after a
     // refusal or a server fault, or once an index is ready. So does the account of a search that
     // found nothing.
-    if (keywords === state.keywords && state.offset === undefined) {
+    if (keywords === state.keywords && state.offset === undefined && byMeaning) {
+      void queryClient.refetchQueries({ queryKey: meaningQuery(state, reviewed, true).queryKey, exact: true });
+    } else if (keywords === state.keywords && state.offset === undefined) {
       void queryClient.refetchQueries({ queryKey: searchQuery(state, reviewed).queryKey, exact: true });
       void queryClient.refetchQueries({
         queryKey: inspectQuery(inspectorFields(state, keywords), { emptyConjuncts: true }).queryKey,
@@ -130,6 +164,26 @@ export function SearchScreen() {
   function narrowTo(next: SearchState) {
     if (results.data) setNarrowed({ signature: JSON.stringify(filterFields(next)), from: results.data.total });
     void navigate({ search: next });
+  }
+
+  /**
+   * Runs the standing search through the other engine, as the Mac's picker does, from its first page: the readings and
+   * the facet panel, which read a keyword match, close on the change, as the Mac's do.
+   */
+  function setMode(mode: SearchMode) {
+    // A search under way through the engine left is abandoned, so the server stops it: its query stays observed,
+    // only disabled, so it would otherwise run on.
+    void queryClient.cancelQueries({ queryKey: [byMeaning ? 'meaning' : 'search'] });
+    void navigate({
+      search: (previous: SearchState) => ({
+        ...previous,
+        by: mode === 'meaning' ? 'meaning' : undefined,
+        reading: undefined,
+        timelineMode: undefined,
+        panel: undefined,
+        offset: undefined,
+      }),
+    });
   }
 
   /** Opens or closes the panel in place of the history entry, so Back leaves the search. */
@@ -225,6 +279,8 @@ export function SearchScreen() {
         userTags={userTags}
         update={update}
         onSearch={search}
+        engine={offersMeaning ? engine : undefined}
+        onEngine={setMode}
         aids={
           keepsUserData && (
             <>
@@ -246,19 +302,20 @@ export function SearchScreen() {
         }
       />
       {keepsUserData && <CorpusBanner state={state} onLeave={() => update({ workingCorpusId: undefined })} />}
-      {state.keywords !== undefined && !searchesAnywhere(state) && (
+      {state.keywords !== undefined && !byMeaning && !searchesAnywhere(state) && (
         // As the Mac's window says it, rather than search nowhere.
         <p className="error" role="alert">
           {copy.search.emptyScope}
         </p>
       )}
-      {state.keywords !== undefined && searchesAnywhere(state) && (
-        <div className={panelOpen ? 'search-body with-facets' : 'search-body'}>
+      {state.keywords !== undefined && (byMeaning ? asksMeaning : searchesAnywhere(state)) && (
+        <div className={panelOpen && !byMeaning ? 'search-body with-facets' : 'search-body'}>
           <Results
             state={state}
             titles={titles}
             userTags={userTags}
             results={results}
+            byMeaning={byMeaning}
             reviewed={reviewed}
             checklist={
               checklist.on
@@ -317,26 +374,29 @@ export function SearchScreen() {
             onTimelineMode={setTimelineMode}
             onAlign={setAlign}
             facets={
-              <button
-                type="button"
-                className="facets-toggle"
-                title={panelOpen ? copy.facets.hideHelp : copy.facets.toggleHelp}
-                aria-expanded={panelOpen}
-                aria-controls={panelOpen ? 'facet-panel' : undefined}
-                // Nothing to break down while nothing matches; an open panel can always be closed.
-                disabled={!panelOpen && !(results.data && results.data.total > 0)}
-                onClick={() => setPanel(!panelOpen)}
-              >
-                {copy.facets.toggle}
-              </button>
+              // The facets count a keyword match, so they wait for Keywords.
+              !byMeaning && (
+                <button
+                  type="button"
+                  className="facets-toggle"
+                  title={panelOpen ? copy.facets.hideHelp : copy.facets.toggleHelp}
+                  aria-expanded={panelOpen}
+                  aria-controls={panelOpen ? 'facet-panel' : undefined}
+                  // Nothing to break down while nothing matches; an open panel can always be closed.
+                  disabled={!panelOpen && !(results.data && results.data.total > 0)}
+                  onClick={() => setPanel(!panelOpen)}
+                >
+                  {copy.facets.toggle}
+                </button>
+              )
             }
           />
-          {panelOpen && <FacetPanel state={state} total={shown?.total} panel={facetPanel} onSearch={narrowTo} />}
+          {panelOpen && !byMeaning && <FacetPanel state={state} total={shown?.total} panel={facetPanel} onSearch={narrowTo} />}
         </div>
       )}
       {sheet === 'saveSearch' && <SaveSearchDialog state={state} onClose={closed} />}
       {sheet === 'savedSearches' && <SavedSearchesDialog onRecall={recall} onClose={closed} />}
-      {sheet === 'saveCorpus' && <SaveCorpusDialog state={state} reviewed={reviewed} onClose={closed} />}
+      {sheet === 'saveCorpus' && <SaveCorpusDialog state={state} reviewed={reviewed} engine={engine} onClose={closed} />}
     </section>
   );
 }
@@ -353,6 +413,8 @@ function SearchEntry({
   userTags,
   update,
   onSearch,
+  engine,
+  onEngine,
   aids,
 }: {
   state: SearchState;
@@ -362,6 +424,9 @@ function SearchEntry({
   userTags: UserTag[] | undefined;
   update: (changes: Partial<SearchState>) => void;
   onSearch: (keywords: string) => void;
+  /** The engine the search runs through, where the server searches by meaning and offers the choice (S27d). */
+  engine?: SearchMode;
+  onEngine: (mode: SearchMode) => void;
   /** The controls beside the search box's aids: Save this search and Saved searches. */
   aids?: ReactNode;
 }) {
@@ -377,9 +442,18 @@ function SearchEntry({
   }
   // Whether the strip shows its term detail, kept from search to search, as the Mac's window keeps it.
   const [inspectorExpanded, setInspectorExpanded] = useState(false);
+  const byMeaning = engine === 'meaning';
   return (
     <>
-      <SearchForm inputRef={searchBox} text={text} onTextChange={setText} onSubmit={onSearch} aids={aids} />
+      {engine && <SearchBy mode={engine} onChange={onEngine} />}
+      <SearchForm
+        inputRef={searchBox}
+        text={text}
+        onTextChange={setText}
+        onSubmit={onSearch}
+        aids={aids}
+        byMeaning={byMeaning}
+      />
       <Filters
         state={state}
         titles={titles}
@@ -387,8 +461,12 @@ function SearchEntry({
         userTags={userTags}
         update={update}
         onCleared={() => searchBox.current?.focus()}
+        byMeaning={byMeaning}
       />
-      <QueryInspectorStrip fields={inspectorFields(state, text)} expanded={inspectorExpanded} onExpandedChange={setInspectorExpanded} />
+      {/* A search by meaning compiles no expression: its strip, with the results, takes the inspector's place. */}
+      {!byMeaning && (
+        <QueryInspectorStrip fields={inspectorFields(state, text)} expanded={inspectorExpanded} onExpandedChange={setInspectorExpanded} />
+      )}
     </>
   );
 }
@@ -399,6 +477,7 @@ function SearchForm({
   onTextChange,
   onSubmit,
   aids,
+  byMeaning,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
   /** The box's text, which the search entry holds. */
@@ -406,6 +485,8 @@ function SearchForm({
   onTextChange: (text: string) => void;
   onSubmit: (keywords: string) => void;
   aids?: ReactNode;
+  /** Whether the search runs by meaning, whose box asks for a question and whose tip says the syntax is the keywords'. */
+  byMeaning: boolean;
 }) {
   const inputId = useId();
 
@@ -424,6 +505,7 @@ function SearchForm({
           type="search"
           value={text}
           onChange={(event) => onTextChange(event.target.value)}
+          placeholder={byMeaning ? copy.meaningSearch.placeholder : undefined}
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"
@@ -433,7 +515,7 @@ function SearchForm({
       <div className="search-aids">
         <details className="syntax">
           <summary>{copy.search.syntax}</summary>
-          <p>{copy.search.syntaxBody}</p>
+          <p>{byMeaning ? copy.meaningSearch.tip : copy.search.syntaxBody}</p>
         </details>
         {/* The other way to find a document, as the Mac's Search window offers it beside its Tips. */}
         <Link to="/lookup" className="find-by-citation" title={copy.lookup.findByCitationHelp}>
@@ -452,6 +534,7 @@ function Filters({
   userTags,
   update,
   onCleared,
+  byMeaning,
 }: {
   state: SearchState;
   titles: Map<string, string>;
@@ -460,10 +543,13 @@ function Filters({
   update: (changes: Partial<SearchState>) => void;
   /** Called when a chip or a token has cleared its filter, and so removed itself. */
   onCleared: () => void;
+  /** Whether the search runs by meaning, which reads none of Search in's places, and whose rows My Tags does not count. */
+  byMeaning: boolean;
 }) {
   // Search in has notes and summaries to choose only where the server keeps them; a scope a link
-  // turned off is shown anywhere, so that it can be turned on again.
-  const showsSearchIn = keepsUserData || !scopes.every((scope) => searches(state, scope));
+  // turned off is shown anywhere, so that it can be turned on again. A search by meaning reads none of
+  // them, so the Mac's window offers none there, and neither does this.
+  const showsSearchIn = !byMeaning && (keepsUserData || !scopes.every((scope) => searches(state, scope)));
   return (
     <fieldset className="filters">
       <legend>{copy.search.filters}</legend>
@@ -531,7 +617,7 @@ function Filters({
           })}
         </div>
       )}
-      {userTags !== undefined && userTags.length > 0 && <MyTags state={state} tags={userTags} update={update} />}
+      {userTags !== undefined && userTags.length > 0 && <MyTags state={state} tags={userTags} update={update} byMeaning={byMeaning} />}
       {keepsUserData && <ScopeFilter update={update} />}
       {keepsUserData && <CorpusFilter state={state} update={update} />}
       {(state.yearKeys ||
@@ -656,13 +742,25 @@ function SearchIn({ state, update }: { state: SearchState; update: (changes: Par
  * on a document must carry, and beside each how many of the results carry it, counted once the list
  * is opened, as the Mac counts them when its filter opens, never before.
  */
-function MyTags({ state, tags: byName, update }: { state: SearchState; tags: UserTag[]; update: (changes: Partial<SearchState>) => void }) {
+function MyTags({
+  state,
+  tags: byName,
+  update,
+  byMeaning,
+}: {
+  state: SearchState;
+  tags: UserTag[];
+  update: (changes: Partial<SearchState>) => void;
+  /** Whether the search runs by meaning, whose rows the counts are of, as the Mac counts a Meaning list's (S27d). */
+  byMeaning: boolean;
+}) {
   // In the reader's own order (S17f), as the app's My Tags filter lists them.
   const { tagOrder } = useListOrder();
   const tags = applyOrder(byName, tagOrder, (tag) => tag.id);
   const [open, setOpen] = useState(false);
-  const counted = open && state.keywords !== undefined && searchesAnywhere(state);
-  const counts = useQuery(searchTagsQuery(state, counted));
+  const counted =
+    open && state.keywords !== undefined && (byMeaning ? (state.keywords ?? '').trim() !== '' : searchesAnywhere(state));
+  const counts = useQuery(searchTagsQuery(state, counted, byMeaning ? 'meaning' : 'keywords'));
   const shown = counted && counts.data !== undefined && !counts.isError ? counts.data : undefined;
   const chosen = new Set(state.userTagIds ?? []);
   function toggle(id: string, on: boolean) {
@@ -729,6 +827,7 @@ function Results({
   titles,
   userTags,
   results,
+  byMeaning,
   narrowedFrom,
   onReading,
   onTimelineMode,
@@ -742,6 +841,8 @@ function Results({
   titles: Map<string, string>;
   userTags: UserTag[] | undefined;
   results: UseQueryResult<SearchResultList, unknown>;
+  /** Whether the rows are a search by meaning's, a `MeaningSearchResult` with the run's account (S27d). */
+  byMeaning: boolean;
   /** The count the last facet narrowed from, while the panel shows it. */
   narrowedFrom: number | undefined;
   onReading: (reading: Reading) => void;
@@ -763,7 +864,9 @@ function Results({
   const error = results.error;
   const first = list && list.items.length > 0 ? list.offset + 1 : 0;
   const last = list ? list.offset + list.items.length : 0;
-  const reading: Reading = state.reading ?? 'list';
+  // A search by meaning's account of its run, and its rows read as a list alone: the readings read a keyword match.
+  const meaning = byMeaning ? (list as MeaningSearchResult | undefined)?.meaning : undefined;
+  const reading: Reading = byMeaning ? 'list' : (state.reading ?? 'list');
   // A row marked reviewed leaves the list once the page has loaded again, and its button with it: the
   // focus goes to the Mark Reviewed of the row that takes its place, or past the last to Mark Page Reviewed.
   const listElement = useRef<HTMLOListElement>(null);
@@ -783,11 +886,19 @@ function Results({
       <h2 id="results-heading" className="visually-hidden">
         {copy.search.results}
       </h2>
+      {meaning && !failed && <MeaningStrip meaning={meaning} />}
       <div className="results-header">
         <p className="count" role="status">
           {failed ? '' : list ? (
             <>
-              {copy.search.count(list.total, list.countBasis)}
+              {/* A search by meaning's list is the shape of its answer, the closest matches, not a count of a match;
+                  one that listed no row says the heading over its matches beyond the library, where it found some, as
+                  the app's finished search says it (A11Y-2). */}
+              {meaning
+                ? list.total === 0
+                  ? (meaning.beyondHeader ?? copy.meaningSearch.noResults)
+                  : copy.meaningSearch.closest(Math.max(0, list.total - hidden))
+                : copy.search.count(list.total, list.countBasis)}
               {narrowedFrom !== undefined && <> · {copy.search.narrowedFrom(narrowedFrom)}</>}
               {list.items.length > 0 && <> · {copy.search.showing(first, last)}</>} ·{' '}
               {copy.search.coverage(list.coverage.indexedVolumes, list.coverage.manifestVolumes)}
@@ -797,8 +908,9 @@ function Results({
           )}
         </p>
         {list && !failed && <SortOrders state={state} list={list} />}
-        {/* Each reading reads what a search found, so the picker waits for a match, as the Mac's does. */}
-        {list && !failed && <ReadingPicker reading={reading} disabled={list.total === 0} onChange={onReading} />}
+        {/* Each reading reads what a search found, so the picker waits for a match, as the Mac's does, and for
+            Keywords, as the readings read a keyword match. */}
+        {list && !failed && !byMeaning && <ReadingPicker reading={reading} disabled={list.total === 0} onChange={onReading} />}
         {actions}
         {facets}
       </div>
@@ -845,8 +957,11 @@ function Results({
               <p>{copy.checklist.allReviewedDetail}</p>
             </div>
           ) : list.items.length === 0 && list.total === 0 ? (
-            // A search that found nothing says so in any reading, as the Mac's window does.
-            results.isPlaceholderData ? null : (state.keywords ?? '').trim() !== '' ? (
+            // A search that found nothing says so in any reading, as the Mac's window does; a search by meaning in its
+            // own words, never blaming a term (S27d).
+            results.isPlaceholderData ? null : meaning ? (
+              <MeaningEmpty meaning={meaning} />
+            ) : (state.keywords ?? '').trim() !== '' ? (
               // Only once the search shown is this one, as the Mac's window waits for its search.
               <ZeroResult state={state} />
             ) : (
@@ -886,6 +1001,8 @@ function Results({
                   <p className="snippet">
                     <Snippet text={item.snippet} />
                   </p>
+                  {/* A row ranked by meaning says its score, the kit's chip (S27d). */}
+                  {item.chip && <p className="semantic-chip">{item.chip}</p>}
                   <RowTags tagIds={item.userTagIds} tags={userTags} />
                   {checklist && (
                     // Hides the result without opening it, as the Mac's row menu offers while the mode is on.
@@ -909,6 +1026,8 @@ function Results({
           )}
           {/* The timeline covers every result the search keeps, so it has no page to turn. */}
           {isPaged(reading) && <Pager state={state} list={list} shownTotal={shownTotal} />}
+          {/* A search by meaning's hits in volumes this server does not serve, apart under the rows (S27d). */}
+          {meaning && !results.isPlaceholderData && <MeaningBeyond meaning={meaning} />}
         </>
       )}
     </section>

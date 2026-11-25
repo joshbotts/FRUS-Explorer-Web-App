@@ -6,7 +6,8 @@
 // at once. The anchor and the run recorded last are kept for the tab's session, a reload included, as
 // the Mac's window keeps them while it is open, so that a return to a search's results from a
 // document, another page of them or a reload records nothing again. A record the server could not take
-// is tried again the next time its run is shown.
+// is tried again the next time its run is shown. Since S27d a run is of an engine too: the same words searched
+// by meaning are another run, which refreshes the row the screen last wrote, as the Mac's writer does.
 import type { QueryClient } from '@tanstack/react-query';
 import { formEncode } from '../api/form';
 import { recordSearch, type SearchAnchor } from '../api/research';
@@ -45,18 +46,19 @@ function runQuery(state: SearchState): string {
   return formEncode({ ...filterFields(state), sort: state.sort }).toString();
 }
 
-/** Records the run of `state` the screen has just shown, unless it was the run recorded last. */
-export function recordSearchRun(client: QueryClient, state: SearchState): void {
+/** Records the run of `state` the screen has just shown, through `engine`, unless it was the run recorded last. */
+export function recordSearchRun(client: QueryClient, state: SearchState, engine: 'keywords' | 'meaning' = 'keywords'): void {
   const search = runQuery(state);
-  if (search === kept.lastRecorded) return;
-  keep({ ...kept, lastRecorded: search });
+  const run = engine === 'meaning' ? `${search} meaning` : search;
+  if (run === kept.lastRecorded) return;
+  keep({ ...kept, lastRecorded: run });
   queue = queue.then(async () => {
     try {
-      const run = await recordSearch(client, search, kept.anchor);
-      if (run.anchor) keep({ ...kept, anchor: run.anchor });
+      const recorded = await recordSearch(client, search, kept.anchor, engine);
+      if (recorded.anchor) keep({ ...kept, anchor: recorded.anchor });
     } catch {
       // The trail's loss alone, for now: the search itself stands, and showing it again tries again.
-      if (kept.lastRecorded === search) keep({ ...kept, lastRecorded: undefined });
+      if (kept.lastRecorded === run) keep({ ...kept, lastRecorded: undefined });
     }
   });
 }

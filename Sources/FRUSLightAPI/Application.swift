@@ -46,7 +46,10 @@ struct ServerComponents: Sendable {
     /// The semantic vectors (PLAN's S26c): the bundled tier, read on its first use, and every shard in the image.
     let vectors: SemanticVectors
 
-    static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
+    /// `encoder`, when a test gives it, runs the encoder over a stand-in in place of the image's (PLAN's S27d): the bundled
+    /// vectors stay the app's, which a model of the stand-in's own digest would otherwise unpair.
+    static func make(configuration: ServerConfiguration, encoder settings: EncoderSettings? = nil,
+                     logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
         let resources = try await Blocking.run {
             try ServerResources.load(from: configuration.resourcesDirectory, language: configuration.languageDirectory)
@@ -96,7 +99,7 @@ struct ServerComponents: Sendable {
                                       folder: files.root.appendingPathComponent("tei-check", isDirectory: true),
                                       resources: resources.indexing, state: state, jobs: jobs, log: { logger.info("\($0)") })
         await library.resumeUnfinished()
-        let encoder = QueryEncoder(settings: EncoderSettings(configuration: configuration), log: { logger.info("\($0)") })
+        let encoder = QueryEncoder(settings: settings ?? EncoderSettings(configuration: configuration), log: { logger.info("\($0)") })
         return ServerComponents(
             files: files,
             state: state,
@@ -230,9 +233,14 @@ struct UserStoreUnreachable: Error, CustomStringConvertible {
 /// `FRUS_WEB_DIR` names a folder without the browser app, and `DataDirectoryError` when the data
 /// directory cannot be written.
 public func buildApplication(configuration: ServerConfiguration) async throws -> some ApplicationProtocol {
+    try await buildApplication(configuration: configuration, encoder: nil)
+}
+
+/// The application, with the encoder's settings a test gives, the stand-in's (PLAN's S27d), or the configuration's.
+func buildApplication(configuration: ServerConfiguration, encoder: EncoderSettings?) async throws -> some ApplicationProtocol {
     var logger = Logger(label: "frus-light")
     logger.logLevel = ProcessInfo.processInfo.environment["LOG_LEVEL"].flatMap(Logger.Level.init(rawValue:)) ?? .info
-    let components = try await ServerComponents.make(configuration: configuration, logger: logger)
+    let components = try await ServerComponents.make(configuration: configuration, encoder: encoder, logger: logger)
     logger.info("frus-light \(FRUSLightVersion.string): \(configuration.mode.rawValue) mode, data in \(configuration.dataDirectory.path), \(components.resources.manifest.count) volumes in the manifest from \(configuration.resourcesDirectory.path)")
     if let webClient = components.webClient {
         logger.info("Serving the browser app from \(webClient.directory.path)")

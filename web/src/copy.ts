@@ -217,6 +217,26 @@ export const copy = {
     } as Record<string, string>,
   },
   /**
+   * Search by meaning (S27d), in the words of the Mac's Search by picker (`SearchMode`), its field's prompt, its tip
+   * for Meaning mode (`SearchTipNote.meaningMode`), its header's count (`ResultSetScope.closestMatchesClause`), its
+   * empty state (`SemanticMeaningEmptyState`) and a hit in a volume it has not downloaded (`SemanticUndownloadedRow`),
+   * where the web speaks of a volume this server does not serve, with no download to offer, as the model and the
+   * vectors are in the image. The strip's sentences, the empty state's and a row's chip are the kit's, which the server
+   * gives; the strip's landmark is the web's own.
+   */
+  meaningSearch: {
+    searchBy: 'Search by',
+    modes: { keywords: 'Keywords', meaning: 'Meaning' },
+    placeholder: 'A question in your own words…',
+    tip: 'These tips are for Keywords search. A Meaning search reads your words as a whole, so quotation marks, AND, OR, NOT, a minus sign, parentheses, *, NEAR and = have no special effect.',
+    closest: (count: number) => (count === 1 ? '1 closest match' : `${count.toLocaleString('en-US')} closest matches`),
+    noResults: 'No results',
+    emptyTitle: 'No semantic matches yet',
+    strip: 'About this Meaning search',
+    beyondDocument: (documentId: string, volumeTitle: string) => `Document ${documentId} in ${volumeTitle}`,
+    beyondNotServed: 'Volume not on this server — its documents are shown without titles.',
+  },
+  /**
    * Saved searches (S17e), in the words of the Mac's Save Search sheet (`SaveSearchSheet`), its toolbar's two
    * bookmark buttons and its Saved Searches sheet (`SavedSearchesView`), with the NEW capsule and "+N since last
    * run". The sheet's empty line, which names the Mac's bookmark button, and the line for what a Mac's saved

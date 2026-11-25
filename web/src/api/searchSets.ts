@@ -100,7 +100,8 @@ export interface CorpusCapturePreview {
   checklistWarning?: string;
   sourceDescription: string;
   wasTruncated: boolean;
-  totalMatchCount: number;
+  /** The search's exact count; absent for a search by meaning's list, which is no count of a match (S27d). */
+  totalMatchCount?: number;
 }
 
 /** One of the user's volume scopes. */
@@ -190,19 +191,35 @@ export function workingCorpusQuery(id: string) {
   });
 }
 
-/** What Save as Working Corpus would capture of the search's rows, less those Checklist Mode hides. */
-export async function previewCapture(client: QueryClient, state: SearchState, reviewed: readonly string[]): Promise<CorpusCapturePreview> {
+/**
+ * What Save as Working Corpus would capture of the search's rows, less those Checklist Mode hides: a keyword search's
+ * results kept, or with `engine` `meaning` a search by meaning's list (S27d).
+ */
+export async function previewCapture(
+  client: QueryClient,
+  state: SearchState,
+  reviewed: readonly string[],
+  engine: 'keywords' | 'meaning' = 'keywords',
+): Promise<CorpusCapturePreview> {
   return (await change<CorpusCapturePreview>(client, 'POST', '/api/v1/me/working-corpora/capture', {
     search: searchString(state),
     reviewed,
+    ...(engine === 'meaning' ? { mode: engine } : {}),
   }))!;
 }
 
-export async function saveCorpus(client: QueryClient, name: string, state: SearchState, reviewed: readonly string[]): Promise<WorkingCorpus> {
+export async function saveCorpus(
+  client: QueryClient,
+  name: string,
+  state: SearchState,
+  reviewed: readonly string[],
+  engine: 'keywords' | 'meaning' = 'keywords',
+): Promise<WorkingCorpus> {
   const corpus = (await change<WorkingCorpus>(client, 'POST', '/api/v1/me/working-corpora', {
     name,
     search: searchString(state),
     reviewed,
+    ...(engine === 'meaning' ? { mode: engine } : {}),
   }))!;
   void client.invalidateQueries({ queryKey: ['workingCorpora'] });
   return corpus;
