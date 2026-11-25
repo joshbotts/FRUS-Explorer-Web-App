@@ -78,6 +78,90 @@ Phase 4's row S29f, in wave 7 beside S27e on the semantic track and S28d on the 
 
 **Next:** S29g, the shares chips on Related Documents, the language group's last row, which writes its shared records.
 
+## CI follow-up: the swift job under load
+
+25 November 2026 · branch `claude/wonderful-haslett-38ea64` · [#188](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/188) · upstream `efd73ecb`, unchanged
+
+This follow-up is not one of PLAN's rows. The orchestrator started it after `main`'s `ci` went red on three of its five merges on 25 November. Each time the swift job failed alone, on code that had passed locally and on its pull request.
+
+The branch was cut from `main` at `eda3ab0`, S27e's merge. It changes CI's workflow, `scripts/swift` and CLAUDE.md's lines on them. It changes no test, no source, no `Package.swift`, no image and no `compose.yaml`.
+
+**Before.** Five of `main`'s last ten `ci` runs, from #175's merge to #185's, failed, each in the swift job alone:
+
+- **#179 (`0df9fb7`) and #180 (`649e129`):** EmbedCheckTests' three tests, its live server's report and queries outwaiting the client.
+- **#181 (`c6ae325`) and #184 (`ae90aab`):** SemanticFeedbackTests' `aVerdictIsTheAppsEntryKeptForEachUser()`, `.readTimeout`, after S26d's warm-up.
+- **#183 (`c5f24c3`):** UserTagTests' `aTagsNameIsTrimmedAndNeverEmpty(_:)` and SemanticFeedbackStoreTests' `verdictsAreKeptAsTheAppsLogKeepsThem(_:)`, on the PostgreSQL store, with "53300: sorry, too many clients already".
+
+Counted per test:
+- EmbedCheckTests' three tests: twice each.
+- SemanticFeedbackTests' test: twice.
+- UserTagTests' and SemanticFeedbackStoreTests' tests: once each.
+
+Two pull-request runs had failed the same way: #181's first, and S29e's `34b65c7`, whose EmbedCheckTests failed after S27c's asks. Across the ten runs the Test step took 706 to 1,409 s, and the job 20 to 36 minutes.
+
+**The cause.**
+- **How the tests run.** SwiftPM 6.4 runs the targets' test runners one after another. Each runner starts as many of its target's test cases at once as Swift Testing's parallelization width allows.
+- **Why the width was unbounded.** Swift Testing documents that width as twice the CPUs. Its 6.4.3 code, however, leaves the default unbounded unless `SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH` names one: the doubling is commented out in its `Serializer.swift`. So every case of a target started together on the runner's 4 CPUs: at `eda3ab0`, 467 in FRUSLightServerTests and 391 in FRUSParityTests.
+- **The PostgreSQL failure.** Each PostgreSQL case holds two or three connections. FRUSLightCoreTests' cases, running together, reached 65 connections on 4 of this Mac's CPUs and 85 on 10. On CI's slower CPUs they passed the service's default of 100 once in ten runs.
+- **The live-test failure.** A live test's request waited behind hundreds of tests for the four CPUs, past HummingbirdTesting's fixed 20 s. The cold loads were not the cause:
+  - At CI's pace, three FRUSLightServerTests runners at once all failed SemanticFeedbackTests' test as `main` had, warm-up and all. Its related list took 22 to 24 s, and `GET /api/v1/me` took 11 s.
+  - Two FRUSParityTests runners failed EmbedCheckTests as `main` had. Counting each request's wait to connect, its reports took 34 to 40 s and its embeddings 24 to 30 s, and the client gave up on nine requests across the three runners. The third runner was killed by the VM for memory.
+
+**The fix.**
+- **CI's Test step** names the width Swift Testing documents: twice the CPUs, 8 on the runner. It first checks that the image's `libTesting.so` still reads the variable, and fails if not, rather than running unbounded. SwiftPM's hidden `--experimental-maximum-parallelization-width` would do the same; the variable serves CI and `scripts/swift` alike.
+- **CI's PostgreSQL** takes 200 connections, through `POSTGRES_INITDB_ARGS: -c max_connections=200`. Since PostgreSQL 16, initdb takes `-c`. The service container takes no command, but its image's entrypoint passes these arguments to initdb, so no step of its own is needed. initdb's log still prints "selecting default max_connections ... 100", the probe the setting overrides; `show max_connections` gives 200.
+  - **Why not bound the store's pool in tests:** each store holds a single connection. A bound would be a semaphore over tests that hold their stores across awaits, which could deadlock a test that opens a second store.
+  - The width keeps the peak near a dozen connections. The 200 match `scripts/swift`'s container and are the margin, should the width lapse.
+- **`scripts/swift`** sets the same width: twice Docker's CPUs, 20 on this Mac. A caller's own value is kept, and 0 means no bound. It also creates its container with 200 connections; until now the container had them only because someone set them by hand (`ALTER SYSTEM`, the lesson of the pin move to `4556c4d5`).
+- **CLAUDE.md** says both.
+
+**The tests that could meet a cold load.** Of the 30 `.test(.live)` calls, these first ask for something a server reads once:
+- SemanticFeedbackTests' two: the bundled vectors, the subject index and the stop words.
+- MeaningSearchTests' two: the vectors, and the start of the encoder stand-in.
+- EmbedCheckTests' three: the semantic report, and the encoder.
+- WordCloudRouteTests' two: a first count.
+
+At width 8, at CI's pace, every live request of FRUSLightServerTests answered within 3.2 s. With S26d's and S27d's warm-ups and S27c's asks patched off, it answered within 1.0 s, the cold related list in 0.6 to 0.7 s. EmbedCheckTests' report answered within 0.15 s, so S27c's asks always stopped at their first answer, and its embeddings within 1.2 s.
+
+So the fix was made once, in the setting every runner of every target shares. No test helper could make it, because Swift Testing reads the width before any test runs. The suites' own patches are left as they are: S26d's `warmed(_:)`, S27d's copy, S27c's asks (taken on the owner's word of 24 November) and S29e's `.serialized` suite. None of them is needed any more.
+
+**The measurements,** on this Mac's Docker VM (swift:6.4-noble, arm64), with the debug build at `eda3ab0`, each run under the heavy lock:
+- **CI's pace** is three runners at once on 4 CPUs, the timing-flakes recipe.
+- **PostgreSQL's peaks** come from a server of its own, with a limit of 1000 and connection logging.
+- **The live requests' times** come from a print in a local copy of HummingbirdTesting's client, from each request's start, its wait to connect included. It was never committed and has been removed.
+- **The harness, the scripts and their outputs** are in the notes folder's `ci-swift-load/`.
+
+| | Unbounded | Width 8 |
+|---|---|---|
+| FRUSLightCoreTests, PostgreSQL's peak | 65 connections on 4 CPUs, 85 on 10 | 11 (19 at width 16), in the same time |
+| FRUSLightServerTests ×3 at CI's pace | all failed; slowest request 24.4 s; 37 to 39 requests of 5 s or more; 97 to 99 s | all passed; slowest request 3.2 s; none of 5 s; 86 to 94 s |
+| The same, the suites' warm-ups and asks off | — | all passed; slowest request 1.0 s |
+| FRUSParityTests ×3 at CI's pace | two failed EmbedCheckTests, one killed for memory | all passed, 610 to 630 s |
+| The whole `swift test` on 4 CPUs | 533 s; PostgreSQL's peak 59 | 502 s; peak 12 |
+
+`scripts/swift --postgres test`, CI's swift job at the default width of 20, ran 5,553 tests in 21 targets, all passing, in 436 s, against the 575 to 595 s of S29e's runs. The only skip was the named `FTS5StoreTests`' `backupExclusion()`, and there was no warning. A test's "passed after" now counts its wait for a slot, so the targets' totals are what compare.
+
+**After, on CI.** The pull request's swift job ran three times, on its merge with `main` at `32f0d40` (S28d's merge): [run 45627044705](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/45627044705)'s first attempt and two re-runs of the job. Each Test step logged a width of 8. Each run passed all 5,564 tests in 21 targets, the only skip the named one.
+
+| | Job | Test step | FTS5StoreTests | FRUSParityTests | FRUSLightServerTests | FRUSLightCoreTests |
+|---|---|---|---|---|---|---|
+| Attempt 1, passed | 38.8 min | 1,395 s | 364 s | 725 s | 94 s | 76 s |
+| Attempt 2, passed | 32.7 min | 1,274 s | 301 s | 643 s | 123 s | 70 s |
+| Attempt 3, passed | 23.2 min | 879 s | 213 s | 450 s | 75 s | 44 s |
+| `main` at `32f0d40`, unbounded, passed | 29.9 min | 1,052 s | 251 s | 560 s | 72 s | 60 s |
+| `main` at `eda3ab0`, unbounded, failed | 37.3 min | 1,468 s | 369 s | 775 s | 102 s | 82 s |
+
+- **Runner speed.** GitHub's runners vary in speed. FTS5StoreTests' time, which the width barely moves (104 and 106 s locally), shows how fast each runner was.
+- **`main` at `eda3ab0` failed again during this session.** At S27e's merge it failed as before: EmbedCheckTests' two tests and SemanticFeedbackTests' test, with S27c's asks and S26d's warm-up in place. Its runner was as slow as attempt 1's, which passed.
+- **No slower on runners of like speed.** FRUSParityTests took 1.99 to 2.14 times FTS5StoreTests' time bounded, against 2.10 and 2.23 unbounded.
+
+**Delivered here:**
+- the width and the 200 connections, in CI's swift job and in `scripts/swift`;
+- CLAUDE.md's two lines;
+- this entry.
+
+**Next:** phase 4's rows as PLAN orders them, with S29f and S30c under way beside this. A row whose swift job now fails, fails on its own code.
+
 ## Session 28d: Browse's clusters
 
 25 November 2026 · branch `claude/s28d-browse-clusters-f51a04` · [#187](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/187) · upstream `efd73ecb`, unchanged

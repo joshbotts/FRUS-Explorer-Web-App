@@ -18,6 +18,10 @@
 #   or uses the one running, and names it in FRUS_TEST_POSTGRES_URL, so the user store's conformance
 #   suite runs on the PostgreSQL store too, as CI's swift job runs it (S14d). Each test makes a schema
 #   of its own, so several runs may share the container. docker rm -f frus-light-postgres removes it.
+#   It takes 200 connections, as CI's service does; a container made before keeps what it was made with.
+# - Swift Testing runs at most twice the CPUs' test cases of a target at once, the width CI's Test step
+#   names, where 6.4.3 would start them all together (the log's "CI follow-up: the swift job under load").
+#   A width set in the caller's environment is passed on as it is, 0 for no bound.
 set -euo pipefail
 
 postgres=""
@@ -78,6 +82,10 @@ run_args+=(-e FRUS_RESOURCES_DIR=/src/upstream/FRUS-Explorer/FRUSExplorer/Resour
 run_args+=(-e FRUS_LANGUAGE_DIR=/src/resources/language)
 # And the browser app from web/dist, when scripts/npm run build has made it.
 if [ -f "$root/web/dist/index.html" ]; then run_args+=(-e FRUS_WEB_DIR=/src/web/dist); fi
+# Swift Testing's parallelization width: the caller's, or twice the CPUs the container sees.
+cpus=$(docker info --format '{{.NCPU}}' 2>/dev/null || true)
+case "$cpus" in '' | *[!0-9]*) cpus=$(getconf _NPROCESSORS_ONLN) ;; esac
+run_args+=(-e "SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH=${SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH:-$((2 * cpus))}")
 
 if [ -n "$postgres" ]; then
   pg_name=frus-light-postgres
@@ -86,7 +94,7 @@ if [ -n "$postgres" ]; then
     # Another run may make it at the same moment, and then this one starts it.
     docker start "$pg_name" >/dev/null 2>&1 \
       || docker run -d --name "$pg_name" --network host -e POSTGRES_USER=frus -e POSTGRES_PASSWORD=frus-light-tests \
-           -e POSTGRES_DB=frus postgres:18-alpine -c port="$pg_port" >/dev/null 2>&1 \
+           -e POSTGRES_DB=frus postgres:18-alpine -c port="$pg_port" -c max_connections=200 >/dev/null 2>&1 \
       || docker start "$pg_name" >/dev/null
   fi
   ready=""
