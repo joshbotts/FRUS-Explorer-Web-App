@@ -18,6 +18,77 @@ Not started: `PLAN.md`'s row S28e. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S30d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## CI follow-up: the reset and the start's open
+
+25 November 2026 · branch `claude/clever-visvesvaraya-49e906` · [#193](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/193) · upstream `efd73ecb`, unchanged
+
+This follow-up is not one of PLAN's rows. The orchestrator started it after `main`'s first `ci` run after #188 failed one test. That was [run 45672715631](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/45672715631), at `3f5a04b`, and the test was FRUSLightCoreTests' `ImportCoordinatorTests.aResetRemovesNoIndexMadeLiveAfterItWasAskedFor()`. At its line 98 it expected `.waitingForExport` and found `Readiness(ready: false, step: .openingIndex, detail: "The index could not be opened: SQLite error 14: unable to open database file")`.
+
+The branch was cut from `main` at `3f5a04b`. It changes `ServerState` (`Sources/FRUSLightCore/ServerState.swift`), the coordinator's tests (`Tests/FRUSLightCoreTests/ImportCoordinatorTests.swift`) and this log. It changes no route, no migration, no `Package.swift`, no image and no `compose.yaml`. SPEC already states the rule, "A reset while the start opens the index found there wins, whether the open finishes or fails", and is unchanged: the server now keeps it in every order.
+
+**The cause.**
+- **How S20d held the rule.** Each reset moves `indexGeneration`. The start's open takes the generation as it begins. Once it has read the file, it drops what it found if the generation has moved since. So a reset that comes while the open reads wins, whether the open then finishes or fails (S20d's review, `b03af8a`).
+- **The gap.** A reset moves the generation at once, then removes the files off the actor, in `Blocking.run`. An open that began in that gap took the generation the reset had already moved, still found the file, and read it while the reset removed it. Its check then saw no move, and it said what it found:
+  - that the index could not be opened, SQLite's 14 (`SQLITE_CANTOPEN`), when the file went between the open's look and its read: `main`'s run;
+  - or, when the read came first, the index the reset had removed, served from a file no longer there.
+- **Why the test met it.** Its second half started the open as an `async let` and asked for the reset at once, so either could reach the actor first. Under width 8 the open's task most often found a thread free at once, and met the reset's removal under way. Under the unbounded width it more often waited behind the target's other cases until the removal had ended, and then found no file. So #188's width made the gap likelier, as the runs below show.
+- **On a server.** The gap was narrow there. The watcher begins the open as the server starts its services, so a reset had to be removing its files just as the open began. Had one been, the server would have said that the index could not be opened, until an export came or it restarted, or served the removed index until it restarted.
+
+**The fix.** `resetIndex` counts itself under way (`resetsUnderWay`) from the moment it moves the generation until it has removed the files. An open that begins while a reset is under way reads nothing, says nothing to `/readyz`, and logs that the index is being reset. With the generation check the open already held, the reset now wins in every order. A failure that is not a reset's doing is still said: an open that begins with no reset under way, and fails, sets the start's problem as before.
+
+**The test.**
+- **The seam.** `ServerState` takes an `IndexFileObserver`, which the server never passes. It hears each moment `IndexFileMoment` names, and holds the open or the reset there until it returns:
+  - `openWillRead`: the open has taken its generation and is about to read the file;
+  - `openDidRead`: the open has read the file, or failed to, and is about to say what it found;
+  - `resetWillRemove`: the reset has moved the generation and is about to remove the files.
+
+  The test's `HoldAt` holds at the moments it names, with S20d's `JobGate`. With no observer nothing waits, and the server's path is as before.
+- **`aResetWinsOverTheStartsOpen(_:)`** first holds that the file found at start opens, so that only the reset keeps it unserved. It then runs five orders (`StartAndReset`), each ending with nothing served, `.waitingForExport` and no file:
+  - the reset whole before the open begins, which finds no file;
+  - `main`'s run's order: the reset holds after moving the generation, and the open begins. Were the open to read, it would hold before reading until the reset had removed the files, then fail as `main`'s run did;
+  - the reset whole while the open holds before reading: the open then fails for want of the file;
+  - the reset whole while the open holds before saying what it read: S20d's served removed file;
+  - the two racing, unheld, as the old test's second half did.
+- **`aResetRemovesNoIndexMadeLiveAfterItWasAskedFor()`** keeps its first half, the imports' order. Its second half is now the racing order.
+- **`anIndexFoundAtStartThatCannotBeOpenedIsReported()`** holds that a failure not a reset's doing is still said, before any reset and after one has ended.
+
+**A cold review,** a subagent given the diff, the rule and the files, and none of this entry, found no interleaving that breaks the rule, and four smaller things, each fixed before the push:
+- The open asked whether a reset was under way before it looked for the file, so a start that found no index would have logged that the index was being reset. It now looks first.
+- A regression that kept the open or the reset from a moment would have left the test polling until CI's job timed out. The test now has a time limit of two minutes, and lets every hold go when it ends.
+- `StartAndReset`'s comment said every order was held by `HoldAt`; the first runs one after the other.
+- The order held before the open reports relied on the file opening, and would quietly have become the order held before it reads had the file stopped opening. That is the check the test now begins with.
+
+**The runs** were made on this Mac's Docker VM (`swift:6.4-noble`, arm64, 10 CPUs), each under the heavy lock. FRUSLightCoreTests' runner ran directly, one run after another, with no PostgreSQL. Swift Testing's width was CI's 8, or unbounded with the variable unset, and a run used every CPU or four, as CI's runner has (`taskset -c 0-3`). A run failed when any of its tests did. The harness and its outputs are in the notes folder's `reset-open-race/`.
+
+**Before the fix,** over S20d's code with the seam and the new tests, the runner set aside once built:
+- `main`'s order failed in every run, each time with `main`'s readiness, SQLite's 14.
+- The racing order, the old test's second half on the server's own path, failed often, and far more often at width 8. Each failure either said SQLite's 14 or served the removed index ("Serving 3 documents from 2 volumes"); "serving" below counts the second.
+
+| Before the fix: runs failed | Width 8 | Unbounded |
+|---|---|---|
+| ImportCoordinatorTests ×50, every CPU | `main`'s order 50; racing 47, 12 serving | `main`'s order 50; racing 22, 6 serving |
+| ImportCoordinatorTests ×50, four CPUs | `main`'s order 50; racing 22, 5 serving | `main`'s order 50; racing 5, none serving |
+| FRUSLightCoreTests ×5, four CPUs | `main`'s order 5; racing 2 | `main`'s order 5; racing 0 |
+
+In the whole-target runs the runner set aside also failed QueryEncoderTests, which look for the encoder's stand-in beside the runner: a cost of moving it, not of the code.
+
+**After the fix,** at `3be63bf`, every run passed. The fix as first written, `0ccfd26`, had passed the same runs before the cold review.
+
+| After the fix: runs passed | Width 8 | Unbounded |
+|---|---|---|
+| ImportCoordinatorTests, every CPU | 100 of 100 | 100 of 100 |
+| ImportCoordinatorTests, four CPUs | 50 of 50 | 50 of 50 |
+| FRUSLightCoreTests, four CPUs | 5 of 5 | 5 of 5 |
+
+**CI's swift job,** `scripts/swift --postgres test` at the default width of 20, ran 5,581 tests in 21 targets, all passing: in 443 s at `0ccfd26` and 433 s at `3be63bf`. The only skip was the named `FTS5StoreTests`' `backupExclusion()`, and there was no warning.
+
+**Delivered here:**
+- the fix and its seam;
+- the three tests;
+- this entry.
+
+**Next:** phase 4's rows as PLAN orders them, with S28e and S29g under way beside this.
+
 ## Session 29f: Distinctive and Collocates
 
 25 November 2026 · branch `claude/nervous-taussig-21b143` · [#189](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/189) · upstream `efd73ecb`, S27c's, unchanged
