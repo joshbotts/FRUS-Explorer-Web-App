@@ -263,7 +263,7 @@ import Glibc
         let began = ContinuousClock.now
         await encoder.shutdown()
         let took = ContinuousClock.now - began
-        #expect(took < .seconds(10), "the stop took \(took): SIGKILL ended the child, its SIGTERM unseen")
+        #expect(took < .seconds(10), "the stop took \(took): the child did not end at its SIGTERM")
         #expect(!Self.isAlive(pid))
     }
 
