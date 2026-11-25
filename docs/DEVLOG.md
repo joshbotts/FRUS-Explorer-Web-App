@@ -8,7 +8,60 @@ Not started: `PLAN.md`'s row S31. The session that does it replaces this line, k
 
 ## Session 29g: the shares chips on Related Documents
 
-Not started: `PLAN.md`'s row S29g. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+25 November 2026 · branch `claude/gifted-noyce-974137` · [#191](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/191) · upstream `efd73ecb`, S27c's, unchanged
+
+Phase 4's row S29g, in wave 8 beside S28e on the map's track and S30c on the Visits track: Related Documents' shares chips, a row matched by meaning or by wording saying what it shares with the anchor. No upstream pull request, no pin move and no migration, and no change to `Package.swift`, the lockfile, the image or `compose.yaml`. The worktree was cut from `main` at `567d59c`, #189's merge; CI's [#188](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/188) merged during the row, and a trial merge with it was clean, so `main` was not merged (rule 8). It is the S29 group's last row, so the group's shared records are its own (PLAN, How phase 4's sessions run beside each other, rule 4).
+
+**The chips** (`Sources/FRUSLightAPI/RelatedSharedTerms.swift`). After the ranking and the subjects' pass, as the app's view runs `attachSubjectEvidence()` and then `attachSemanticEvidence(claimedKey:)`, the server runs the app's second pass over the rows shown: the rows either vocabulary axis scored, the semantic or the lexical, and the kit's `SemanticSharedTerms.sharedTerms(anchor:candidates:pipeline:references:languageAnalysis:stopwords:tagger:isolation:)` (S29b) over the anchor and those rows in the served index, with the language family's references as the kit reads them (`familyClouds.references(language:lists:)`, S29f's reader), the web's tagger at its own verdict, which reduces every word, so that the reference in dictionary forms prices them, and the app's stop lists. The kit names at most three words a row, the rarest across the corpus first by the reference's counts, a word it does not price passed over, each as the anchor spells it, or as the tagger reduced it where the anchor's text holds no such form. The server joins them as the kit's chip splits them and writes them under each of the two axes that scored the row, and the kit's `whyRelatedChips` reads them as "shares: treaty". A row the pass names no word for keeps its generator's label, so that a semantic row's chip says "shares: Semantic match · 71%", the kit's and the app's, and a lexical row's its percentage. The kit's note on words compared as printed (`Evidence.printedFormsNote`) is never said, since the web's tagger reduces every word.
+
+**Where the pass runs.** The kit's pass runs on its caller's actor, and the ranking's is the main actor. So the server runs it in a turn of a gate of its own (`sharedTermsGate`, a `CountGate` bounded as S29e's is, half the processors from one to four), so that a list never waits behind a word cloud's count or a scan of Collocates, which hold their turns for seconds; on a serial Dispatch queue of its own that the task prefers and moves onto first (S29f's `CollocationExecutor`, `frus-light.shared-terms`); and isolated to nothing, so that the tagging holds neither the main actor nor a thread of the cooperative pool. A task cancelled before its turn tags nothing.
+
+**The walks kept** (`KeptWalks`), the web's own. The pass tags the anchor's body and each row's, and a document recurs, in its neighbours' lists and in every list a reader ranks again as they tune it, where the app's view tags every row again at each reload. A walk is the tagger's alone, a function of the text and of what the walk reads, so the server keeps the walks of the last 500,000 words its tagger read for the pass, by the text's UTF-8 bytes and the reading: each word's range as UTF-8 offsets, its lemma and its class. It gives a kept text's walk again, and past the limit lets the least recently given go, down to nine tenths of it; about 20 MB at the most, by estimate, which the install guide's Memory says. Tagging costs about seventeen times what giving a walk again does: forty lists of thirty-one documents took 4.4 s to tag and 0.28 s to give again, in a debug build. Without the walks kept, S26d's every-document parity test, which asks the server for 621 lists and the kit for as many, took 393 s, where it took about 110 s before this row; with them, 143 s alone.
+
+**The browser** (`web/src/related/RelatedScreen.tsx`): the chips' words are the server's. A row's link is described by its chips (`aria-describedby`, each chip's item by an id from the list's `useId`), so that the keyboard reaching a row reads why it is related, as the app's row, a button, reads its chips to VoiceOver with its title.
+
+**Decided here, each the web's own:**
+- **A list comes with its words,** where the app's shows its rows first and fills the words in when its pass lands: an answer of the server's is whole, and the pass costs it little once the walks are kept (the smoke test's figures, below).
+- **The walks kept,** above, and **a gate of the pass's own,** so that no count of a word cloud holds a list up.
+- **A row's link described by its chips.**
+
+**The done-when, shown:**
+- **The chips for every fixture pair equal the kit's:** S26d's `RelatedDocumentsParityTests.everyFixtureDocumentsRelatedListIsTheKitsRanking` holds every fixture document's list through the API, and a seventh of them in each scope offered, under a tuning and with the two experimental axes raised, to the kit's ranking with the kit's pass over the same rows (`Host.namingSharedTerms`), made apart from the server's: the family's references read by URL (`LanguageReadings.references`), the bundled stop lists read here and the web's tagger, each text's walk given again by the suite's own replayer (`ReplayedWalks`), never the server's. So each pair's chips are the kit's, word for word: 11,123 rows matched by meaning name the words they share and one says its match alone, and with the experimental axes raised 1,373 lexical chips name words, counts the test asserts. `theOffIndexLeadsAreTheKitsOverTwoOfTheThreeVolumes` does the same over the two-volume index. `theServersKeptWalksAreTheTaggersOwn` holds the server's kept walks to the tagger's own over a quarter of the fixture texts, first walked and given again, a tenth of those with their classes too; two spellings of one text, composed and decomposed, each walked as its own in either order; and the eviction.
+- **The route:** `RelatedSharedTermsTests` over the synthetic export. Its d1 and d2 share one word no stop list holds, "treaty", which d1 prints as "treaties", since the tagger reads d2's opening "Negotiating" as a noun it gives no lemma; so d2's chip is "shares: treaty", and with the lexical axis raised the same under both axes. With d2's text one that shares only stop words, its chip says the match alone. And the pass, as the route runs it, walks each text once on its own queue, its words the kit's made apart.
+- **The mirrored lines:** `theMirrorsAreTheApps` holds the server's pass to the app's `attachSemanticEvidence` (its axes, its rows, after the subjects' pass, the join, a row named none left alone) and to the app's entry's reference and lists (`SemanticSharedTerms+App.swift`).
+- **Playwright, by keyboard, with no axe violations:** `related.spec.ts`'s new test reaches d2's link by keyboard over the synthetic export and reads its description, "Semantically similar (experimental) shares: treaty", then raises Similar wording by keyboard and reads the same word under it, axe at each state; S26d's test reads a semantic row's chip as "shares: " either way. The smoke test's new step asks the Standalone library for frus1961-63v06's d1 list twice: 30 rows, all 30 matched by meaning naming the words they share, the first two "shares: unsigned, elect, goal" and "shares: Khrushchev, Kennedy, marking", answered in 0.09 s and again in 0.03 s by the release build.
+
+**The runs,** at the final code, each heavy job under the Mac's lock:
+- **Swift:** `scripts/swift --postgres test`, CI's swift job with its PostgreSQL, at `452813c`: 5,583 tests in 21 targets, all passing, the one skip the named `FTS5StoreTests`' `backupExclusion()`, and no warning, in 485 s: FRUSParityTests 413 in 86 suites, FRUSLightServerTests 475, FRUSLightCoreTests 310 and FRUSLanguageTests 54, every kit's runner at S27c's figures (FRUSCoreKitTests 3,142). Within it the every-pair test took 271 s, the two-volume test 213 s and the walks' test 51 s, which then read half the fixture texts and now reads a quarter, in 4.7 s alone. The first whole run, before the review's fixes, passed 5,582 in 499 s.
+- **The browser app:** `scripts/npm run typecheck`, `run lint`, `test` and `run build`, clean: 821 tests in 88 files.
+- **The smoke test:** `FRUS_IMAGE=frus-light:s29g FRUS_HOST_PORT=18300 scripts/compose-smoke --e2e`, the library's mirror on 18301, on the image built at `452813c` with the release's build arguments (189 s), passed every step in 743 s: the new step's figures above, and the browser suite, passing 110 and skipping 11 at the root and again under the path, `related.spec.ts`'s three tests among them; checks 2 and 8 and check 9's two halves skipped, as on any image without the parity stage, which this row leaves alone and CI runs. The image was removed after. The disk had 15 GiB free when the row began, 38 GiB once other sessions had freed some, and 35 GiB at its end; the build folder was an APFS clone of S29f's, which costs no space but for what changed.
+- **CI's first run,** at `655318d`, on the merge with `main` at `3f5a04b`, #188's: paths, web and the image's two builds passed, and swift failed one test, FRUSLightCoreTests' `ImportCoordinatorTests.aResetRemovesNoIndexMadeLiveAfterItWasAskedFor`, the reset that races a start ("SQLite error 14: unable to open database file"), which `main`'s own run at `3f5a04b` failed the same way and #190's branch passed, a race in code this row does not touch, which a linked session is looking into; this row's suites passed, S26d's every-pair test in 530 s and its two-volume test in 422 s, where `main`'s last green run before this row, at `32f0d40`, took 560 s and 482 s, so the walks kept leave the swift job no longer.
+
+**The cold review,** by a fresh subagent given the row, the diff and where the kit's and the app's code is, and none of this session's reasoning, read only (about 16 minutes), found eight things, all taken:
+- **The kept walks were keyed by `String`,** whose equality holds a composed and a decomposed spelling of a text equal: a walk's offsets, given again to the other spelling, named the wrong words, or ran past its end, which traps a release build. Now they are keyed by the UTF-8 bytes, tested both ways, and the suite's replayer gives a walk only to the same bytes.
+- **A list waited behind the word counts,** whose gate the pass shared: a count of 5,000 documents or a scan of Collocates holds a turn for seconds, and a server with two processors has one turn. The pass has a gate of its own.
+- **The parity suite's counts of named chips were printed, not asserted,** so a reference lost on both sides would have passed. They are asserted.
+- **The test of a row that shares only stop words could skip,** its row never in the list. It now runs over an export whose d2 shares only stop words, and requires the row.
+- **The memory figure** ignored the room a walk built word by word holds. Each walk is kept at its own length.
+- **Two comments said a client's going cancels the pass,** which it does only before its turn; the route does not watch its client. The comments say so, and a task cancelled before the pass begins tags nothing.
+- **Eviction sorted every walk kept on each keep** once at the limit. It lets go to nine tenths at once.
+- **The records named stop words alone,** where a row's words also go unnamed when short, markings or too rare for the reference to price. They say so.
+
+It also found the first commit's expectations of d1's and d2's words wrong, which the second had corrected.
+
+**Records.** The S29 group's shared records (rule 4), each line the earlier rows named for this one corrected:
+- **SPEC:** the surfaces' Search, rail, Related Documents and Analytics rows; WordCloudKit's sentence (S26b's and S29d's); the feature table's Collocates, Related Documents and Word Cloud rows; the data's sources, the bundled word-cloud row and the regeneration's exception (S29d's); Search's readings, with a bullet for Collocates (S29f's); the rail's Word Cloud tile, Chronology's range cloud and the bench's sentence (S29e's); Related Documents' chips (S26d's "until S29g"); the Word Cloud's section, rewritten for the family, live counts, Distinctive, the lenses, the API and the tokenizer's identity (S29d's, S29e's and S29f's); the API's routes, `reviewed`'s four routes and a bullet for `/search/collocates` (S29f's), and `…/related`'s chips; the configuration's `FRUS_LANGUAGE_DIR` and the image's folder (S29d's); the delivery plan's S29 group; and the risk table's lemma parity.
+- **README:** Search's collocates, Related's shared words, the Word Cloud (S29d's and S29e's), Known gaps' Related sentences and Word Cloud (S26d's, S29e's and S29f's), the later phases (S29f's) and Next.
+- **COORDINATION:** §1's WordCloudKit row and the uses paragraph, with the mirrors' tests; §5's note of what the language rows leave upstream, and S26d's note on the semantic chip.
+- **The install guide:** Related's chip and the Memory's walks.
+
+**Another row's files, each a line or two:** `RelatedDocuments.swift` (S23d's and S26d's), the second pass after the subjects' and the header's pointer; `RelatedDocumentsParityTests.swift` (S26d's), the host's pass and its replayer, the counts asserted, the walks' test and the mirrored lines; `SemanticFeedbackTests.swift` (S26d's), the warm-up reading the references and the tagger, and a verdict's row's chip "shares: " either way; `related.spec.ts` and `RelatedScreen.tsx`, Related Documents' files, S29g's after S26d's by rule 3; and `scripts/compose-smoke`, the step after S29f's.
+
+**Follow-ups:** none upstream: FRUS-Explorer#1972, open, still asks for a reason of the kit's for a host's language analysis, which the server's sentences stand in for. For the web: S31, phase 4's sign-off, which the hand-over (`s29g-handover.md`) gives the language family's record; SPEC's delivery plan names the S26 and S29 groups done and not yet S27e's group, which S31's records can add.
+
+**Delivered here:** the pass and its walks, the chips' description in the browser, the suites above, the smoke test's step, the S29 group's shared records, this entry and S29g's paragraph in PLAN's Where phase 4's rows stand.
+
+**Next:** phase 4's sign-off, S31, once the map's tools (S28e) and Archives Visits (S30c and S30d) are done.
 
 ## Session 28e: the map's tools
 
@@ -77,6 +130,61 @@ Phase 4's row S28e, in wave 8 beside S29g on the language track and S30c on the 
 
 Not started: `PLAN.md`'s row S30d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## CI follow-up: the encoder's starts, by posix_spawn
+
+25 November 2026 · branch `claude/interesting-shirley-658f4e` · [#190](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/190) · upstream `efd73ecb`, unchanged
+
+This follow-up is not one of PLAN's rows; the CI follow-up's session ([#188](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/188)) left it. `main`'s [ci run 45643998324](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/45643998324), at `567d59c`, S29f's merge, failed when FRUSLightServerTests' runner died of signal 11 in Foundation's `Process.run()`, called from `QueryEncoder.versionLine(of:)` in `Blocking.run`. The runner printed no summary, so `swift test` exited 1. It was the one such crash in the 17 swift-job logs read that day.
+
+The branch was cut from `main` at `567d59c`. It adds `Sources/FRUSLightCore/SpawnedProcess.swift`, moves the encoder's two starts in `QueryEncoder.swift` onto it, and adds a test to QueryEncoderTests. It changes no `Package.swift`, image, `compose.yaml`, workflow or upstream file.
+
+**Not a race.** Only one thread was in `Process.run()` when the runner crashed, and the crash's registers show what it read:
+- A copy of 256 bytes (0x100) from 0x7f3170b56f13, which held the name "1362". The fault's address, 0x7f3170b57000, is the next page, 237 bytes on.
+- Glibc's DIR for /proc/self/fd, at 0x7f3170b4eef0: its descriptor 2,332, its buffer 32,768 bytes from 0x7f3170b4ef20. "1362" was the 1,365th 24-byte entry of a full buffer, its name 13 bytes from the buffer's end. The runner, every test case started at once, held more than 2,332 descriptors.
+
+swift-corelibs-foundation 6.4.3 is the Foundation of swift:6.4-noble and of the image. Its `Process.run()` closes the descriptors a child should not inherit by listing /proc/self/fd in the parent:
+- `findMaximumOpenFromProcSelfFD()` reads each entry's number from `var entryName = dirEntPtr.pointee.d_name`, a copy of the whole 256-byte `d_name`. readdir(3) gives an entry only its `d_reclen` bytes.
+- Once /proc/self/fd lists some 1,355 entries, the copy of each full buffer's last entry reads 243 bytes past the buffer's end. Where the buffer is the last block of a heap, those bytes may be unmapped, since glibc grows a thread's heap a page at a time.
+- Foundation's main fixed it on 19 May 2026, in [swiftlang/swift-corelibs-foundation#5472](https://github.com/swiftlang/swift-corelibs-foundation/pull/5472), "Process.run() on Linux crashes intermittently — buffer over-read in findMaximumOpenFromProcSelfFD()". Neither `swift-6.4.3-RELEASE` nor `release/6.4.x` has the fix.
+- Otherwise `run()` may be called from several threads at once. It makes its manager thread once, under a lock (`Process.setup()`), and each call has its own file actions, socket pair and listing. The crash needs only one thread.
+
+**Reproduced** on this Mac's Docker VM (swift:6.4-noble, arm64). A harness outside the package (the notes folder's `process-run-crash/`, never committed) holds N descriptors, and four threads spawn `/bin/true` through `Process`. Before each spawn, each thread uses up its heap's free blocks:
+- At 4 and at 1,304 descriptors, none of 10 runs crashed. At 1,504 and at 2,404, all 10 did.
+- One thread is enough. In 20 one-thread runs the crash came after a mean of 18 spawns, about one in nineteen.
+- The backtrace is CI's: `findMaximumOpenFromProcSelfFD()` under `Process.run()`, the fault at a page boundary, the name at the same offset in its page.
+
+Without the heaps used up, 12,000 spawns at 1,504 descriptors did not crash. Each spawn frees its 48 KB of close actions, and the next listing's buffer takes that block, which has room after it. A probe of 2,000 listings at 1,504 descriptors found that every last copy reached past its buffer. Where the heap grew a page at a time, 107 of the buffers (5.4%) were followed by fewer than 243 mapped bytes. So the crash needs many descriptors, which the unbounded width gave, and a buffer at a heap's end, which a Dispatch worker's first start can give.
+
+**The fix.** `SpawnedProcess` starts a child with posix_spawn(3) as `Process` did:
+- the same arguments and environment;
+- a process group of its own;
+- /dev/null as its input, and its output and errors to the caller's pipe;
+- the calling thread's signal mask.
+
+Every other descriptor is closed in the child, by `posix_spawn_file_actions_addclosefrom_np` (glibc 2.34; noble's is 2.39), which calls close_range(2), so the parent lists nothing. A thread of the child's own waits for it with waitpid(2) and reads its status as `Process` does. `versionLine(of:)` and `Child.launch` start through it, and `Child` keeps `isRunning`, `terminate()`, `terminationStatus` and `terminationReason` as they were. The server starts no other process.
+
+**The test.** QueryEncoderTests' `itStartsWhileTheServerHoldsThousandsOfDescriptors()` is the package's first exit test, so that its 2,000 descriptors are a process's of its own. Its body runs 40 rounds. Each round uses up the heaps of the threads `Blocking` runs work on, then reads the stand-in's version four times at once. The body then starts the encoder and counts its child's descriptors.
+- Before the fix, the child ended by SIGSEGV in all 10 runs, each within 0.1 s, in CI's frames (`QueryEncoder.swift:567:25` in `Blocking.swift:14:66`).
+- With the fix, all 10 passed, in about 0.5 s each.
+- With the closefrom action removed, it failed: "the encoder's child holds 2042 descriptors".
+
+**Measured.** `scripts/swift --postgres test`, at the unbounded width `main` still runs, passed 5,580 tests in 21 targets in 468 s, apart from the one named skip. The exit test took 6.9 s under that load. A sampler read each runner's open descriptors every 0.2 s, leaving out exit tests' children:
+- Three runners passed the listing's 1,355 entries: FRUSCoreKitTests' peaked at 2,617, FRUSLightServerTests' at 2,484 and FRUSParityTests' at 1,536.
+- FRUSLightCoreTests' peaked at 659, and the others under 60.
+- At #188's width of 8, the three peaked at 56, 167 and 195.
+
+**Left as it was.**
+- **The encoder child's blocked SIGTERM.** A child takes the signal mask of the thread that starts it, through either spawner, and the server's Dispatch workers block SIGTERM, SIGINT and SIGHUP: a child's SigBlk read `fffffffe3bfbea27` both ways. So a stop's SIGTERM likely reaches the real llama-server only as the SIGKILL 10 s later (`stopTimeout`). This fix keeps `Process`'s behaviour; the change, checked against the real binary, is a follow-up's.
+- **The tests' own `Process` calls.** FRUSParity's `Upstream.commit(_:)`, which ProvenanceTests and `frus-parity` call, and UserStoreRestoreTests' `run(_:_:)` still start through Foundation. FRUSParityTests' runner passed the 1,355 entries only at the unbounded width, so #188's width keeps it far from the read. Should a runner's descriptors climb toward it again, both can start through `SpawnedProcess`.
+- **Foundation's fix, once the image's toolchain has it,** need not undo this: `SpawnedProcess` lists nothing, and the child closes what it should not hold.
+
+**Delivered here:**
+- `SpawnedProcess`, and the encoder's two starts through it;
+- the exit test;
+- this entry.
+
+**Next:** #188's merge, which bounds the width; the encoder child's SIGTERM, proposed as a follow-up of its own; then phase 4's rows as PLAN orders them.
+
 ## Session 29f: Distinctive and Collocates
 
 25 November 2026 · branch `claude/nervous-taussig-21b143` · [#189](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/189) · upstream `efd73ecb`, S27c's, unchanged
@@ -136,6 +244,90 @@ Phase 4's row S29f, in wave 7 beside S27e on the semantic track and S28d on the 
 **Delivered here:** Distinctive through the API and on the page, Collocates' route and reading, the suites above, the smoke test's step and the language spec, the install guide's sentences, this entry and S29f's paragraph in PLAN's Where phase 4's rows stand.
 
 **Next:** S29g, the shares chips on Related Documents, the language group's last row, which writes its shared records.
+
+## CI follow-up: the swift job under load
+
+25 November 2026 · branch `claude/wonderful-haslett-38ea64` · [#188](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/188) · upstream `efd73ecb`, unchanged
+
+This follow-up is not one of PLAN's rows. The orchestrator started it after `main`'s `ci` went red on three of its five merges on 25 November. Each time the swift job failed alone, on code that had passed locally and on its pull request.
+
+The branch was cut from `main` at `eda3ab0`, S27e's merge. It changes CI's workflow, `scripts/swift` and CLAUDE.md's lines on them. It changes no test, no source, no `Package.swift`, no image and no `compose.yaml`.
+
+**Before.** Five of `main`'s last ten `ci` runs, from #175's merge to #185's, failed, each in the swift job alone:
+
+- **#179 (`0df9fb7`) and #180 (`649e129`):** EmbedCheckTests' three tests, its live server's report and queries outwaiting the client.
+- **#181 (`c6ae325`) and #184 (`ae90aab`):** SemanticFeedbackTests' `aVerdictIsTheAppsEntryKeptForEachUser()`, `.readTimeout`, after S26d's warm-up.
+- **#183 (`c5f24c3`):** UserTagTests' `aTagsNameIsTrimmedAndNeverEmpty(_:)` and SemanticFeedbackStoreTests' `verdictsAreKeptAsTheAppsLogKeepsThem(_:)`, on the PostgreSQL store, with "53300: sorry, too many clients already".
+
+Counted per test:
+- EmbedCheckTests' three tests: twice each.
+- SemanticFeedbackTests' test: twice.
+- UserTagTests' and SemanticFeedbackStoreTests' tests: once each.
+
+Two pull-request runs had failed the same way: #181's first, and S29e's `34b65c7`, whose EmbedCheckTests failed after S27c's asks. Across the ten runs the Test step took 706 to 1,409 s, and the job 20 to 36 minutes.
+
+**The cause.**
+- **How the tests run.** SwiftPM 6.4 runs the targets' test runners one after another. Each runner starts as many of its target's test cases at once as Swift Testing's parallelization width allows.
+- **Why the width was unbounded.** Swift Testing documents that width as twice the CPUs. Its 6.4.3 code, however, leaves the default unbounded unless `SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH` names one: the doubling is commented out in its `Serializer.swift`. So every case of a target started together on the runner's 4 CPUs: at `eda3ab0`, 467 in FRUSLightServerTests and 391 in FRUSParityTests.
+- **The PostgreSQL failure.** Each PostgreSQL case holds two or three connections. FRUSLightCoreTests' cases, running together, reached 65 connections on 4 of this Mac's CPUs and 85 on 10. On CI's slower CPUs they passed the service's default of 100 once in ten runs.
+- **The live-test failure.** A live test's request waited behind hundreds of tests for the four CPUs, past HummingbirdTesting's fixed 20 s. The cold loads were not the cause:
+  - At CI's pace, three FRUSLightServerTests runners at once all failed SemanticFeedbackTests' test as `main` had, warm-up and all. Its related list took 22 to 24 s, and `GET /api/v1/me` took 11 s.
+  - Two FRUSParityTests runners failed EmbedCheckTests as `main` had. Counting each request's wait to connect, its reports took 34 to 40 s and its embeddings 24 to 30 s, and the client gave up on nine requests across the three runners. The third runner was killed by the VM for memory.
+
+**The fix.**
+- **CI's Test step** names the width Swift Testing documents: twice the CPUs, 8 on the runner. It first checks that the image's `libTesting.so` still reads the variable, and fails if not, rather than running unbounded. SwiftPM's hidden `--experimental-maximum-parallelization-width` would do the same; the variable serves CI and `scripts/swift` alike.
+- **CI's PostgreSQL** takes 200 connections, through `POSTGRES_INITDB_ARGS: -c max_connections=200`. Since PostgreSQL 16, initdb takes `-c`. The service container takes no command, but its image's entrypoint passes these arguments to initdb, so no step of its own is needed. initdb's log still prints "selecting default max_connections ... 100", the probe the setting overrides; `show max_connections` gives 200.
+  - **Why not bound the store's pool in tests:** each store holds a single connection. A bound would be a semaphore over tests that hold their stores across awaits, which could deadlock a test that opens a second store.
+  - The width keeps the peak near a dozen connections. The 200 match `scripts/swift`'s container and are the margin, should the width lapse.
+- **`scripts/swift`** sets the same width: twice Docker's CPUs, 20 on this Mac. A caller's own value is kept, and 0 means no bound. It also creates its container with 200 connections; until now the container had them only because someone set them by hand (`ALTER SYSTEM`, the lesson of the pin move to `4556c4d5`).
+- **CLAUDE.md** says both.
+
+**The tests that could meet a cold load.** Of the 30 `.test(.live)` calls, these first ask for something a server reads once:
+- SemanticFeedbackTests' two: the bundled vectors, the subject index and the stop words.
+- MeaningSearchTests' two: the vectors, and the start of the encoder stand-in.
+- EmbedCheckTests' three: the semantic report, and the encoder.
+- WordCloudRouteTests' two: a first count.
+
+At width 8, at CI's pace, every live request of FRUSLightServerTests answered within 3.2 s. With S26d's and S27d's warm-ups and S27c's asks patched off, it answered within 1.0 s, the cold related list in 0.6 to 0.7 s. EmbedCheckTests' report answered within 0.15 s, so S27c's asks always stopped at their first answer, and its embeddings within 1.2 s.
+
+So the fix was made once, in the setting every runner of every target shares. No test helper could make it, because Swift Testing reads the width before any test runs. The suites' own patches are left as they are: S26d's `warmed(_:)`, S27d's copy, S27c's asks (taken on the owner's word of 24 November) and S29e's `.serialized` suite. None of them is needed any more.
+
+**The measurements,** on this Mac's Docker VM (swift:6.4-noble, arm64), with the debug build at `eda3ab0`, each run under the heavy lock:
+- **CI's pace** is three runners at once on 4 CPUs, the timing-flakes recipe.
+- **PostgreSQL's peaks** come from a server of its own, with a limit of 1000 and connection logging.
+- **The live requests' times** come from a print in a local copy of HummingbirdTesting's client, from each request's start, its wait to connect included. It was never committed and has been removed.
+- **The harness, the scripts and their outputs** are in the notes folder's `ci-swift-load/`.
+
+| | Unbounded | Width 8 |
+|---|---|---|
+| FRUSLightCoreTests, PostgreSQL's peak | 65 connections on 4 CPUs, 85 on 10 | 11 (19 at width 16), in the same time |
+| FRUSLightServerTests ×3 at CI's pace | all failed; slowest request 24.4 s; 37 to 39 requests of 5 s or more; 97 to 99 s | all passed; slowest request 3.2 s; none of 5 s; 86 to 94 s |
+| The same, the suites' warm-ups and asks off | — | all passed; slowest request 1.0 s |
+| FRUSParityTests ×3 at CI's pace | two failed EmbedCheckTests, one killed for memory | all passed, 610 to 630 s |
+| The whole `swift test` on 4 CPUs | 533 s; PostgreSQL's peak 59 | 502 s; peak 12 |
+
+`scripts/swift --postgres test`, CI's swift job at the default width of 20, ran 5,553 tests in 21 targets, all passing, in 436 s, against the 575 to 595 s of S29e's runs. The only skip was the named `FTS5StoreTests`' `backupExclusion()`, and there was no warning. A test's "passed after" now counts its wait for a slot, so the targets' totals are what compare.
+
+**After, on CI.** The pull request's swift job ran three times, on its merge with `main` at `32f0d40` (S28d's merge): [run 45627044705](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/45627044705)'s first attempt and two re-runs of the job. Each Test step logged a width of 8. Each run passed all 5,564 tests in 21 targets, the only skip the named one.
+
+| | Job | Test step | FTS5StoreTests | FRUSParityTests | FRUSLightServerTests | FRUSLightCoreTests |
+|---|---|---|---|---|---|---|
+| Attempt 1, passed | 38.8 min | 1,395 s | 364 s | 725 s | 94 s | 76 s |
+| Attempt 2, passed | 32.7 min | 1,274 s | 301 s | 643 s | 123 s | 70 s |
+| Attempt 3, passed | 23.2 min | 879 s | 213 s | 450 s | 75 s | 44 s |
+| `main` at `32f0d40`, unbounded, passed | 29.9 min | 1,052 s | 251 s | 560 s | 72 s | 60 s |
+| `main` at `eda3ab0`, unbounded, failed | 37.3 min | 1,468 s | 369 s | 775 s | 102 s | 82 s |
+
+- **Runner speed.** GitHub's runners vary in speed. FTS5StoreTests' time, which the width barely moves (104 and 106 s locally), shows how fast each runner was.
+- **`main` at `eda3ab0` failed again during this session.** At S27e's merge it failed as before: EmbedCheckTests' two tests and SemanticFeedbackTests' test, with S27c's asks and S26d's warm-up in place. Its runner was as slow as attempt 1's, which passed.
+- **No slower on runners of like speed.** FRUSParityTests took 1.99 to 2.14 times FTS5StoreTests' time bounded, against 2.10 and 2.23 unbounded.
+
+**Delivered here:**
+- the width and the 200 connections, in CI's swift job and in `scripts/swift`;
+- CLAUDE.md's two lines;
+- this entry.
+
+**Next:** phase 4's rows as PLAN orders them, with S29f and S30c under way beside this. A row whose swift job now fails, fails on its own code.
 
 ## Session 28d: Browse's clusters
 

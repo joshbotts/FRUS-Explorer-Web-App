@@ -9,7 +9,8 @@
 #   GitHub reported upstream-watch.yml's watch-report, waiting under !cancelled(), in that
 #   workflow's cancelled runs; one cancelled while the paths job ran lets them run to the end.
 # - swift: build and test in swift:6.4-noble with libsqlite3-dev and libargon2-dev, the way scripts/swift runs them, with
-#   a PostgreSQL service, so the user store's conformance suite runs on both of its stores (S14d).
+#   a PostgreSQL service, so the user store's conformance suite runs on both of its stores (S14d), and at most twice the
+#   CPUs' test cases of a target at once (the CI follow-up of 25 November).
 # - web: the browser app in web/, typechecked, linted, unit-tested and built with Node at
 #   web/.node-version, as scripts/npm runs it.
 # - compose: build the image, its search model from the Actions cache by its digest (PLAN's S27b) and its
@@ -85,7 +86,13 @@ jobs:
     # The PostgreSQL store's half of the user store's conformance suite runs against this database,
     # which the job's container reaches by the service's name; the Test step names it in
     # FRUS_TEST_POSTGRES_URL. Without it, the suite runs on app.db alone and the PostgreSQL store's own
-    # tests are skipped, which the Test step's count of skips refuses.
+    # tests are skipped, which the Test step's count of skips refuses. It takes 200 connections, as
+    # scripts/swift's container does, where PostgreSQL's default is 100, which ran out on 25 November
+    # while every test case of FRUSLightCoreTests ran at once (main's c5f24c3, "sorry, too many clients
+    # already"). A service container takes no command, so initdb writes the setting (its -c, since
+    # PostgreSQL 16); its log's "selecting default max_connections ... 100" is the probe it overrides.
+    # The Test step's bound on the test cases running at once keeps the connections near a dozen; the
+    # 200 are the margin, should that bound lapse.
     services:
       postgres:
         image: postgres:18-alpine
@@ -93,6 +100,7 @@ jobs:
           POSTGRES_USER: frus
           POSTGRES_PASSWORD: frus-light-tests
           POSTGRES_DB: frus
+          POSTGRES_INITDB_ARGS: -c max_connections=200
         options: >-
           --health-cmd "pg_isready -U frus -d frus"
           --health-interval 2s
@@ -169,10 +177,29 @@ jobs:
       # (greedily, so a name holding quotes still matches) or bare: upstream has a passing test named
       # "A Lot File(s) prefix is skipped, never captured into the key", whose lines a looser pattern
       # took for a skip. grep -a reads the log and the file as text even if a test prints a NUL byte.
+      #
+      # SwiftPM runs the targets' runners one after another, and a runner runs as many of its target's test
+      # cases at once as Swift Testing's parallelization width allows. Swift Testing documents that width as
+      # twice the CPUs, but 6.4.3 leaves it unbounded unless SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH
+      # names one, so every test case of a target started together on the runner's 4 CPUs. A live test's
+      # request then waited behind hundreds of others past the live client's fixed 20 s, as
+      # SemanticFeedbackTests' and EmbedCheckTests' did on main in November, and FRUSLightCoreTests' PostgreSQL
+      # connections passed the database's 100. So this step names the width Swift Testing documents, 8 here,
+      # as scripts/swift test does. At CI's pace, on 4 CPUs of the owner's Mac, it brought the slowest live
+      # request from 24 s, a failure, to 3 s, and the suite finished sooner (the log's "CI follow-up: the
+      # swift job under load"). The variable is experimental, so the step first checks that the image's
+      # testing library still reads it, and fails if not, rather than run unbounded.
       - name: Test
         env:
           FRUS_TEST_POSTGRES_URL: postgres://frus:frus-light-tests@postgres:5432/frus?sslmode=disable
         run: |
+          testing=/usr/lib/swift/linux/libTesting.so
+          if ! grep -aqF SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH "$testing"; then
+            echo "::error::$testing does not read SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH, so this step cannot bound how many test cases of a target run at once. Find how this toolchain's Swift Testing bounds its parallelization width, and name it here and in scripts/swift."
+            exit 1
+          fi
+          export SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH=$((2 * $(nproc)))
+          echo "Swift Testing's parallelization width: $SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH test cases of a target at once, twice the $(nproc) CPUs."
           swift test --skip-build --scratch-path .build/linux --xunit-output test-results.xml 2>&1 | tee test.log
           results=test-results-swift-testing.xml
           if [ ! -s "$results" ]; then

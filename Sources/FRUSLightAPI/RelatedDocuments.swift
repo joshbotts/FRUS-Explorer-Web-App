@@ -28,6 +28,10 @@
 // rules, its five volumes and its row for a document, are the app's `RelatedDocumentsContent` and
 // `SemanticUndownloadedRow`, mirrored. Each row says its semantic score, `axisScores[.semanticSimilarity]`, which a
 // verdict on it records (SemanticFeedback.swift), and the verdict the request's user gave it.
+//
+// Since PLAN's S29g a row matched by meaning or by wording says what it shares with the anchor, in the kit's chip,
+// "shares: …", as the app's view says it once its pass over the rows shown has run: the kit's `SemanticSharedTerms` with
+// the language family's reference and the web's tagger, off the main actor (RelatedSharedTerms.swift).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -284,8 +288,9 @@ enum RelatedDocumentsRoutes {
 
     /// The anchor's related documents, as the app's list loads them: the anchor's year from the index, the
     /// scope's volumes and the kit's ranking, each row's line read from `summaries` where the reader has
-    /// summarised its document, with the shared subjects of the rows shown named; and the volumes whose shard the
-    /// semantic axis asked for, over `vectors`, the bundled generation and the server's shards, when they are served.
+    /// summarised its document, with the shared subjects of the rows shown named, and then the words the rows matched by
+    /// meaning or by wording share with the anchor (S29g); and the volumes whose shard the semantic axis asked for, over
+    /// `vectors`, the bundled generation and the server's shards, when they are served.
     @MainActor
     static func ranked(_ anchor: DocumentKey, scope: RelatedScope, weights: AxisWeights, limit: Int, summaries: SearchUserSource,
                        served: ServedIndex, resources: ServerResources, subjects: DocumentSubjectIndex?, stopwords: Set<String>,
@@ -300,8 +305,11 @@ enum RelatedDocumentsRoutes {
             limit: limit, userSource: summaries,
             dependencies: dependencies(served: served, resources: resources, subjects: subjects, stopwords: stopwords,
                                        semantic: semantic?.source))
-        return (RelatedDocumentsResult(rows: namingSharedSubjects(result.rows, anchor: anchor, subjects: subjects),
-                                       totalBeforeLimit: result.totalBeforeLimit, poolCutFrom: result.poolCutFrom,
+        // The two passes over the rows shown, in the app's order: the subjects, then the shared words, which tag, off this
+        // actor (`namingSharedTerms`).
+        let rows = await namingSharedTerms(namingSharedSubjects(result.rows, anchor: anchor, subjects: subjects), anchor: anchor,
+                                           pipeline: served.pipeline, resources: resources)
+        return (RelatedDocumentsResult(rows: rows, totalBeforeLimit: result.totalBeforeLimit, poolCutFrom: result.poolCutFrom,
                                        offIndexLeads: result.offIndexLeads),
                 semantic?.missingShards ?? [])
     }

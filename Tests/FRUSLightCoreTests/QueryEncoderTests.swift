@@ -3,7 +3,8 @@
 // query, with a key of its own; a query is the kit's prompt and the reader's words, its vector normalised as
 // the app's; it stops when idle and comes back after it is killed; a query past the app's 2,048 tokens and a
 // server with the encoder off are refused in their words; a model that is not the bundled index's, or a start
-// that fails, says why; and the child stops with the server.
+// that fails, says why; the child stops with the server; and it starts while the server holds thousands of
+// descriptors, none of which its child holds.
 
 import FRUSLightTestSupport
 import Foundation
@@ -240,6 +241,78 @@ import Glibc
         await encoder.shutdown()
         #expect(QueryEncoder.runningProcesses(binary: settings.binary, model: settings.model).isEmpty)
     }
+
+    /// The encoder's starts while the server holds 2,000 descriptors, in a process of their own (an exit test),
+    /// so that no other test's process holds them. Foundation's `Process.run()` read past glibc's readdir buffer
+    /// once its listing of /proc/self/fd held some 1,355 entries, and faulted where the buffer ended within 243
+    /// bytes of its heap's end (SpawnedProcess.swift): main's ci run 45643998324 crashed so, in
+    /// `versionLine(of:)`, with more than 2,332 open. Each round first uses up the heaps of the threads `Blocking`
+    /// runs work on, as a busy server's work does, so that a listing's buffer comes from a heap's end: through
+    /// `Process`, the child ended by SIGSEGV in its first rounds, every time. Then the child of the encoder's own
+    /// start holds none of the 2,000. Swift Testing turns the child's backtracer off unless SWIFT_BACKTRACE is set.
+    @Test func itStartsWhileTheServerHoldsThousandsOfDescriptors() async {
+        await #expect(processExitsWith: .success) {
+            // Past the 1,355 entries that fill glibc's 32 KB buffer, and none closed on exec, so a child that
+            // inherited them would hold them.
+            QueryEncoderTests.raiseDescriptorLimit(to: 4_096)
+            let held = (0..<2_000).map { _ in open("/dev/null", O_RDONLY) }
+            try #require(held.allSatisfy { $0 >= 0 })
+            let binary = try StandInEncoder.binary()
+            let version = "version: 0.0.0-stand-in (build 1, commit 5ea4d11)"
+            for _ in 0..<40 {
+                try await QueryEncoderTests.useUpBlockingHeaps(ways: 4)
+                let versions = await withTaskGroup(of: String?.self) { group in
+                    for _ in 0..<4 { group.addTask { await QueryEncoder.versionLine(of: binary) } }
+                    return await group.reduce(into: []) { $0.append($1) }
+                }
+                #expect(versions == Array(repeating: version, count: 4))
+            }
+            let directory = try TemporaryDirectory()
+            let encoder = QueryEncoder(settings: try StandInEncoder.settings(in: directory.url))
+            _ = try await encoder.embed("détente")
+            let pid = try #require(await encoder.report().pid)
+            // Its own are a few dozen, three for each of NIO's event loops, one a CPU; inherited, the 2,000
+            // would be among them.
+            let inherited = try FileManager.default.contentsOfDirectory(atPath: "/proc/\(pid)/fd").count
+            #expect(inherited < 1_000, "the encoder's child holds \(inherited) descriptors")
+            await encoder.shutdown()
+        }
+    }
+
+    /// Raises this process's soft limit of descriptors to `wanted`, where its hard limit allows.
+    static func raiseDescriptorLimit(to wanted: Int) {
+        var limit = rlimit()
+        guard getrlimit(Int32(RLIMIT_NOFILE.rawValue), &limit) == 0, limit.rlim_cur < rlim_t(wanted) else { return }
+        limit.rlim_cur = min(limit.rlim_max, rlim_t(wanted))
+        _ = setrlimit(Int32(RLIMIT_NOFILE.rawValue), &limit)
+    }
+
+    /// Uses up the heaps of the threads `Blocking` runs work on, `ways` at once: blocks of random sizes, kept,
+    /// 160 KB on each, so that the next large block one of them asks for comes from its heap's end, which glibc
+    /// grows a page at a time.
+    static func useUpBlockingHeaps(ways: Int) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<ways {
+                group.addTask {
+                    try await Blocking.run {
+                        var blocks: [Int] = []
+                        var taken = 0
+                        while taken < 160_000 {
+                            let size = Int.random(in: 16...16_384)
+                            guard let block = malloc(size) else { break }
+                            blocks.append(Int(bitPattern: block))
+                            taken += size
+                        }
+                        keptBlocks.withLock { $0.append(contentsOf: blocks) }
+                    }
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
+
+    /// The blocks `useUpBlockingHeaps(ways:)` keeps, their addresses held here so that no optimizer drops them.
+    static let keptBlocks = Mutex<[Int]>([])
 }
 
 /// The lines an encoder logs, kept for a test.
