@@ -81,10 +81,13 @@ final class HoldAt: IndexFileObserver {
     func untilReached(_ moment: IndexFileMoment) async { await gates[moment]?.untilReached() }
 
     func letGo(_ moment: IndexFileMoment) { gates[moment]?.open() }
+
+    /// Lets every hold go, so that nothing waits on after a test that failed.
+    func letGoOfAll() { gates.values.forEach { $0.open() } }
 }
 
-/// The orders in which the start's open of the index found there and a reset reach its file (S20d), each
-/// held in place by `HoldAt`, and once more unheld, as the server runs them.
+/// The orders in which the start's open of the index found there and a reset reach its file (S20d): one
+/// after the other, held in place by `HoldAt`, or racing, as the server runs them.
 enum StartAndReset: CaseIterable, Sendable {
     /// The reset runs whole before the open begins, which finds no file.
     case resetBeforeTheOpenBegins
@@ -112,12 +115,14 @@ enum StartAndReset: CaseIterable, Sendable {
 @Suite struct ImportCoordinatorTests {
     /// A reset while the start opens the index found there wins (S20d), in every order the two reach its
     /// file: nothing is served, and the server waits for an export, with no word of the open's failure.
-    @Test(arguments: StartAndReset.allCases)
+    @Test(.timeLimit(.minutes(2)), arguments: StartAndReset.allCases)
     func aResetWinsOverTheStartsOpen(_ order: StartAndReset) async throws {
         let held = HoldAt(order.holds)
+        defer { held.letGoOfAll() }
         let f = try WatchFixture(holding: order.holds.isEmpty ? nil : held)
         let (state, files) = (f.state, f.files)
         try SyntheticExport().write(to: files.liveIndex)
+        #expect(try CorpusIndex.open(files.liveIndex).summary.documents > 0, "the file opens: only the reset keeps it unserved")
         await state.prepareToOpenExistingIndex(files: files)
         let generation = await state.indexGeneration
         let reset: @Sendable () async throws -> Void = { _ = try await state.resetIndex(files: files, askedAt: generation) }

@@ -103,13 +103,13 @@ public actor ServerState: ImportObserver {
     public func openExistingIndex(files: any FileStore) async {
         defer { openingAtStart = false }
         let live = files.liveIndex
+        guard FileManager.default.fileExists(atPath: live.path) else { return }
         // A reset under way when the open begins has moved the generation the open would take, and is
         // removing the file it would read: it wins, as one that comes while the open reads does (S20d).
         guard resetsUnderWay == 0 else {
             log("Not serving \(live.path): the index is being reset")
             return
         }
-        guard FileManager.default.fileExists(atPath: live.path) else { return }
         openingAtStart = true
         let generation = indexGeneration
         await indexFileObserver?.reached(.openWillRead)
