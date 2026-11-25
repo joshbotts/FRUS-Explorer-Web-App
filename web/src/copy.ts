@@ -2591,11 +2591,14 @@ export const copy = {
     chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
   },
   /**
-   * Semantic Analytics (S28b), in the app's words: its title, the Mac's Zoom In, Zoom Out and Fit the Map, the map's
-   * loading and its refusals, the legend's one entry under the Regions lens, the regions' table and its columns, and the
-   * summary the app's list of the regions opens with. The lens's caption names the table where the app's names the map,
-   * whose names the web does not draw yet; the map's name, its controls' group, the keyboard's help, the zoom's status
-   * and the sentences for a browser without WebGL2 or whose WebGL2 fails are the web's own.
+   * Semantic Analytics (S28b, S28c), in the app's words: its title, the Mac's Zoom In, Zoom Out and Fit the Map, the map's
+   * loading and its refusals, the regions' table and its columns, and the summary the app's list of the regions opens
+   * with; since S28c the lens picker's Color by, the administration menu's item with no mapped volume, the map's caveat,
+   * a region's card and a point's (their titles, Dismiss, what a region is, the era caveat, Between regions, Open Document
+   * and that a volume is not here, a server's), the notice for a document with no place on the map, and the rail's On the
+   * Map. The lenses' names, keys and captions, the scope's sentence, a card's headline and era rows are the kit's, from
+   * the server. The map's name, its controls' group, the keyboard's help, the zoom's status, the region's documents and
+   * the sentences for a browser without WebGL2 or whose WebGL2 fails are the web's own.
    */
   semanticAnalytics: {
     title: 'Semantic Analytics',
@@ -2610,15 +2613,48 @@ export const copy = {
     controls: 'Map view',
     map: 'Semantic map',
     mapHelp:
-      'With the map focused, the arrow keys move across it, + and − zoom in and out, and 0 fits the whole map. With a pointer, drag to move it, and scroll, pinch or double-click to zoom.',
+      'With the map focused, Up and Down move between its regions, largest first, and Enter opens a region’s card, with its documents. Shift with an arrow key moves across the map, + and − zoom in and out, and 0 fits the whole map. With a pointer, click a region’s name or a point, drag to move the map, and scroll, pinch or double-click to zoom.',
     zoom: {
       whole: 'The whole map.',
       zoomedIn: (times: string) => `Zoomed in ${times} times.`,
       zoomedOut: (times: string) => `Zoomed out ${times} times.`,
       moved: 'Moved, at the whole map’s zoom.',
     },
-    betweenRegions: 'Between regions',
-    caption: 'Color separates neighboring regions rather than naming them; the names are in the table.',
+    // S28c: the lens picker, the administration menu, the map's caveat, the cards, the notice and the rail's tile.
+    colorBy: 'Color by',
+    administrationNone: (president: string) => `${president} — no mapped volumes`,
+    caveat: 'Layout preserves local similarity; distances between far regions are not meaningful.',
+    region: {
+      title: 'Region',
+      dismiss: 'Dismiss region',
+      dismissHelp: 'Closes this region’s card',
+      whatItIs:
+        'A region is a group the corpus fell into on its own — documents whose meaning an AI model detected to be alike, found by mathematical clustering rather than chosen by a human editor. Its name reflects the most distinctive words in a sample of those documents. It is NOT a subject heading, so read it as a hint at what the group is about rather than a claim about every document in it.',
+      eraCaveat: 'Era is the volume’s coverage midpoint, not each document’s own date.',
+      documents: 'Its documents',
+      documentsInScope: 'Its documents in the scope',
+      shown: (shown: number, total: number) =>
+        total === 1 ? 'The region’s one document.' : `${shown.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}, in the series’ order.`,
+      capped: (kept: number, total: number) =>
+        `The first ${kept.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} can be listed here.`,
+      more: 'Show More',
+      none: 'None of its documents is in the scope.',
+      show: (headline: string) => `Show on the map: ${headline}`,
+    },
+    point: {
+      dismiss: 'Dismiss',
+      betweenRegions: 'Between regions',
+      open: 'Open Document',
+      notServed: 'This volume is not on this server.',
+    },
+    notOnMap: {
+      title: 'This document has no place on the map',
+      detail: (volume: string) =>
+        `Chapter openers, front matter and appendix material were not included when the map was built, so ${volume} has no point to show. The rest of the series is here.`,
+      dismiss: 'Dismiss',
+    },
+    tile: 'On the Map',
+    tileHelp: 'Show where this document sits on the semantic map, among the documents whose language is most like it',
     summary: (regions: number, documents: number, between: number) =>
       `Semantic map: ${regions.toLocaleString('en-US')} regions covering ${documents.toLocaleString('en-US')} documents. ${between.toLocaleString('en-US')} more sit between regions and are not listed. Position shows similarity, not time — distances between far-apart regions are not meaningful.`,
     table: 'Semantic map regions',

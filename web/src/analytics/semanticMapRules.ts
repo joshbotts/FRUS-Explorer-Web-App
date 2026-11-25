@@ -1,52 +1,16 @@
-// The semantic map's rules (PLAN's S28b), pure. The palette, a region's slot in it and the ground it is drawn on are the
-// app's (`SemanticMapColouring`, `SemanticMapRenderer`), mirrored until S28a moves them into the kit and held to the
-// app's lines by SemanticMapMirrorParityTests; so are the camera (`SemanticMapCamera`), the zoom step of the Mac's ⌘+ and
-// ⌘− and its fit (`frameAll`). The pan by keyboard, the zoom about the pointer, the wheel's rate, the limits and the
-// words for the zoom are the web's own.
+// The semantic map's rules (PLAN's S28b, S28c), pure. The ground the points are drawn on and a point's size are the app's
+// renderer's (`SemanticMapRenderer`), and so are the camera (`SemanticMapCamera`), the zoom step of the Mac's ⌘+ and ⌘−
+// and its fit (`frameAll`), mirrored and held to the app's lines by SemanticMapMirrorParityTests. Since S28c each
+// lens's palette and each point's slot in it are the server's, the kit's (`SemanticMapColouring`), and so are the
+// names, the picks and the cards; what is mirrored here is what the app's view does with them: a pick's tolerance from
+// the view (`SemanticMapPicking.hit(at:)`, whose grid form the server runs), a click on a drawn name
+// (`regionLabel(at:size:)`) and a swatch's colour (`swatch(lens:slot:)`). The pan by keyboard, the zoom about the
+// pointer, the wheel's rate, the limits, the words for the zoom and the address are the web's own.
 
 export type Rgba = readonly [number, number, number, number];
 
 /** How many palette slots the renderer holds (`SemanticMapColouring.paletteSize`). */
 export const paletteSize = 16;
-
-/** The region a point between regions names (`SemanticMapArtifacts.unclustered`). */
-export const betweenRegions = 0xffff;
-
-/** A colour from hue, saturation and brightness, each 0 to 1, as the app makes its palette (`SemanticMapColouring.hsb`). */
-export function hsb(hue: number, saturation: number, brightness: number, alpha: number): Rgba {
-  const sector = (hue - Math.floor(hue)) * 6;
-  const fraction = sector - Math.floor(sector);
-  const p = brightness * (1 - saturation);
-  const q = brightness * (1 - saturation * fraction);
-  const t = brightness * (1 - saturation * (1 - fraction));
-  switch (Math.trunc(sector) % 6) {
-    case 0: return [brightness, t, p, alpha];
-    case 1: return [q, brightness, p, alpha];
-    case 2: return [p, brightness, t, alpha];
-    case 3: return [p, q, brightness, alpha];
-    case 4: return [t, p, brightness, alpha];
-    default: return [brightness, p, q, alpha];
-  }
-}
-
-/**
- * The Regions lens's palette (`SemanticMapColouring.palette(for: .cluster)`): slot 0 for the documents between regions,
- * dim, so that the regions read as figure and the space between them as ground; then an even sweep of hues, which the
- * regions cycle through, so that colour separates neighbouring regions rather than naming them.
- */
-export const regionPalette: readonly Rgba[] = [
-  [0.35, 0.37, 0.42, 0.3],
-  ...Array.from({ length: paletteSize - 1 }, (_, slot) => {
-    const index = slot + 1;
-    const hue = (index - 1) / (paletteSize - 1);
-    return hsb(hue, 0.55, 0.95, 0.72);
-  }),
-];
-
-/** A point's slot under the Regions lens (`SemanticMapColouring.indices(for: .cluster)`). */
-export function regionSlot(region: number): number {
-  return region === betweenRegions ? 0 : 1 + (region % (paletteSize - 1));
-}
 
 /** The map's ground (`SemanticMapRenderer.backgroundClearColor`), the same in either appearance, as the app's map is. */
 export const background: Rgba = [0.06, 0.07, 0.09, 1];
@@ -58,6 +22,17 @@ export const pointSize = 2;
 export function onGround(colour: Rgba): string {
   const channel = (index: 0 | 1 | 2) => Math.round(255 * (colour[index] * colour[3] + background[index] * (1 - colour[3])));
   return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
+}
+
+/**
+ * A key's swatch (`swatch(lens:slot:)`): the slot's colour, opaque, since a swatch is read against the key rather than
+ * among overlapping points; and none for a slot the palette has not.
+ */
+export function swatchColour(palette: readonly Rgba[], slot: number): string | undefined {
+  const colour = palette[slot];
+  if (!colour) return undefined;
+  const channel = (value: number) => Math.round(255 * Math.min(1, Math.max(0, value)));
+  return `rgb(${channel(colour[0])}, ${channel(colour[1])}, ${channel(colour[2])})`;
 }
 
 // ─── The camera ─────────────────────────────────────────────────────────────
@@ -193,4 +168,101 @@ export function zoomWords(
 export function wheelZoom(deltaY: number, deltaMode: number): number {
   const pixels = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
   return Math.exp(-pixels * 0.002);
+}
+
+// ─── Picks and names ────────────────────────────────────────────────────────
+
+/** How far a click may miss a point and still pick it, in CSS pixels (`SemanticMapPicking.tapRadius`). */
+export const tapRadius = 22;
+
+/** How near a drawn name a click counts as hitting it, in CSS pixels: the picker's own radius (`regionTapRadius`). */
+export const regionTapRadius = 22;
+
+/**
+ * A pick's tolerance in grid units for a view (`SemanticMapPicking.hit(at:)`): the click's radius through the scale the
+ * projection uses, the larger of the two axes' grid units a pixel, so that the reach is never tighter than it looks in
+ * the narrower axis.
+ */
+export function pickTolerance(camera: MapCamera, size: ViewSize, radius = tapRadius): number {
+  if (size.width <= 0 || size.height <= 0) return 0;
+  const [scaleX, scaleY] = cameraScale(camera, size.width / size.height);
+  const gridPerPointX = (scaleX * 2) / size.width;
+  const gridPerPointY = (scaleY * 2) / size.height;
+  return radius * Math.max(gridPerPointX, gridPerPointY);
+}
+
+/** A point of the view: where a name is drawn, in CSS pixels from the view's top left. */
+export interface ViewPlace {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * The drawn name a click at `x`, `y` lands on (`regionLabel(at:size:)`): the first, in the layout's order, whose middle
+ * is within the click's reach. The reader aims at the word they can see, so it is its laid-out place that is measured,
+ * not its region's centre.
+ */
+export function labelAt<T extends ViewPlace>(labels: readonly T[], x: number, y: number): T | undefined {
+  return labels.find((label) => Math.hypot(label.x - x, label.y - y) <= regionTapRadius);
+}
+
+/** A view: its camera and its size. */
+export interface MapView {
+  readonly camera: MapCamera;
+  readonly size: ViewSize;
+}
+
+/**
+ * Where a name laid out for one view is drawn in another: the grid point under it carried through the second view's
+ * camera, so that while the names for a moved view are asked for, the last ones move with the map.
+ */
+export function carried(place: ViewPlace, from: MapView, to: MapView): [number, number] {
+  return viewPoint(to.camera, to.size, gridPoint(from.camera, from.size, place.x, place.y));
+}
+
+/** A camera from the server's answer, kept within the limits (`SemanticMapReveal`'s landing). */
+export function cameraFrom(answer: { x: number; y: number; halfExtent: number }, gridExtent: number): MapCamera {
+  return clampCamera({ centre: [answer.x, answer.y], halfExtent: answer.halfExtent }, gridExtent);
+}
+
+// ─── The address ────────────────────────────────────────────────────────────
+
+/**
+ * Semantic Analytics' address, the kit's `SemanticMapRequest` in an address's terms: the lens; the scope, as Archival
+ * Analytics names one (the scope menu's, or a presidency); and the document a link reveals (`focusDocumentKey`) or the
+ * region it focuses (`focusClusterID`), with the layout it was named in (`focusClusterDigest`).
+ */
+export interface SemanticSearch {
+  lens?: string;
+  subseries?: string;
+  volume?: string;
+  topic?: string;
+  subtopic?: string;
+  volumes?: string[];
+  scopeLabel?: string;
+  administration?: string;
+  document?: string;
+  region?: number;
+  layout?: string;
+}
+
+function text(value: unknown): string | undefined {
+  const single = Array.isArray(value) ? value[0] : value;
+  return typeof single === 'string' && single !== '' ? single : typeof single === 'number' ? String(single) : undefined;
+}
+
+/** The address's fields, each checked; what does not fit is dropped. */
+export function validateSemanticSearch(raw: Record<string, unknown>): SemanticSearch {
+  const search: SemanticSearch = {};
+  for (const key of ['lens', 'subseries', 'volume', 'topic', 'subtopic', 'scopeLabel', 'administration', 'document', 'layout'] as const) {
+    const value = text(raw[key]);
+    if (value !== undefined) search[key] = value;
+  }
+  const volumes = (Array.isArray(raw.volumes) ? raw.volumes : raw.volumes === undefined ? [] : [raw.volumes])
+    .filter((value): value is string => typeof value === 'string' && value !== '');
+  if (volumes.length > 0) search.volumes = volumes;
+  // A region by its id alone, in its canonical spelling: an id is a whole number of the layout it was named in.
+  const region = text(raw.region);
+  if (region !== undefined && /^(0|[1-9]\d{0,4})$/.test(region)) search.region = Number(region);
+  return search;
 }

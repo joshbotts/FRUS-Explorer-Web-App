@@ -453,6 +453,10 @@ export function ReaderScreen() {
             <Link to="/related/$volumeId/$documentId" params={{ volumeId, documentId }} title={copy.related.tileHelp}>
               {copy.related.tile}
             </Link>
+            {/* The rail's On the Map tile (S28c), after Related as the app's: the semantic map, revealing this document. */}
+            <Link to="/analytics/semantic" search={{ document: `${volumeId}/${documentId}` }} title={copy.semanticAnalytics.tileHelp}>
+              {copy.semanticAnalytics.tile}
+            </Link>
             {keepsUserData && (
               <button
                 ref={researchToggle}

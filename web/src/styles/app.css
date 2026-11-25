@@ -2761,9 +2761,75 @@ dialog.cross-volume {
   cursor: grabbing;
 }
 
-.semantic-map-frame:focus-visible {
+/* The keyboard's list of the regions (S28c): over the canvas, which takes the pointer, ringed when it has the focus; its
+   options are read, not seen, and the region they name is ringed on the map. */
+.semantic-map-keys {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+.semantic-map-keys:focus-visible {
   outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.semantic-map-option {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The regions' names over the points (S28c), in the app's white with its two shadows, each at its middle; a click is the
+   frame's, which finds the name it lands on. */
+.semantic-map-names {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.semantic-map-name {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 0 0.125rem;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9), 0 0 5px rgba(0, 0, 0, 0.6);
+  forced-color-adjust: none;
+}
+
+.semantic-map-name.is-active {
+  outline: 2px solid #fff;
   outline-offset: 2px;
+}
+
+/* The ring on the point a card shows (`selectionMarker`), and on the keyboard's region where no name of it is drawn. */
+.semantic-map-marker,
+.semantic-map-ring {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+  forced-color-adjust: none;
+}
+
+.semantic-map-ring {
+  width: 28px;
+  height: 28px;
+  border-style: dashed;
 }
 
 .semantic-map-canvas {
@@ -2821,6 +2887,135 @@ dialog.cross-volume {
 
 .semantic-regions-summary {
   margin-bottom: 0.5rem;
+}
+
+/* The scope's sentence (S28c), in the warning's colour when the scope holds no mapped document, as the app's. */
+.semantic-scope-summary {
+  margin: 0 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.semantic-scope-summary.is-empty {
+  color: var(--warning);
+}
+
+.semantic-map-caveat {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+/* A region's card and a point's (S28c), under the map, side by side where there is room. */
+.semantic-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.semantic-cards:empty {
+  display: none;
+}
+
+.semantic-card {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.semantic-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.semantic-card h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.semantic-card h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.875rem;
+}
+
+.semantic-card-dismiss {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.semantic-card p {
+  margin: 0.25rem 0 0;
+}
+
+.semantic-card-name {
+  font-weight: 500;
+}
+
+.semantic-card-count,
+.semantic-card-region,
+.semantic-card-ids,
+.semantic-card-note {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.semantic-card-ids {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.semantic-card-absent {
+  color: var(--warning);
+  font-size: 0.875rem;
+}
+
+.semantic-card .button {
+  display: inline-block;
+  margin-top: 0.5rem;
+}
+
+.semantic-card-eras {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+.semantic-card-eras div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.semantic-card-eras dt {
+  font-weight: normal;
+}
+
+.semantic-card-eras dd {
+  margin: 0;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.semantic-card-documents {
+  max-height: 20rem;
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+  overflow-y: auto;
+  font-size: 0.875rem;
+}
+
+.semantic-card-documents li {
+  margin: 0.25rem 0;
+}
+
+.semantic-card-documents .link-button {
+  text-align: left;
 }
 
 .semantic-regions .analytics-table {
