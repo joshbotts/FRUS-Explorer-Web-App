@@ -2634,7 +2634,7 @@ export const copy = {
       documents: 'Its documents',
       documentsInScope: 'Its documents in the scope',
       shown: (shown: number, total: number) =>
-        total === 1 ? 'The region’s one document.' : `${shown.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}, in the series’ order.`,
+        total === 1 ? 'Its one document.' : `${shown.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}, in their volumes’ order.`,
       capped: (kept: number, total: number) =>
         `The first ${kept.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} can be listed here.`,
       more: 'Show More',

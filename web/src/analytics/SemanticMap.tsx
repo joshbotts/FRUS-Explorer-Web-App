@@ -12,7 +12,7 @@
 // it by the Mac's step and 0 fits it, and Escape closes the card the page shows. The canvas and the names are hidden
 // from screen readers, as the app's are: the list box is their map, and the zoom is said in a status line.
 import { useQuery } from '@tanstack/react-query';
-import { type KeyboardEvent, type MouseEvent, type PointerEvent, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import {
   type SemanticMapListedRegion,
   type SemanticMapScopeAsk,
@@ -81,6 +81,7 @@ export function SemanticMap({
   onPick,
   onEscape,
   onUnavailable,
+  keysRef,
 }: {
   /** The server's answer: six bytes a point. */
   points: ArrayBuffer;
@@ -110,6 +111,8 @@ export function SemanticMap({
   onEscape: () => boolean;
   /** The browser could not draw the map after all: its WebGL2 failed, with why. */
   onUnavailable: (reason: string) => void;
+  /** The list box, the canvas's one stop, where the page sends the keyboard back when a card closes. */
+  keysRef?: RefObject<HTMLDivElement | null>;
 }) {
   const helpId = useId();
   const prefix = useId();
@@ -497,6 +500,7 @@ export function SemanticMap({
           {markerAt && <span className="semantic-map-marker" style={{ left: `${markerAt[0]}px`, top: `${markerAt[1]}px` }} />}
         </div>
         <div
+          ref={keysRef}
           role="listbox"
           tabIndex={0}
           className="semantic-map-keys"

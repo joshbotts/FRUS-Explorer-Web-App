@@ -105,8 +105,8 @@ const card: SemanticMapRegionCard = {
   name: 'berlin soviet access',
   countSummary: '3 documents in the series',
   eraRows: [{ label: '1945–1990', count: '3' }],
-  total: 3,
-  kept: 3,
+  total: 2,
+  kept: 2,
   offset: 0,
   documents: [
     { volumeId: 'frus1961-63v06', documentId: 'd1', headline: point.headline, title: point.title, served: true },
@@ -253,8 +253,31 @@ describe('Semantic Analytics', () => {
         'Chapter openers, front matter and appendix material were not included when the map was built, so Foreign Relations, 1961–1963, Volume VI has no point to show. The rest of the series is here.',
       ),
     ).toBeTruthy();
+    // Said in a region that was there before it.
+    expect(screen.getAllByRole('status').some((status) => status.textContent === 'This document has no place on the map')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('heading', { level: 2, name: 'This document has no place on the map' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('listbox', { name: 'Semantic map' }));
+  });
+
+  it('drops a point’s card when the scope changes, and does not bring it back with the scope', async () => {
+    drawing();
+    serve({ '/api/v1/semantic/map/request': { lens: 'cluster', reveal: { key: 'frus1961-63v06/d1', revealed: true, point, camera: { x: 120, y: 210, halfExtent: 900 }, volumeTitle: 'x' } } });
+    renderAt('/analytics/semantic?document=frus1961-63v06%2Fd1');
+    expect(await screen.findByRole('heading', { level: 2, name: point.headline })).toBeTruthy();
+    const scope = screen.getByRole('combobox', { name: 'Analysis scope' });
+    fireEvent.change(scope, { target: { value: 'administration:nixon' } });
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 2, name: point.headline })).toBeNull());
+    fireEvent.change(scope, { target: { value: 'whole' } });
+    await waitFor(() => expect((scope as HTMLSelectElement).value).toBe('whole'));
+    expect(screen.queryByRole('heading', { level: 2, name: point.headline })).toBeNull();
+  });
+
+  it('says why when the lenses cannot be read, rather than waiting for them', async () => {
+    drawing();
+    serve({ '/api/v1/semantic/map/reading': new ProblemAnswer(503, 'SEMANTIC_MAP_UNAVAILABLE', 'The semantic map could not be read: a test.') });
+    renderAt('/analytics/semantic');
+    expect(await screen.findByText('The semantic map could not be read: a test.')).toBeTruthy();
   });
 
   it('opens a region’s card from the keyboard’s list, and shows one of its documents’ points', async () => {
@@ -278,11 +301,46 @@ describe('Semantic Analytics', () => {
     const regionAsk = server.mock.calls.map(([url]) => new URL(url, 'http://localhost')).find((url) => url.pathname === '/api/v1/semantic/map/regions/1');
     expect(regionAsk?.searchParams.get('layout')).toBe(regions.layoutIdentity);
     // Its documents: the server's headings where it serves them, each showing its point and its card.
-    fireEvent.click(within(region).getByRole('button', { name: `Show on the map: ${point.title}` }));
+    const shower = within(region).getByRole('button', { name: `Show on the map: ${point.title}` });
+    fireEvent.click(shower);
     const heading = await screen.findByRole('heading', { level: 2, name: point.headline });
     await waitFor(() => expect(document.activeElement).toBe(heading));
     expect(within(region).getByRole('button', { name: 'Show on the map: Foreign Relations, 1969–1976, Volume XII · d45' })).toBeTruthy();
+    expect(within(region).getByText('2 of 2, in their volumes’ order.')).toBeTruthy();
+    expect(within(region).queryByRole('button', { name: 'Show More' })).toBeNull();
+    // Closing the point's card sends the keyboard back to the document that showed it, and the region's to the map.
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('heading', { level: 2, name: point.headline })).toBeNull();
+    expect(document.activeElement).toBe(shower);
     fireEvent.click(within(region).getByRole('button', { name: 'Dismiss region' }));
     expect(screen.queryByRole('region', { name: 'Region' })).toBeNull();
+    expect(document.activeElement).toBe(keys);
+  });
+
+  it('lists a region’s documents a page at a time, through the capture, and says where the capture stops', async () => {
+    drawing();
+    const many = (offset: number, count: number) =>
+      Array.from({ length: count }, (_, at) => ({ volumeId: 'frus1969-76v12', documentId: `d${offset + at + 1}`, headline: `Volume XII · d${offset + at + 1}`, served: false }));
+    const server = serve({
+      '/api/v1/semantic/map/regions/1': (url: URL) => {
+        const offset = Number(url.searchParams.get('offset'));
+        return { ...card, total: 9_000, kept: 60, offset, documents: many(offset, Math.min(50, 60 - offset)) };
+      },
+    });
+    renderAt('/analytics/semantic');
+    const keys = await screen.findByRole('listbox', { name: 'Semantic map' });
+    fireEvent.focus(keys);
+    fireEvent.keyDown(keys, { key: 'Enter' });
+    const region = await screen.findByRole('region', { name: 'Region' });
+    expect(await within(region).findByText('50 of 9,000, in their volumes’ order.')).toBeTruthy();
+    fireEvent.click(within(region).getByRole('button', { name: 'Show More' }));
+    expect(await within(region).findByText('60 of 9,000, in their volumes’ order. The first 60 of 9,000 can be listed here.')).toBeTruthy();
+    expect(within(region).queryByRole('button', { name: 'Show More' })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(region).getByRole('button', { name: 'Show on the map: Volume XII · d51' })));
+    const offsets = server.mock.calls
+      .map(([url]) => new URL(url, 'http://localhost'))
+      .filter((url) => url.pathname === '/api/v1/semantic/map/regions/1')
+      .map((url) => `${url.searchParams.get('offset')}+${url.searchParams.get('limit')}`);
+    expect(offsets).toEqual(['0+50', '50+50']);
   });
 });

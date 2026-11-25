@@ -4,18 +4,14 @@
 // on the map; and a point's card, its headline, its ids, its heading where the server serves it, its region or Between
 // regions, and Open Document, or that its volume is not on this server. And the notice for a document a link names that
 // has no place on the map. Every count, name and row is the server's, the kit's.
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type Ref, useId, useState } from 'react';
+import { type Ref, useEffect, useId, useRef } from 'react';
 import { errorMessage } from '../api/client';
-import { type SemanticMapPoint, type SemanticMapScopeAsk, semanticMapRegionQuery } from '../api/semanticMap';
+import { type SemanticMapPoint, type SemanticMapScopeAsk, semanticMapRegionPages } from '../api/semanticMap';
 import { copy } from '../copy';
 
 const words = copy.semanticAnalytics;
-
-/** How many of a region's documents a card lists at first, and how many more each Show More adds, to the server's most. */
-const page = 25;
-const most = 200;
 
 /** A region's card, with its documents in the scope, a page at a time. */
 export function RegionCard({
@@ -36,9 +32,25 @@ export function RegionCard({
 }) {
   const heading = useId();
   const listHeading = useId();
-  const [limit, setLimit] = useState(page);
-  const card = useQuery(semanticMapRegionQuery(region, layout, scope, limit));
-  const answer = card.data?.id === region ? card.data : undefined;
+  const list = useRef<HTMLUListElement>(null);
+  const card = useInfiniteQuery(semanticMapRegionPages(region, layout, scope));
+  const pages = card.data?.pages ?? [];
+  const answer = pages[0]?.id === region ? pages[0] : undefined;
+  const documents = pages.flatMap((each) => each.documents);
+
+  // Show More keeps its place while the page comes, and then the keyboard goes on to the first document it added.
+  const focusFrom = useRef<number | undefined>(undefined);
+  function more() {
+    if (card.isFetchingNextPage) return;
+    focusFrom.current = documents.length;
+    void card.fetchNextPage();
+  }
+  useEffect(() => {
+    const from = focusFrom.current;
+    if (from === undefined || documents.length <= from) return;
+    focusFrom.current = undefined;
+    list.current?.querySelectorAll<HTMLButtonElement>('button[data-key]')[from]?.focus();
+  }, [documents.length]);
   return (
     <section className="semantic-card" aria-labelledby={heading}>
       <div className="semantic-card-head">
@@ -48,7 +60,7 @@ export function RegionCard({
           ×
         </button>
       </div>
-      {card.error ? (
+      {card.error && !answer ? (
         <p className="analytics-alert" role="alert">{errorMessage(card.error)}</p>
       ) : !answer ? (
         <p className="analytics-loading" role="status">{words.loading}</p>
@@ -72,15 +84,15 @@ export function RegionCard({
           ) : (
             <>
               <p className="semantic-card-note">
-                {words.region.shown(answer.documents.length, answer.total)}
-                {answer.kept < answer.total && answer.documents.length >= answer.kept ? ` ${words.region.capped(answer.kept, answer.total)}` : ''}
+                {words.region.shown(documents.length, answer.total)}
+                {!card.hasNextPage && answer.kept < answer.total ? ` ${words.region.capped(answer.kept, answer.total)}` : ''}
               </p>
-              <ul className="semantic-card-documents" aria-labelledby={listHeading}>
-                {answer.documents.map((document) => {
+              <ul ref={list} className="semantic-card-documents" aria-labelledby={listHeading}>
+                {documents.map((document) => {
                   const key = `${document.volumeId}/${document.documentId}`;
                   return (
                     <li key={key}>
-                      <button type="button" className="link-button" onClick={() => onShow(key)}
+                      <button type="button" className="link-button" data-key={key} onClick={() => onShow(key)}
                               aria-label={words.region.show(document.title ?? document.headline)}>
                         {document.title ?? document.headline}
                       </button>
@@ -89,8 +101,9 @@ export function RegionCard({
                   );
                 })}
               </ul>
-              {answer.documents.length < Math.min(answer.kept, most) && (
-                <button type="button" disabled={card.isFetching} onClick={() => setLimit((shown) => Math.min(most, shown + page))}>
+              {card.error && pages.length > 0 && <p className="analytics-alert" role="alert">{errorMessage(card.error)}</p>}
+              {card.hasNextPage && (
+                <button type="button" aria-disabled={card.isFetchingNextPage} onClick={more}>
                   {words.region.more}
                 </button>
               )}
@@ -139,7 +152,7 @@ export function PointCard({
 export function NotOnMap({ volumeTitle, onDismiss }: { volumeTitle: string; onDismiss: () => void }) {
   const heading = useId();
   return (
-    <section className="semantic-card semantic-card-notice" aria-labelledby={heading} role="status">
+    <section className="semantic-card semantic-card-notice" aria-labelledby={heading}>
       <div className="semantic-card-head">
         <h2 id={heading}>{words.notOnMap.title}</h2>
         <button type="button" className="semantic-card-dismiss" aria-label={words.notOnMap.dismiss} onClick={onDismiss}>

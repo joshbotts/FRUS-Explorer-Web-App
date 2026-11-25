@@ -117,14 +117,17 @@ test('opens the map from a document’s rail, revealing it, and a link that name
   await expect(page.getByRole('region', { name: 'Region', exact: true }).getByText('edc nato nuclear', { exact: true })).toBeVisible();
   await expect(page.getByRole('listbox', { name: 'Semantic map' }).getByRole('option', { selected: true })).toHaveText(/^edc nato nuclear, region/);
   await axeCheck(page);
+  // The request is answered before the map is read for it, so that a focus landing late would be seen.
+  const refused = page.waitForResponse((response) => response.url().includes('/api/v1/semantic/map/request') && response.url().includes('region=115'));
   await page.goto('analytics/semantic?region=115&layout=00000000%3A2026-01-01%3A1');
+  expect(((await (await refused).json()) as { focus?: { focused: boolean } }).focus?.focused).toBe(false);
   await drawn(page, '1.000 0 0');
   await expect(page.getByRole('region', { name: 'Region', exact: true })).toHaveCount(0);
 
   // A document the map has no point for: a chapter's opening.
   await page.goto('analytics/semantic?document=frus1961-63v06%2Fch1');
   await drawn(page, '1.000 0 0');
-  const notice = page.getByRole('status', { name: 'This document has no place on the map' });
+  const notice = page.getByRole('region', { name: 'This document has no place on the map' });
   await expect(notice.getByText(/^Chapter openers, front matter and appendix material were not included when the map was built, so .+ has no point to show\. The rest of the series is here\.$/)).toBeVisible();
   await axeCheck(page);
 });

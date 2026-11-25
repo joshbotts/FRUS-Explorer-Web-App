@@ -107,15 +107,10 @@ function scopeSearch(value: string, groups: ScopeGroup[]): Partial<SemanticSearc
   return { ...cleared, ...scopeFields(option.scope) };
 }
 
-/**
- * What the page shows beside the map: a region's card, a point's, or the notice for a document with no place; a point's
- * under the scope it was found in, since a scope drops the card of a point it may ghost, as the app's `setScope` drops
- * its selection.
- */
+/** What the page shows beside the map: a region's card, a point's, and the notice for a document with no place. */
 interface Cards {
   region?: number;
   point?: SemanticMapPoint;
-  pointScope?: string;
   notOnMap?: string;
 }
 
@@ -157,11 +152,28 @@ export function SemanticAnalyticsScreen() {
   const ghost = scope === undefined ? { key: 'whole' } : flags.data ? { key: flags.data.key, flags: flags.data.flags } : { key: 'whole' };
 
   const [cards, setCards] = useState<Cards>({});
+  // A scope drops the point's card and the notice, which may name a document it ghosts, as the app's `setScope` drops its
+  // selection; the region's card stays, its counts the scope's. The cards adjusted as the page draws, not after.
+  const [cardsScope, setCardsScope] = useState(chosen);
+  if (cardsScope !== chosen) {
+    setCardsScope(chosen);
+    setCards((current) => ({ region: current.region }));
+  }
+  const point = cards.point;
   const [focus, setFocus] = useState<MapFocus | undefined>(undefined);
   const focusSerial = useRef(0);
   const pointHeading = useRef<HTMLHeadingElement>(null);
+  const keysRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef<HTMLDivElement>(null);
   const wantsPointFocus = useRef(false);
-  const point = cards.point && cards.pointScope === chosen ? cards.point : undefined;
+  // The document whose button in a region's card showed the point, where the keyboard goes back to when its card closes.
+  const returnTo = useRef<string | undefined>(undefined);
+  // Only the latest pick or show lands, and only under the scope it was asked in: a late answer is let go.
+  const askSerial = useRef(0);
+  const latestScope = useRef(chosen);
+  useEffect(() => {
+    latestScope.current = chosen;
+  }, [chosen]);
   const scopeId = useId();
   const lensId = useId();
   const layout = answer?.layoutIdentity ?? reading.data?.layoutIdentity ?? '';
@@ -179,12 +191,17 @@ export function SemanticAnalyticsScreen() {
   const asked = search.document !== undefined || search.region !== undefined;
   const requestKey = `${search.document ?? ''}|${search.region ?? ''}|${search.layout ?? ''}`;
   const applyRequest = useEffectEvent((data: Awaited<ReturnType<typeof semanticMapRequest>>) => {
+    // A link's request goes before a pick still on its way.
+    askSerial.current += 1;
+    returnTo.current = undefined;
     if (data.reveal) {
       if (data.reveal.revealed && data.reveal.point) {
-        setCards({ point: data.reveal.point, pointScope: chosen });
+        setCards({ point: data.reveal.point });
         bring(data.reveal.camera);
       } else {
-        setCards({ notOnMap: data.reveal.volumeTitle });
+        // A reveal that fails leaves the cards the reader has, as the app's leaves its region's card.
+        const volumeTitle = data.reveal.volumeTitle;
+        setCards((current) => ({ ...current, notOnMap: volumeTitle }));
       }
     } else if (data.focus?.focused) {
       setCards({ region: data.focus.region });
@@ -204,7 +221,9 @@ export function SemanticAnalyticsScreen() {
 
   // A point shown from a region's card takes the focus, so that the keyboard is on its card.
   useEffect(() => {
-    if (point && wantsPointFocus.current) {
+    if (!point) {
+      wantsPointFocus.current = false;
+    } else if (wantsPointFocus.current) {
       wantsPointFocus.current = false;
       pointHeading.current?.focus();
     }
@@ -215,23 +234,31 @@ export function SemanticAnalyticsScreen() {
   }
 
   async function pick(grid: [number, number], tolerance: number) {
+    const serial = ++askSerial.current;
+    const asked = chosen;
     try {
       const found = await semanticMapPick(grid[0], grid[1], tolerance, scope);
-      // A point's card replaces a region's, as the app's tap swaps them; a pick that finds nothing clears the point's card,
-      // as a tap on empty map does, and leaves a region's.
-      setCards((current) => (found ? { point: found, pointScope: chosen } : { region: current.region }));
+      if (serial !== askSerial.current || asked !== latestScope.current) return;
+      returnTo.current = undefined;
+      // A point's card stands beside a region's, as the app's tap leaves its region's card (`select(at:)`); a pick that
+      // finds nothing clears the point's card, as a tap on empty map does, and leaves a region's.
+      setCards((current) => (found ? { region: current.region, point: found } : { region: current.region }));
     } catch (error) {
       console.warn(`Semantic map: ${errorMessage(error)}`);
     }
   }
 
   async function show(key: string) {
+    const serial = ++askSerial.current;
+    const asked = chosen;
     try {
       const shown = await semanticMapReveal(key, scope);
+      if (serial !== askSerial.current || asked !== latestScope.current) return;
       const reveal = shown.reveal;
       if (reveal?.revealed && reveal.point) {
+        returnTo.current = key;
         wantsPointFocus.current = true;
-        setCards((current) => ({ region: current.region, point: reveal.point, pointScope: chosen }));
+        setCards((current) => ({ region: current.region, point: reveal.point }));
         bring(reveal.camera);
       } else if (reveal) {
         setCards((current) => ({ region: current.region, notOnMap: reveal.volumeTitle }));
@@ -241,8 +268,33 @@ export function SemanticAnalyticsScreen() {
     }
   }
 
+  /** The keyboard's way back when a card closes: the document that showed the point, or the map's list box. */
+  function returnFocus(toDocument: boolean) {
+    const key = toDocument ? returnTo.current : undefined;
+    returnTo.current = undefined;
+    const button = key ? [...(cardsRef.current?.querySelectorAll<HTMLButtonElement>('button[data-key]') ?? [])].find((each) => each.dataset.key === key) : undefined;
+    (button ?? keysRef.current)?.focus();
+  }
+
+  function dismissPoint() {
+    returnFocus(true);
+    setCards((current) => ({ region: current.region }));
+  }
+
+  function dismissRegion() {
+    returnFocus(false);
+    setCards((current) => ({ point: current.point, notOnMap: current.notOnMap }));
+  }
+
+  function dismissNotice() {
+    returnFocus(false);
+    setCards((current) => ({ region: current.region, point: current.point }));
+  }
+
+  // Escape in the map's list box closes the point's card or the notice, then the region's; the focus stays in the list.
   function escape(): boolean {
     if (point || cards.notOnMap !== undefined) {
+      returnTo.current = undefined;
       setCards((current) => ({ region: current.region }));
       return true;
     }
@@ -317,8 +369,8 @@ export function SemanticAnalyticsScreen() {
             <div className="semantic-map-column">
               {!drawable ? (
                 <p className="semantic-map-unavailable">{webGL2 ? words.failed : words.noWebGL2}</p>
-              ) : points.error || slots.error ? (
-                <Empty title={words.unavailableTitle} detail={errorMessage(points.error ?? slots.error)} />
+              ) : points.error || slots.error || reading.error ? (
+                <Empty title={words.unavailableTitle} detail={errorMessage(points.error ?? slots.error ?? reading.error)} />
               ) : !points.data || !drawn || !drawnLens ? (
                 <p className="analytics-loading" role="status">
                   {words.loading}
@@ -340,20 +392,24 @@ export function SemanticAnalyticsScreen() {
                   selectedRegion={cards.region}
                   marker={point ? [point.x, point.y] : undefined}
                   focus={focus}
-                  onRegion={(id) => setCards({ region: id })}
+                  onRegion={(id) => {
+                    returnTo.current = undefined;
+                    setCards({ region: id });
+                  }}
+                  keysRef={keysRef}
                   onPick={(grid, tolerance) => void pick(grid, tolerance)}
                   onEscape={escape}
                   onUnavailable={unavailable}
                 />
               )}
+              {/* Said when it appears, in a region of its own that is there before it. */}
+              <p className="visually-hidden" role="status">
+                {cards.notOnMap !== undefined && !point ? words.notOnMap.title : ''}
+              </p>
               {drawable && whole && (
-                <div className="semantic-cards">
-                  {cards.notOnMap !== undefined && !point && (
-                    <NotOnMap volumeTitle={cards.notOnMap} onDismiss={() => setCards((current) => ({ region: current.region }))} />
-                  )}
-                  {point && (
-                    <PointCard point={point} headingRef={pointHeading} onDismiss={() => setCards((current) => ({ region: current.region }))} />
-                  )}
+                <div className="semantic-cards" ref={cardsRef}>
+                  {cards.notOnMap !== undefined && !point && <NotOnMap volumeTitle={cards.notOnMap} onDismiss={dismissNotice} />}
+                  {point && <PointCard point={point} headingRef={pointHeading} onDismiss={dismissPoint} />}
                   {cards.region !== undefined && (
                     <RegionCard
                       key={`${cards.region}|${chosen}`}
@@ -361,7 +417,7 @@ export function SemanticAnalyticsScreen() {
                       layout={layout}
                       scope={scope}
                       scoped={scope !== undefined}
-                      onDismiss={() => setCards((current) => ({ point: current.point, pointScope: current.pointScope, notOnMap: current.notOnMap }))}
+                      onDismiss={dismissRegion}
                       onShow={(key) => void show(key)}
                     />
                   )}

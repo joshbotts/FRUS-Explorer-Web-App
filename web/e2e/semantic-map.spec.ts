@@ -100,6 +100,7 @@ test('opens the map from the Analytics menu, zooms and pans it by keyboard, fits
   // the canvas's box, and with its names laid out for its view, the region the list is on ringed.
   await tabTo(page, keys);
   await expect(map).toHaveAttribute('data-names', 'laid-out');
+  await expect(page.locator('.semantic-map-name.is-active, .semantic-map-ring')).toHaveCount(1);
   const canvas = map.locator('canvas');
   const whole = await canvas.screenshot();
   const share = await drawnShare(page, whole);

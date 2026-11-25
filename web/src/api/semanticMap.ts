@@ -1,7 +1,7 @@
 // The semantic map (PLAN's S28b): the bundled map's 314,616 points, one binary answer of six bytes a point, and its 140
 // regions, read on the server through SemanticVectorsKit and refused there, both alike, when the map's files and the
 // bundled vectors disagree. Neither changes while the server runs, so each is fetched once a session.
-import { keepPreviousData, queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { ArchivalScope } from './archivalAnalytics';
 import { servedPath } from './base';
 import { ApiError, getJSON } from './client';
@@ -296,15 +296,27 @@ export function semanticMapReveal(key: string, scope: SemanticMapScopeAsk): Prom
   return semanticMapRequest({ scope, document: key });
 }
 
-export function semanticMapRegionQuery(region: number, layout: string, scope: SemanticMapScopeAsk, limit: number) {
+/** How many of a region's documents a page of its card lists. */
+export const regionPage = 50;
+
+/** A region's card, a page of its documents at a time, from the first: each page the next `regionPage`, to the capture's most. */
+export function semanticMapRegionPages(region: number, layout: string, scope: SemanticMapScopeAsk) {
   const params = scopeParams(scope);
   params.set('layout', layout);
-  params.set('limit', String(limit));
-  return queryOptions({
+  return infiniteQueryOptions({
     queryKey: ['semanticMap', 'region', region, params.toString()],
-    queryFn: ({ signal }) => getJSON<SemanticMapRegionCard>(`/api/v1/semantic/map/regions/${region}`, params, signal),
+    queryFn: ({ signal, pageParam }) => {
+      const page = new URLSearchParams(params);
+      page.set('offset', String(pageParam));
+      page.set('limit', String(regionPage));
+      return getJSON<SemanticMapRegionCard>(`/api/v1/semantic/map/regions/${region}`, page, signal);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (last: SemanticMapRegionCard) => {
+      const next = last.offset + last.documents.length;
+      return last.documents.length > 0 && next < last.kept ? next : undefined;
+    },
     staleTime: Infinity,
     retry: false,
-    placeholderData: keepPreviousData,
   });
 }
