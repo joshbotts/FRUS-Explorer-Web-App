@@ -82,6 +82,8 @@ In the whole-target runs the runner set aside also failed QueryEncoderTests, whi
 
 **CI's swift job,** `scripts/swift --postgres test` at the default width of 20, ran 5,581 tests in 21 targets, all passing: in 443 s at `0ccfd26` and 433 s at `3be63bf`. The only skip was the named `FTS5StoreTests`' `backupExclusion()`, and there was no warning.
 
+**The merge of `main`.** Once the pull request was open, GitHub reported `docs/DEVLOG.md` conflicting with `main` at `22cccd8`, #190's merge, whose entry had gone where this one goes. `main` was merged once (rule 8), both entries kept, this one first; no other file conflicted. On the merged tree FRUSLightCoreTests and FRUSLightServerTests passed at width 8, in 19 s and 55 s, and the build gave no warning.
+
 **Delivered here:**
 - the fix and its seam;
 - the three tests;
