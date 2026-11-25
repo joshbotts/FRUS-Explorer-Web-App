@@ -556,15 +556,9 @@ public actor QueryEncoder {
     public static func versionLine(of binary: URL) async -> String? {
         guard isExecutable(binary) else { return nil }
         return try? await Blocking.run {
-            let process = Process()
-            process.executableURL = binary
-            process.arguments = ["--version"]
-            process.environment = Child.environment(key: nil)
             let output = Pipe()
-            process.standardOutput = output
-            process.standardError = output
-            process.standardInput = FileHandle.nullDevice
-            try process.run()
+            let process = try SpawnedProcess.run(binary, arguments: ["--version"], environment: Child.environment(key: nil),
+                                                 output: output.fileHandleForWriting.fileDescriptor)
             try? output.fileHandleForWriting.close()
             let data = (try? output.fileHandleForReading.readToEnd()) ?? Data()
             process.waitUntilExit()
@@ -653,7 +647,7 @@ enum ChildError: Error, CustomStringConvertible {
 /// One `llama-server` process, from its start to its end: its port and key, its health, its last words, and
 /// the two requests a query makes.
 final class Child: @unchecked Sendable {
-    let process: Process
+    let process: SpawnedProcess
     let pid: Int32
     let port: Int
     /// The key this start was given, which every request but the health check sends.
@@ -664,7 +658,7 @@ final class Child: @unchecked Sendable {
     /// The lines of its output kept, its last.
     static let keptLines = 60
 
-    private init(process: Process, port: Int, key: String) {
+    private init(process: SpawnedProcess, port: Int, key: String) {
         self.process = process
         self.pid = process.processIdentifier
         self.port = port
@@ -725,16 +719,10 @@ final class Child: @unchecked Sendable {
         var generator = SystemRandomNumberGenerator()
         for index in bytes.indices { bytes[index] = UInt8.random(in: .min ... .max, using: &generator) }
         let key = bytes.map { String(format: "%02x", $0) }.joined()
-        let process = Process()
-        process.executableURL = settings.binary
-        process.arguments = arguments(model: settings.model, port: port)
-        process.environment = environment(key: key)
-        process.standardInput = FileHandle.nullDevice
         let output = Pipe()
-        process.standardOutput = output
-        process.standardError = output
-        process.terminationHandler = { process in ended(process.processIdentifier) }
-        try process.run()
+        let process = try SpawnedProcess.run(settings.binary, arguments: arguments(model: settings.model, port: port),
+                                             environment: environment(key: key), output: output.fileHandleForWriting.fileDescriptor,
+                                             terminationHandler: { process in ended(process.processIdentifier) })
         try? output.fileHandleForWriting.close()
         let child = Child(process: process, port: port, key: key)
         let reading = output.fileHandleForReading

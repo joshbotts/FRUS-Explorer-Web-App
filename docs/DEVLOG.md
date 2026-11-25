@@ -89,6 +89,61 @@ In the whole-target runs the runner set aside also failed QueryEncoderTests, whi
 
 **Next:** phase 4's rows as PLAN orders them, with S28e and S29g under way beside this.
 
+## CI follow-up: the encoder's starts, by posix_spawn
+
+25 November 2026 · branch `claude/interesting-shirley-658f4e` · [#190](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/190) · upstream `efd73ecb`, unchanged
+
+This follow-up is not one of PLAN's rows; the CI follow-up's session ([#188](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/188)) left it. `main`'s [ci run 45643998324](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/45643998324), at `567d59c`, S29f's merge, failed when FRUSLightServerTests' runner died of signal 11 in Foundation's `Process.run()`, called from `QueryEncoder.versionLine(of:)` in `Blocking.run`. The runner printed no summary, so `swift test` exited 1. It was the one such crash in the 17 swift-job logs read that day.
+
+The branch was cut from `main` at `567d59c`. It adds `Sources/FRUSLightCore/SpawnedProcess.swift`, moves the encoder's two starts in `QueryEncoder.swift` onto it, and adds a test to QueryEncoderTests. It changes no `Package.swift`, image, `compose.yaml`, workflow or upstream file.
+
+**Not a race.** Only one thread was in `Process.run()` when the runner crashed, and the crash's registers show what it read:
+- A copy of 256 bytes (0x100) from 0x7f3170b56f13, which held the name "1362". The fault's address, 0x7f3170b57000, is the next page, 237 bytes on.
+- Glibc's DIR for /proc/self/fd, at 0x7f3170b4eef0: its descriptor 2,332, its buffer 32,768 bytes from 0x7f3170b4ef20. "1362" was the 1,365th 24-byte entry of a full buffer, its name 13 bytes from the buffer's end. The runner, every test case started at once, held more than 2,332 descriptors.
+
+swift-corelibs-foundation 6.4.3 is the Foundation of swift:6.4-noble and of the image. Its `Process.run()` closes the descriptors a child should not inherit by listing /proc/self/fd in the parent:
+- `findMaximumOpenFromProcSelfFD()` reads each entry's number from `var entryName = dirEntPtr.pointee.d_name`, a copy of the whole 256-byte `d_name`. readdir(3) gives an entry only its `d_reclen` bytes.
+- Once /proc/self/fd lists some 1,355 entries, the copy of each full buffer's last entry reads 243 bytes past the buffer's end. Where the buffer is the last block of a heap, those bytes may be unmapped, since glibc grows a thread's heap a page at a time.
+- Foundation's main fixed it on 19 May 2026, in [swiftlang/swift-corelibs-foundation#5472](https://github.com/swiftlang/swift-corelibs-foundation/pull/5472), "Process.run() on Linux crashes intermittently — buffer over-read in findMaximumOpenFromProcSelfFD()". Neither `swift-6.4.3-RELEASE` nor `release/6.4.x` has the fix.
+- Otherwise `run()` may be called from several threads at once. It makes its manager thread once, under a lock (`Process.setup()`), and each call has its own file actions, socket pair and listing. The crash needs only one thread.
+
+**Reproduced** on this Mac's Docker VM (swift:6.4-noble, arm64). A harness outside the package (the notes folder's `process-run-crash/`, never committed) holds N descriptors, and four threads spawn `/bin/true` through `Process`. Before each spawn, each thread uses up its heap's free blocks:
+- At 4 and at 1,304 descriptors, none of 10 runs crashed. At 1,504 and at 2,404, all 10 did.
+- One thread is enough. In 20 one-thread runs the crash came after a mean of 18 spawns, about one in nineteen.
+- The backtrace is CI's: `findMaximumOpenFromProcSelfFD()` under `Process.run()`, the fault at a page boundary, the name at the same offset in its page.
+
+Without the heaps used up, 12,000 spawns at 1,504 descriptors did not crash. Each spawn frees its 48 KB of close actions, and the next listing's buffer takes that block, which has room after it. A probe of 2,000 listings at 1,504 descriptors found that every last copy reached past its buffer. Where the heap grew a page at a time, 107 of the buffers (5.4%) were followed by fewer than 243 mapped bytes. So the crash needs many descriptors, which the unbounded width gave, and a buffer at a heap's end, which a Dispatch worker's first start can give.
+
+**The fix.** `SpawnedProcess` starts a child with posix_spawn(3) as `Process` did:
+- the same arguments and environment;
+- a process group of its own;
+- /dev/null as its input, and its output and errors to the caller's pipe;
+- the calling thread's signal mask.
+
+Every other descriptor is closed in the child, by `posix_spawn_file_actions_addclosefrom_np` (glibc 2.34; noble's is 2.39), which calls close_range(2), so the parent lists nothing. A thread of the child's own waits for it with waitpid(2) and reads its status as `Process` does. `versionLine(of:)` and `Child.launch` start through it, and `Child` keeps `isRunning`, `terminate()`, `terminationStatus` and `terminationReason` as they were. The server starts no other process.
+
+**The test.** QueryEncoderTests' `itStartsWhileTheServerHoldsThousandsOfDescriptors()` is the package's first exit test, so that its 2,000 descriptors are a process's of its own. Its body runs 40 rounds. Each round uses up the heaps of the threads `Blocking` runs work on, then reads the stand-in's version four times at once. The body then starts the encoder and counts its child's descriptors.
+- Before the fix, the child ended by SIGSEGV in all 10 runs, each within 0.1 s, in CI's frames (`QueryEncoder.swift:567:25` in `Blocking.swift:14:66`).
+- With the fix, all 10 passed, in about 0.5 s each.
+- With the closefrom action removed, it failed: "the encoder's child holds 2042 descriptors".
+
+**Measured.** `scripts/swift --postgres test`, at the unbounded width `main` still runs, passed 5,580 tests in 21 targets in 468 s, apart from the one named skip. The exit test took 6.9 s under that load. A sampler read each runner's open descriptors every 0.2 s, leaving out exit tests' children:
+- Three runners passed the listing's 1,355 entries: FRUSCoreKitTests' peaked at 2,617, FRUSLightServerTests' at 2,484 and FRUSParityTests' at 1,536.
+- FRUSLightCoreTests' peaked at 659, and the others under 60.
+- At #188's width of 8, the three peaked at 56, 167 and 195.
+
+**Left as it was.**
+- **The encoder child's blocked SIGTERM.** A child takes the signal mask of the thread that starts it, through either spawner, and the server's Dispatch workers block SIGTERM, SIGINT and SIGHUP: a child's SigBlk read `fffffffe3bfbea27` both ways. So a stop's SIGTERM likely reaches the real llama-server only as the SIGKILL 10 s later (`stopTimeout`). This fix keeps `Process`'s behaviour; the change, checked against the real binary, is a follow-up's.
+- **The tests' own `Process` calls.** FRUSParity's `Upstream.commit(_:)`, which ProvenanceTests and `frus-parity` call, and UserStoreRestoreTests' `run(_:_:)` still start through Foundation. FRUSParityTests' runner passed the 1,355 entries only at the unbounded width, so #188's width keeps it far from the read. Should a runner's descriptors climb toward it again, both can start through `SpawnedProcess`.
+- **Foundation's fix, once the image's toolchain has it,** need not undo this: `SpawnedProcess` lists nothing, and the child closes what it should not hold.
+
+**Delivered here:**
+- `SpawnedProcess`, and the encoder's two starts through it;
+- the exit test;
+- this entry.
+
+**Next:** #188's merge, which bounds the width; the encoder child's SIGTERM, proposed as a follow-up of its own; then phase 4's rows as PLAN orders them.
+
 ## Session 29f: Distinctive and Collocates
 
 25 November 2026 · branch `claude/nervous-taussig-21b143` · [#189](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/189) · upstream `efd73ecb`, S27c's, unchanged
