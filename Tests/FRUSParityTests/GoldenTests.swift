@@ -248,7 +248,7 @@ import Testing
     func eachRequiredInputMustBeRecorded(_ file: GoldenFile) throws {
         let repository = try GoldenRepository()
         try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary, .richText, .languageTags,
-                         .semanticNeighbours)
+                         .semanticNeighbours, .semanticEmbeddings, .semanticCorpusNeighbours)
         for each in GoldenFile.allCases { try repository.write(each) }
         #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [])
 
@@ -276,6 +276,11 @@ import Testing
             "fixtures/semantic/frus1894Nicaragua.vec", "fixtures/semantic/frus1961-63v06.vec",
             "fixtures/semantic/frus1969-76ve09p1.vec", "fixtures/semantic/SHA256SUMS",
         ])
+        // Check 9's full-scale files rest on the model and the 553 shards, which no repository holds, and on the hundred
+        // queries, which their validation holds to the repository's files themselves; the embeddings on the commit of
+        // llama.cpp the app's encoder runs, which the app's build script names.
+        #expect(GoldenValidation.requiredInputs(.semanticEmbeddings) == ["upstream/FRUS-Explorer/Scripts/build-llama-xcframework.sh"])
+        #expect(GoldenValidation.requiredInputs(.semanticCorpusNeighbours) == [])
     }
 
     /// A file made from an export must come from the pinned build, at the pin's index version.
@@ -333,7 +338,9 @@ struct GoldenRepository {
     let directory: TemporaryDirectory
     let layout: RepositoryLayout
 
-    static let queries = [ParityQuery(id: "q001", rule: "R01", query: "treaty"), ParityQuery(id: "q002", rule: "R01", query: "canal")]
+    /// Plain words, ten of them, so that check 9's hundred can take their first ten.
+    static let queries = ["treaty", "canal", "berlin", "kennedy", "nicaragua", "libya", "sahara", "oil", "embassy", "cable"]
+        .enumerated().map { ParityQuery(id: String(format: "q%03d", $0.offset + 1), rule: "R01", query: $0.element) }
     /// A reading of every code page, of no text.
     static let codePages = RichTextCodePages.pages.map {
         RichTextCodePageReading(name: $0.name, length: 0, sha256: ParityFormat.Digest.sha256(Data()))
@@ -365,6 +372,13 @@ struct GoldenRepository {
             sums += "\(ParityFormat.Digest.sha256(bytes))  \(volume).vec\n"
         }
         try Data(sums.utf8).write(to: shards.appendingPathComponent("SHA256SUMS"))
+        // The app's three files of typed queries, as the submodule holds them, for check 9's hundred, and the script that
+        // names the llama.cpp commit its encoder runs.
+        for path in SemanticQueries.appFiles + [SemanticEmbeddingsGolden.encoderScriptPath] {
+            let copy = root.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: copy.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(contentsOf: Repository.root.appendingPathComponent(path)).write(to: copy)
+        }
     }
 
     /// What the tools record for `file`: the fixtures, the query list's records and the stamp, as
@@ -384,6 +398,12 @@ struct GoldenRepository {
             }
         case .languageTags: inputs = tei
         case .semanticNeighbours: inputs = try SemanticNeighboursLoop.verifiedShardInputs(root: layout.root)
+        case .semanticEmbeddings:
+            let script = SemanticEmbeddingsGolden.encoderScriptPath
+            inputs = ["queries.sha256": SemanticQueries.digest(try SemanticQueries.load(root: layout.root)),
+                      "model.sha256": String(repeating: "b", count: 64),
+                      script: try ParityFormat.Digest.sha256(contentsOf: layout.root.appendingPathComponent(script))]
+        case .semanticCorpusNeighbours: inputs = ["shards": "553 of the bundled manifest's"]
         }
         if file.needsExport {
             for (key, value) in Self.stamp { inputs["research_provenance.\(key)"] = value }
@@ -442,6 +462,22 @@ struct GoldenRepository {
             }
             try GoldenJSON.write(SemanticNeighboursGolden(provenance: provenance, configuration: "tests", generation: String(repeating: "a", count: 64),
                                                           rerankPool: 800, neighbourCount: 10, anchors: anchors), to: url)
+        case .semanticEmbeddings:
+            let unit = [1.0] + [Double](repeating: 0, count: SemanticEmbeddingsGolden.dimensions - 1)
+            let queries = try SemanticQueries.load(root: layout.root).map { SemanticEmbeddingsGolden.Query(text: $0, vector: unit) }
+            try GoldenJSON.write(SemanticEmbeddingsGolden(provenance: provenance, queryPrefix: SearchModel.queryPrefix,
+                                                          ggufSHA256: String(repeating: "b", count: 64), referenceEngine: "tests",
+                                                          queries: queries), to: url)
+        case .semanticCorpusNeighbours:
+            let pool = SemanticNeighboursLoop.record(Array(0..<800))
+            let anchors = (0..<SemanticCorpusLoop.rowCount).map { index in
+                SemanticCorpusAnchor(document: "v\(index)/d1", row: index * 524, candidates: pool,
+                                     neighbours: ["v\(index)/d2 \(index * 524 + 1) 3fe0000000000000"])
+            }
+            try GoldenJSON.write(SemanticCorpusNeighboursGolden(
+                provenance: provenance, configuration: "tests", generation: String(repeating: "a", count: 64),
+                shardManifest: String(repeating: "c", count: 64), rerankPool: 800, neighbourCount: 10, stride: 524,
+                anchors: anchors), to: url)
         }
     }
 }

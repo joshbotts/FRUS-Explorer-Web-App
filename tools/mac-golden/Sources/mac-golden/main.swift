@@ -13,6 +13,8 @@ let usage = """
            mac-golden rich-text   [--repo <root>] [--out <json>]
            mac-golden tags        [--repo <root>] [--out <json>]
            mac-golden neighbours  [--repo <root>] [--out <json>]
+           mac-golden embed       --model <gguf> [--repo <root>] [--out <json>]
+           mac-golden corpus-neighbours --shards <dir> [--repo <root>] [--out <json>]
 
       render       the reader's HTML of every fixture document    (default out: fixtures/golden/render)
                    it replaces <dir>/html and <dir>/manifest.json, and refuses a <dir> holding either without a render manifest
@@ -33,6 +35,13 @@ let usage = """
                    Hamming scan over the bundled tier at its rerank pool, fenced to the three volumes, and the int8 rerank
                    against their shards from fixtures/semantic, through the app's own store, with each score's bits
                    (default out: fixtures/golden/semantic/neighbours.json)
+      embed        check 9's encoder half at full scale: the hundred queries, the 90 the app's repository keeps and the
+                   first ten of check 3's, embedded by the app's own encoder over the model at --model, held first to the
+                   bundled index's SHA-256 (default out: fixtures/golden/semantic/embeddings.json)
+      corpus-neighbours
+                   check 9's kernel half at full scale: 600 corpus rows' ten nearest, one in every 524, by the kit's two
+                   stages over the bundled tier and all 553 shards in --shards, each held to the bundled manifest and
+                   opened through the app's own store (default out: fixtures/golden/semantic/corpus-neighbours.json)
 
     --repo defaults to the current directory. Paths are relative to the current directory.
     """
@@ -79,6 +88,18 @@ do {
         let out = arguments.path("--out") ?? repo.url(NeighboursPaths.golden)
         try arguments.finish()
         try await neighboursGolden(repo: repo, out: out)
+    case "embed":
+        guard let model = arguments.path("--model") else { throw Arguments.UsageError(message: "embed takes --model <gguf>") }
+        let out = arguments.path("--out") ?? repo.url(CorpusPaths.embeddings)
+        try arguments.finish()
+        try await embedGolden(repo: repo, model: model, out: out)
+    case "corpus-neighbours":
+        guard let shards = arguments.path("--shards") else {
+            throw Arguments.UsageError(message: "corpus-neighbours takes --shards <dir>")
+        }
+        let out = arguments.path("--out") ?? repo.url(CorpusPaths.corpusNeighbours)
+        try arguments.finish()
+        try await corpusNeighboursGolden(repo: repo, shards: shards, out: out)
     default:
         throw ToolError("unknown command \(arguments.command)")
     }

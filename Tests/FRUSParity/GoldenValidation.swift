@@ -83,6 +83,16 @@ public enum GoldenValidation {
                     let golden = try GoldenJSON.read(SemanticNeighboursGolden.self, from: url)
                     provenance = golden.provenance
                     problems = format(golden.format, SemanticNeighboursGolden.currentFormat, file) + semanticNeighboursProblems(golden)
+                case .semanticEmbeddings:
+                    let golden = try GoldenJSON.read(SemanticEmbeddingsGolden.self, from: url)
+                    provenance = golden.provenance
+                    problems = format(golden.format, SemanticEmbeddingsGolden.currentFormat, file)
+                        + semanticEmbeddingsProblems(golden, root: layout.root)
+                case .semanticCorpusNeighbours:
+                    let golden = try GoldenJSON.read(SemanticCorpusNeighboursGolden.self, from: url)
+                    provenance = golden.provenance
+                    problems = format(golden.format, SemanticCorpusNeighboursGolden.currentFormat, file)
+                        + semanticCorpusNeighboursProblems(golden)
                 }
                 report.problems += staleness(of: provenance, file: file.rawValue, layout: layout, sourceDigest: digest ?? "")
                 report.problems += inputProblems(of: provenance, file: file)
@@ -158,6 +168,8 @@ public enum GoldenValidation {
         case .richText: return [RichTextGolden.harnessPath, RichTextWebCases.path]
         case .languageTags: return ParityFixtures.teiInputKeys
         case .semanticNeighbours: return SemanticNeighboursLoop.shardInputKeys
+        case .semanticEmbeddings: return [SemanticEmbeddingsGolden.encoderScriptPath]
+        case .semanticCorpusNeighbours: return []
         }
     }
 
@@ -320,6 +332,76 @@ public enum GoldenValidation {
             for candidates in [anchor.fencedCandidates, anchor.poolCandidates]
             where candidates.wholeMatch(of: /[0-9]+ [0-9a-f]{64}/) == nil {
                 problems.append("\(file): \(anchor.document) has candidates not in the form, \(candidates)")
+                break
+            }
+        }
+        return problems
+    }
+
+    /// Check 9's encoder half at full scale is whole: the hundred queries the repository's files give, in their order,
+    /// each embedded under the kit's prompt as 768 finite values of unit length, by a model named by its SHA-256.
+    public static func semanticEmbeddingsProblems(_ golden: SemanticEmbeddingsGolden, root: URL) -> [String] {
+        let file = GoldenFile.semanticEmbeddings.rawValue
+        var problems: [String] = []
+        if golden.queryPrefix != SearchModel.queryPrefix {
+            problems.append("\(file): its queries were embedded under \"\(golden.queryPrefix)\", not the kit's prompt")
+        }
+        if golden.ggufSHA256.wholeMatch(of: /[0-9a-f]{64}/) == nil {
+            problems.append("\(file): its model is not named by a SHA-256")
+        }
+        do {
+            let expected = try SemanticQueries.load(root: root)
+            if golden.queries.map(\.text) != expected {
+                problems.append("\(file): its queries are not the hundred the repository's files give, in their order")
+            }
+        } catch {
+            problems.append("\(file): the hundred queries could not be read: \(error)")
+        }
+        for query in golden.queries {
+            let norm = query.vector.reduce(0) { $0 + $1 * $1 }.squareRoot()
+            if query.vector.count != SemanticEmbeddingsGolden.dimensions || !query.vector.allSatisfy(\.isFinite)
+                || abs(norm - 1) > 1e-6 {
+                problems.append("\(file): \(query.text) is not \(SemanticEmbeddingsGolden.dimensions) finite values of unit length")
+                break
+            }
+        }
+        return problems
+    }
+
+    /// Check 9's kernel half at full scale is whole: 600 rows at the benchmark's stride, in order, each with at most the
+    /// ten nearest in the form `volume/document row scoreBits` and the pool's candidates as `count sha256`.
+    public static func semanticCorpusNeighboursProblems(_ golden: SemanticCorpusNeighboursGolden) -> [String] {
+        let file = GoldenFile.semanticCorpusNeighbours.rawValue
+        var problems: [String] = []
+        if golden.neighbourCount != SemanticNeighboursLoop.neighbourCount || golden.rerankPool <= 0 {
+            problems.append("\(file): it keeps \(golden.neighbourCount) neighbours from a pool of \(golden.rerankPool), not \(SemanticNeighboursLoop.neighbourCount) from the bundled pool")
+        }
+        for (name, digest) in [("generation", golden.generation), ("shard manifest", golden.shardManifest)]
+        where digest.wholeMatch(of: /[0-9a-f]{64}/) == nil {
+            problems.append("\(file): its \(name) is not a SHA-256")
+        }
+        // The stride is read before anything is multiplied by it, so that a file that is not whole is reported, not trapped on.
+        let strideReads = golden.stride > 0 && golden.stride <= Int.max / SemanticCorpusLoop.rowCount
+        let rows = strideReads ? (0..<SemanticCorpusLoop.rowCount).map { $0 * golden.stride } : []
+        if !strideReads || golden.anchors.map(\.row) != rows {
+            problems.append("\(file): its rows are not the first \(SemanticCorpusLoop.rowCount) of a stride of \(golden.stride)")
+        }
+        for anchor in golden.anchors {
+            if anchor.document.wholeMatch(of: /[^ \/]+\/[^ \/]+/) == nil {
+                problems.append("\(file): row \(anchor.row) names no document, \(anchor.document)")
+                break
+            }
+            if anchor.neighbours.isEmpty || anchor.neighbours.count > golden.neighbourCount {
+                problems.append("\(file): \(anchor.document) has \(anchor.neighbours.count) neighbours")
+                break
+            }
+            if let neighbour = anchor.neighbours.first(where: { $0.wholeMatch(of: /[^ \/]+\/[^ \/]+ [0-9]+ [0-9a-f]+/) == nil }) {
+                problems.append("\(file): \(anchor.document) has a neighbour not in the form, \(neighbour)")
+                break
+            }
+            if anchor.candidates.wholeMatch(of: /[0-9]+ [0-9a-f]{64}/) == nil
+                || !anchor.candidates.hasPrefix("\(golden.rerankPool) ") {
+                problems.append("\(file): \(anchor.document)'s candidates are not the pool's, \(anchor.candidates)")
                 break
             }
         }

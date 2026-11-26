@@ -4,7 +4,8 @@
 # first query the hardened container embeds through the server's own path, with check 9's encoder half
 # over the app's 25 judged queries where it has an image of the parity stage (PLAN's S27b), every semantic
 # vector in the image, each shard held to the bundled manifest and counted by the server, offline as online,
-# with check 9's kernel half on the fixtures in that image (S26c), the web's
+# with check 9's kernel half on the fixtures in that image (S26c), and both halves at full scale, the image's own 553
+# shards and the hundred queries held to the Mac's lists and vectors (S31), the web's
 # tagger, whose self-test the hardened container runs to the committed digest (S29c), and the
 # catalogue and the reader before any import, imports a synthetic export with docker compose cp, and
 # waits for /readyz to answer 200;
@@ -115,7 +116,7 @@ cleanup() {
     fi
   fi
   docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" "$COMPOSE_PROJECT_NAME-keyless" \
-    "$COMPOSE_PROJECT_NAME-library-github" "$COMPOSE_PROJECT_NAME-library-services" >/dev/null 2>&1 || true
+    "$COMPOSE_PROJECT_NAME-library-github" "$COMPOSE_PROJECT_NAME-library-services" "$COMPOSE_PROJECT_NAME-shards" >/dev/null 2>&1 || true
   # The library's Standalone project (PLAN's S21c), with its volume.
   docker compose -p "$COMPOSE_PROJECT_NAME-library" -f compose.yaml -f compose.standalone.yaml down --volumes --remove-orphans >/dev/null 2>&1 || true
   docker volume rm "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
@@ -310,6 +311,20 @@ if [ -n "${FRUS_PARITY_IMAGE:-}" ]; then
     || fail "check 9's kernel half fails: $(tail -20 "$work/check9-kernel.log")"
   grep -q "^check 9's kernel half passes" "$work/check9-kernel.log" || fail "check 9's kernel half said nothing: $(tail -5 "$work/check9-kernel.log")"
   echo "   $(grep "^check 9's kernel half passes" "$work/check9-kernel.log" | cut -c1-200)"
+  # At full scale (S31): 600 corpus rows' ten nearest over the image's own 553 shards, copied out of it, each held to
+  # the bundled manifest by the server's store, against the Mac's lists in rows, order and score bits.
+  docker create --name "$COMPOSE_PROJECT_NAME-shards" "$FRUS_IMAGE" >/dev/null || fail "could not create a container of the image to read its shards"
+  copied=0
+  docker cp "$COMPOSE_PROJECT_NAME-shards:$shards_folder" "$work/shards" > /dev/null && copied=1
+  docker rm -f "$COMPOSE_PROJECT_NAME-shards" >/dev/null 2>&1 || true
+  [ "$copied" = 1 ] || fail "could not copy the image's shards"
+  chmod -R a+rX "$work/shards"
+  docker run --rm --user "$(id -u):$(id -g)" --network none -v "$PWD:/repo:ro" -v "$work/shards:/shards:ro" "$FRUS_PARITY_IMAGE" \
+    frus-parity corpus-neighbours --shards /shards --repo /repo > "$work/check9-corpus.log" 2>&1 \
+    || fail "check 9's kernel half at full scale fails: $(tail -20 "$work/check9-corpus.log")"
+  grep -q "^check 9's kernel half at full scale passes" "$work/check9-corpus.log" \
+    || fail "check 9's kernel half at full scale said nothing: $(tail -5 "$work/check9-corpus.log")"
+  echo "   $(grep "^check 9's kernel half at full scale passes" "$work/check9-corpus.log" | cut -c1-220)"
 else
   echo "   check 9's kernel half: skipped, since FRUS_PARITY_IMAGE names no image of the parity stage"
 fi
@@ -380,6 +395,16 @@ if [ -n "${FRUS_PARITY_IMAGE:-}" ]; then
     || fail "check 9's encoder half fails: $(tail -30 "$work/check9.log")"
   grep -q "^check 9's encoder half passes" "$work/check9.log" || fail "check 9's encoder half said nothing: $(tail -5 "$work/check9.log")"
   echo "   $(grep "^check 9's encoder half passes" "$work/check9.log" | cut -c1-200)…"
+  # At full scale (S31): the hundred queries, each at a cosine of 0.999 or more against the vectors the app's own
+  # encoder made on the Mac, with how many of each one's ten nearest the two encoders' vectors share, reported.
+  docker run --rm --user "$(id -u):$(id -g)" --network "container:$container" -v "$PWD:/repo:ro" -v "$work/shards:/shards:ro" \
+    "$FRUS_PARITY_IMAGE" frus-parity embed --api http://localhost:8080/ --fixture /repo/fixtures/golden/semantic/embeddings.json \
+    --shards /shards --repo /repo > "$work/check9-hundred.log" 2>&1 \
+    || fail "check 9's encoder half at full scale fails: $(tail -30 "$work/check9-hundred.log")"
+  grep -q "^check 9's encoder half passes: 100 queries" "$work/check9-hundred.log" \
+    || fail "check 9's encoder half at full scale said nothing: $(tail -5 "$work/check9-hundred.log")"
+  echo "   $(grep "^check 9's encoder half passes" "$work/check9-hundred.log" | cut -c1-150)…"
+  echo "   $(grep "^the two encoders' ten nearest share" "$work/check9-hundred.log" | cut -c1-200)"
 else
   echo "   check 9's encoder half: skipped, since FRUS_PARITY_IMAGE names no image of the parity stage"
 fi
