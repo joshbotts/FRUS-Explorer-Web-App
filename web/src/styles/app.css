@@ -7889,10 +7889,6 @@ dialog.packet-sheet {
   user-select: text;
 }
 
-.packet-status:empty {
-  display: none;
-}
-
 /* Source Explorer's Source Note header carries its Add to Archives Visit, as the app's header does. */
 .se-section-head {
   display: flex;
