@@ -196,7 +196,7 @@ import Testing
             let id = try #require(sources.collection?.id)
             let record = try #require(authority.record(id: id))
             let answer = try ServedFixture.decode(ArchivalCollectionDocuments.self,
-                                                  try await session.get("/api/v1/archival-collection/documents?id=\(Self.escaped(id))"))
+                                                  try await session.get("/api/v1/me/archival-collection/documents?id=\(Self.escaped(id))"))
             let kit = try await built.index.pipeline.collectionNeighbors(
                 lotFileNorm: record.lotFileNorm, repository: record.repository, recordGroup: record.recordGroup,
                 names: [record.name] + record.aliases, limit: 20_000)

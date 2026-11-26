@@ -258,7 +258,7 @@ export interface RecordSeeds {
 }
 
 export async function recordSeeds(recordId: string): Promise<RecordSeeds> {
-  return getJSON<RecordSeeds>('/api/v1/archival-collection/documents', new URLSearchParams({ id: recordId }));
+  return getJSON<RecordSeeds>('/api/v1/me/archival-collection/documents', new URLSearchParams({ id: recordId }));
 }
 
 /** The packet's sheet over a plan (`GET …/packet`). */
@@ -285,7 +285,11 @@ export interface VisitPacket {
   textFileName: string;
 }
 
-/** The packet over the plan `id`, for a repository's slice or the whole plan, and the day the sheet opened on. */
+/**
+ * The packet over the plan `id`, for a repository's slice or the whole plan, and the day the sheet opened on. Kept while
+ * its sheet is open and no longer: a sheet opens on the packet as the plan now stands, never on one an earlier opening read,
+ * which a write since, or one whose answer the sheet's closing cut off, would have left stale.
+ */
 export function packetQuery(id: string, repository: string | null, day: string | null) {
   return queryOptions({
     queryKey: ['visitPacket', id.toUpperCase(), repository, day],
@@ -296,6 +300,7 @@ export function packetQuery(id: string, repository: string | null, day: string |
       return getJSON<VisitPacket>(path(id, '/packet'), params, signal);
     },
     staleTime: 30_000,
+    gcTime: 0,
     retry: false,
   });
 }

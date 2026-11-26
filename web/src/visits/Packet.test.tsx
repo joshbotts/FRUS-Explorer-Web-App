@@ -7,7 +7,7 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { VisitPacket, VisitPlan } from '../api/visits';
-import { ready, renderAt, stubServer } from '../test/renderRoute';
+import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { sent } from '../test/notes';
 import { pickerBanner, planMatches, sameTopicText, showsSeededCaption, topicIsUncommitted, writtenTopic } from './visitRules';
 
@@ -109,18 +109,43 @@ describe('the packet’s sheet', () => {
     expect(within(sheet).queryByRole('button', { name: 'Save as PDF' })).toBeNull();
   });
 
-  it('saves the topic half a second after typing stops, the caption following the field', async () => {
-    const stub = server({ [`PATCH ${planPath}`]: plan({ inquiryText: 'The Vienna letters' }) });
+  it('saves the topic once, half a second after typing stops, the caption following the field', async () => {
+    const saves: { at: number; body: unknown }[] = [];
+    server({
+      [`PATCH ${planPath}`]: (_url: URL, init?: RequestInit) => {
+        saves.push({ at: performance.now(), body: sent(init).body });
+        return plan({ inquiryText: 'The Vienna letters' });
+      },
+    });
     const sheet = await openSheet();
     const topic = within(sheet).getByRole('textbox', { name: 'Inquiry topic sentence' });
     await userEvent.clear(topic);
     await userEvent.type(topic, 'The Vienna letters');
+    const typed = performance.now();
     expect(within(sheet).getByText('The inquiry drafts include what you write here.')).toBeTruthy();
-    await waitFor(() => expect(stub.mock.calls.some(([url, init]) => String(url).endsWith(planPath) && init?.method === 'PATCH')).toBe(true), {
-      timeout: 3000,
-    });
-    const patches = stub.mock.calls.filter(([url, init]) => String(url).endsWith(planPath) && init?.method === 'PATCH');
-    expect(sent(patches.at(-1)?.[1]).body).toEqual({ inquiryText: 'The Vienna letters' });
+    expect(saves).toEqual([]);
+    await waitFor(() => expect(saves.length).toBe(1), { timeout: 3000 });
+    expect(saves[0]!.body).toEqual({ inquiryText: 'The Vienna letters' });
+    expect(saves[0]!.at - typed).toBeGreaterThanOrEqual(400);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(saves).toHaveLength(1);
+  });
+
+  it('opens the topic on the plan’s, never on an older packet’s answer', async () => {
+    server({ [planPath]: plan({ inquiryText: 'The topic as replaced' }), [`${planPath}/packet`]: packet({ topic: 'An older topic' }) });
+    const sheet = await openSheet();
+    expect((within(sheet).getByRole('textbox', { name: 'Inquiry topic sentence' }) as HTMLTextAreaElement).value).toBe('The topic as replaced');
+  });
+
+  it('keeps the sheet open, saying why, when Done’s save fails', async () => {
+    server({ [`PATCH ${planPath}`]: new ProblemAnswer(413, 'CONTENT_TOO_LARGE', 'A change’s body here may be at most 64 KiB.') });
+    const sheet = await openSheet();
+    const topic = within(sheet).getByRole('textbox', { name: 'Inquiry topic sentence' });
+    await userEvent.clear(topic);
+    await userEvent.type(topic, 'A topic too long');
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Done' }));
+    expect(await within(sheet).findByText('A change’s body here may be at most 64 KiB.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Archives Visit' })).toBeTruthy();
   });
 
   it('writes What to Include, and asks for a repository’s slice', async () => {
@@ -226,6 +251,18 @@ describe('the plan picker', () => {
       includeExternalRefs: true,
     });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add to Archives Visit' })).toBeNull(), { timeout: 3000 });
+  });
+
+  it('offers the unprinted references from their own header for a document with no source note', async () => {
+    server({
+      '/api/v1/volumes/frus1961-63v06/documents/d10/sources': sources({ hasSourceNote: false, rawSourceNote: '' }),
+      '/api/v1/volumes/frus1961-63v06/documents/d10': { document: { displayTitle: '10. Letter' } },
+    });
+    renderAt('/sources/frus1961-63v06/d10');
+    const unprinted = await screen.findByRole('region', { name: 'Unprinted Material' });
+    await userEvent.click(within(unprinted).getByRole('button', { name: 'Add to Archives Visit' }));
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Add unprinted references (2)']);
+    expect(screen.getAllByRole('button', { name: 'Add to Archives Visit' })).toHaveLength(1);
   });
 
   it('makes a plan with its New row, and finds a plan by name', async () => {

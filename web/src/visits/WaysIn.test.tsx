@@ -61,7 +61,7 @@ describe('a record’s add of its citing documents', () => {
       '/readyz': ready,
       '/api/v1/me': me,
       '/api/v1/archival-collection': collection,
-      '/api/v1/archival-collection/documents': { name: collection.name, totalCount: 2, documents: citing },
+      '/api/v1/me/archival-collection/documents': { name: collection.name, totalCount: 2, documents: citing },
       '/api/v1/me/visits': { total: 0, items: [] },
       'POST /api/v1/me/visits': { id: planId },
     });
@@ -80,7 +80,7 @@ describe('a record’s add of its citing documents', () => {
       '/readyz': ready,
       '/api/v1/me': me,
       '/api/v1/archival-collection': collection,
-      '/api/v1/archival-collection/documents': { name: 'Central Files', totalCount: 20_001, documents: [{ volumeId: 'frus1961-63v06', documentId: 'd4' }] },
+      '/api/v1/me/archival-collection/documents': { name: 'Central Files', totalCount: 20_001, documents: [{ volumeId: 'frus1961-63v06', documentId: 'd4' }] },
       '/api/v1/me/visits': { total: 0, items: [] },
     });
     renderAt(`/archival-collection?id=${encodeURIComponent(collection.id)}`);
@@ -121,24 +121,25 @@ describe('Project Home’s Plan a Visit', () => {
   });
 
   it('makes or opens the project’s plan and opens it in its editor', async () => {
+    const made = {
+      id: planId,
+      name: 'Berlin crisis',
+      displayName: 'Berlin crisis',
+      projectIds: [project],
+      deliverables: { includeLinks: true, includeTargets: true, includeInquiry: true, includeCitationCrib: false },
+      tiers: [],
+      documentCount: 2,
+      indexedDocumentCount: 2,
+      served: true,
+      sections: [],
+      storedTargets: [],
+      documents: [],
+    };
     const stub = stubServer({
       ...answers,
       [`/api/v1/me/projects/${project}/visit`]: { planId: null, engagedDocuments: 2 },
-      [`POST /api/v1/me/projects/${project}/visit`]: { created: true, plan: { id: planId, name: 'Berlin crisis', displayName: 'Berlin crisis' } },
-      [`/api/v1/me/visits/${planId}`]: {
-        id: planId,
-        name: 'Berlin crisis',
-        displayName: 'Berlin crisis',
-        projectIds: [project],
-        deliverables: { includeLinks: true, includeTargets: true, includeInquiry: true, includeCitationCrib: false },
-        tiers: [],
-        documentCount: 2,
-        indexedDocumentCount: 2,
-        served: true,
-        sections: [],
-        storedTargets: [],
-        documents: [],
-      },
+      [`POST /api/v1/me/projects/${project}/visit`]: { created: true, plan: made },
+      [`/api/v1/me/visits/${planId}`]: made,
     });
     const { router } = renderAt(`/projects/${project}`);
     const button = (await screen.findByRole('button', { name: 'Plan a Visit' })) as HTMLButtonElement;

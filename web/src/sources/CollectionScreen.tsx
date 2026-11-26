@@ -313,7 +313,6 @@ export function Record({ collection }: { collection: ArchivalCollection }) {
   );
 }
 
-/** A series NARA divided the lot into: its title, NARA's caption and entry numbers, and its catalogue record. */
 /**
  * `fetchCitingDocumentsForPlan(expected:)`: every indexed document drawn from the record, then the picker over the whole
  * set, the source alone, its basis saying so where the fetch's ceiling cut it; none fetched, no picker, as the app's.
@@ -371,6 +370,7 @@ function AddCitingToVisit({ collection }: { collection: ArchivalCollection }) {
   );
 }
 
+/** A series NARA divided the lot into: its title, NARA's caption and entry numbers, and its catalogue record. */
 function Claimant({ claimant }: { claimant: LotClaimant }) {
   const titleId = useId();
   return (

@@ -72,11 +72,18 @@ import Testing
             let after = try #require(try ArchiveVisitTests.held(fixture, plan.id))
             #expect(after.lastModified == UserDataFixture.now, "the plan stamped as its seeds join it")
 
-            // The refusals: no documents, neither half, a volume the catalogue does not list, an id that is no document's,
-            // more than the app's ceiling, and a plan the user does not have.
+            // An add of no documents writes nothing, as the app's picker writes nothing for a smart collection whose search
+            // finds none.
             let path = "/api/v1/me/visits/\(plan.id)/documents"
+            let none = try ArchiveVisitTests.detail(try await owner.send(.post, path, try ArchiveVisitTests.json([
+                "documents": [[String: String]](), "includeSource": true, "includeExternalRefs": true,
+            ])))
+            let unchanged = try ArchiveVisitTests.held(fixture, plan.id)
+            #expect(none.documents.count == 3 && unchanged == after)
+
+            // The refusals: neither half, a volume the catalogue does not list, an id that is no document's, more than the
+            // app's ceiling, and a plan the user does not have.
             for (body, code) in [
-                (["documents": [[String: String]](), "includeSource": true, "includeExternalRefs": true], "INVALID_PARAMETER"),
                 (["documents": Self.seeds(["d1"]), "includeSource": false, "includeExternalRefs": false], "INVALID_PARAMETER"),
                 (["documents": Self.seeds(["d1"], volume: "frus1999v99"), "includeSource": true, "includeExternalRefs": false], "VOLUME_NOT_FOUND"),
                 (["documents": Self.seeds(["../d1"]), "includeSource": true, "includeExternalRefs": false], "INVALID_PARAMETER"),
@@ -111,7 +118,12 @@ import Testing
             #expect(made.createdAt == ArchiveVisitTests.now && made.lastModified == ArchiveVisitTests.now)
             let halfless = try await owner.send(.post, "/api/v1/me/visits", try ArchiveVisitTests.json(["documents": Self.seeds(["d1"])]))
             #expect(halfless.status == .badRequest && problemCode(halfless) == "INVALID_PARAMETER")
-            #expect(try await UserHalfSearchTests.answer(VisitPlanList.self, owner, "/api/v1/me/visits").total == 1)
+            // With no documents, an empty plan named as the way in suggests, as the app's New row makes one.
+            let empty = try await ArchiveVisitTests.created(owner, [
+                "name": "Treaties", "documents": [[String: String]](), "includeSource": true, "includeExternalRefs": true,
+            ])
+            #expect(empty.name == "Treaties" && empty.documents.isEmpty)
+            #expect(try await UserHalfSearchTests.answer(VisitPlanList.self, owner, "/api/v1/me/visits").total == 2)
         }
     }
 
@@ -178,9 +190,9 @@ import Testing
                 == "attachment; filename=\"Archives Visit _ Caf_ - Berlin.txt\"; filename*=UTF-8''Archives%20Visit%20%E2%80%94%20Caf%C3%A9%20-%20Berlin.txt")
             #expect(file.headers[.cacheControl] == "no-store" && file.headers[.xContentTypeOptions] == "nosniff")
 
-            for query in ["day=2026-11-31", "day=26-11-25", "day=2026-1-125", "format=text&day=2026-02-30"] {
-                let refused = try await owner.get("/api/v1/me/visits/\(plan.id)/packet?\(query)")
-                #expect(refused.status == .badRequest, "\(query)")
+            for day in ["2026-11-31", "26-11-25", "2026-1-125", "2026-02-30", "2026-13-01"] {
+                let refused = try await owner.get("/api/v1/me/visits/\(plan.id)/packet?day=\(day)")
+                #expect(refused.status == .badRequest && problemCode(refused) == "INVALID_PARAMETER", "\(day)")
             }
             for format in ["markdown", ""] {
                 let refused = try await owner.get("/api/v1/me/visits/\(plan.id)/packet/file?format=\(format)")

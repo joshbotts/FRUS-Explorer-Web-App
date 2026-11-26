@@ -29,7 +29,6 @@ import Testing
     static let topic = "kit:FRUSCoreKit/TripPacket/TripPacketModel.swift"
     static let packet = "Sources/FRUSLightAPI/ArchivePacket.swift"
     static let visits = "Sources/FRUSLightAPI/ArchiveVisits.swift"
-    static let collection = "Sources/FRUSLightAPI/ArchivalCollection.swift"
     static let reviews = "Sources/FRUSLightAPI/Reviews.swift"
     static let packetSheet = "web:visits/PacketSheet.tsx"
     static let planPicker = "web:visits/PlanPicker.tsx"
@@ -85,12 +84,12 @@ import Testing
             (Self.sheet, #"plan.inquiryText = trimmed.isEmpty ? nil : topicDraft"#,
              Self.visits, #"if let topic = body.inquiryText { plan.inquiryText = TripPacketTopicSentence.written(topic) }"#),
             (Self.sheet, #"TripPacketTopicSentence.isUncommitted(draft: topicDraft, edited: model.topicSentence.edited) { applyTopicEdit() }"#,
-             Self.packetSheet, #"if (draft !== null && topicIsUncommitted(draft, committed)) {"#),
+             Self.packetSheet, #"if (!topicIsUncommitted(draft, saved.current)) { close(); return; }"#),
             (Self.sheet, #"Text(TripPacketTopicSentence.showsSeededCaption(draft: topicDraft, researchQuestion: researchQuestion)"#,
-             Self.packetSheet, #"{showsSeededCaption(draft ?? '', data.researchQuestion) ? words.packetTopicSeeded : words.packetTopicUnseeded}"#),
+             Self.packetSheet, #"{showsSeededCaption(draft, data.researchQuestion) ? words.packetTopicSeeded : words.packetTopicUnseeded}"#),
             (Self.sheet, #"prompt: Text(TripPacketTopicSentence.placeholder),"#, Self.packet, #"topicPlaceholder: TripPacketTopicSentence.placeholder,"#),
             (Self.sheet, #"let opened = planModel.topicSentence.openPlanDraft(draft: topicDraft, stored: plan.inquiryText)"#,
-             Self.packetSheet, #"setDraft(data.topic ?? '');"#),
+             Self.packetSheet, #"const [draft, setDraft] = useState(plan.inquiryText ?? '');"#),
             // The kit's topic rules the field reads, mirrored.
             (Self.topic, #"guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil } return text"#,
              Self.rules, #"return text != null && text.trim() !== '' ? text : null;"#),
@@ -172,14 +171,16 @@ import Testing
              Self.sourcesScreen, #"documents: [{ volumeId: sources.volumeId, documentId: sources.documentId }],"#),
             (Self.explorer, #"Text(String(localized: "source.explorer.rawNote.header", defaultValue: "Source Note")) Spacer()"#,
              Self.sourcesScreen, #"<Section title={words.rawNote} action={<AddToVisit sources={sources} />}>"#),
+            (Self.explorer, #"if !hasSourceNote { addToVisitMenu }"#,
+             Self.sourcesScreen, #"action={sources.hasSourceNote ? undefined : <AddToVisit sources={sources} />}"#),
             // Archival Neighbors: the documents shown, the source alone.
             (Self.neighbors, #"documents: docs.map { (volumeId: $0.volumeId, documentId: $0.documentId) }, includeSource: true, includeExternalRefs: false,"#,
              Self.neighboursScreen, #"documents: data.documents.map((document) => ({ volumeId: document.volumeId, documentId: document.documentId })), includeSource: true, includeExternalRefs: false,"#),
             (Self.neighbors, #"Int64(docs.count)))"#, Self.neighboursScreen, #"basis: copy.visits.basisNeighbors(data.documents.length),"#),
             // A record's citing documents: every one, to the app's ceiling, the source alone, the record's name for a plan.
-            (Self.record, #"private static let planSeedFetchCeiling = 20_000"#, Self.collection, #"static let planSeedFetchCeiling = 20_000"#),
+            (Self.record, #"private static let planSeedFetchCeiling = 20_000"#, Self.packet, #"static let planSeedFetchCeiling = 20_000"#),
             (Self.record, #"names: [record.name] + record.aliases, limit: Self.planSeedFetchCeiling) else { return }"#,
-             Self.collection, #"names: [record.name] + record.aliases, limit: planSeedFetchCeiling)) ?? (documents: [], totalCount: 0, basis: nil)"#),
+             Self.packet, #"names: [record.name] + record.aliases, limit: planSeedFetchCeiling))"#),
             (Self.record, #"guard !result.documents.isEmpty else { return }"#, Self.recordScreen, #"if (seeds.documents.length === 0) return;"#),
             (Self.record, #"if result.totalCount > result.documents.count {"#, Self.recordScreen, #"seeds.totalCount > seeds.documents.length"#),
             (Self.record, #"includeSource: true, includeExternalRefs: false, basis: basis, suggestedName: record.name)"#,

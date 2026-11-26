@@ -6,7 +6,7 @@
 // always with its coverage report, rendered on the server. Save as Text and Save as PDF, the web's saves for the app's
 // two shares, save the text the sheet shows, PDF while the server's PDF service answers.
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import { offersPdf, pdfServiceQuery } from '../api/pdf';
 import { editVisit, packetFile, packetQuery, type VisitDeliverables, type VisitPacket, type VisitPlan } from '../api/visits';
@@ -40,20 +40,51 @@ export function PacketSheet({ plan, onClose }: { plan: VisitPlan; onClose: () =>
   const packet = useQuery({ ...packetQuery(plan.id, repository, null), placeholderData: keepPreviousData });
   const pdfService = useQuery(pdfServiceQuery);
   const data = packet.data;
-  /** The topic as typed, opened on the plan's (`openPlanDraft`), and the topic last saved. */
-  const [draft, setDraft] = useState<string | null>(null);
-  const [committed, setCommitted] = useState<string | null>(null);
+  /**
+   * The topic as typed, opened on the plan's as the editor holds it (`openPlanDraft`), which each write sets at once, and
+   * never on a packet's answer, which may be older; a live draft is never replaced by one.
+   */
+  const [draft, setDraft] = useState(plan.inquiryText ?? '');
+  /** The topic the plan holds, as the last save that succeeded left it, and the last one sent, which may be on its way. */
+  const saved = useRef<string | null>(plan.inquiryText ?? null);
+  const sent = useRef<string | null>(plan.inquiryText ?? null);
+  /** The saves, one after another, so that they reach the server in the order they were made. */
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  /** The pause before a save, and the text it waits to save, which leaving the sheet saves at once. */
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const waiting = useRef<string | null>(null);
   const [said, setSaid] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  useEffect(() => () => clearTimeout(pending.current), []);
 
-  // The field opens on the plan's stored topic once the packet has come; a live draft is never replaced by an answer.
-  if (data && draft === null) {
-    setDraft(data.topic ?? '');
-    setCommitted(data.topic ?? null);
+  /** A save of `text`, after the saves before it; a save that fails leaves the plan's topic unsaved, as it is. */
+  function saveTopic(text: string): Promise<unknown> {
+    sent.current = text;
+    const write = chain.current
+      .then(() => editVisit(client, plan.id, { inquiryText: text }))
+      .then(
+        () => {
+          saved.current = text;
+        },
+        (error: unknown) => {
+          sent.current = saved.current;
+          throw error;
+        },
+      );
+    chain.current = write.catch(() => {});
+    return write;
   }
+
+  // The sheet gone, as the editor's page left within the pause, the text it waited to save is saved all the same, as the
+  // app's task applies it.
+  const flush = useEffectEvent(() => {
+    clearTimeout(pending.current);
+    const text = waiting.current;
+    waiting.current = null;
+    if (text !== null && topicIsUncommitted(text, sent.current)) void saveTopic(text).catch(() => {});
+  });
+  useEffect(() => () => flush(), []);
+
   // A re-derived plan can lose the scoped repository, which the server answers with the whole plan.
   if (data && !packet.isPlaceholderData && repository !== null && data.repository == null) setRepository(null);
 
@@ -61,18 +92,22 @@ export function PacketSheet({ plan, onClose }: { plan: VisitPlan; onClose: () =>
     done.current?.closest('dialog')?.close();
   }
 
-  /** `applyTopicEdit()`: the draft saved to the plan, a blank one as none, and the packet rendered again. */
-  async function commitTopic(text: string) {
+  /**
+   * `applyTopicEdit()`: the draft saved to the plan, a blank one as none, and the packet rendered again; a text already on
+   * its way waits for that save rather than sending a second.
+   */
+  function commitTopic(text: string): Promise<unknown> {
     clearTimeout(pending.current);
-    if (!topicIsUncommitted(text, committed)) return;
-    setCommitted(text);
-    await editVisit(client, plan.id, { inquiryText: text });
+    waiting.current = null;
+    if (!topicIsUncommitted(text, sent.current)) return chain.current;
+    return saveTopic(text);
   }
 
   /** `scheduleTopicRender()`: saved half a second after typing stops. */
   function typed(text: string) {
     setDraft(text);
     clearTimeout(pending.current);
+    waiting.current = text;
     pending.current = setTimeout(() => void run(() => commitTopic(text)), topicPause);
   }
 
@@ -85,19 +120,25 @@ export function PacketSheet({ plan, onClose }: { plan: VisitPlan; onClose: () =>
     }
   }
 
-  /** Done: a topic the pause has not yet taken is saved first, so that closing never races what was just typed. */
+  /**
+   * Done: a topic the plan does not hold yet is saved first, so that closing never races what was just typed; one that
+   * cannot be saved keeps the sheet open, saying why.
+   */
   async function finish() {
-    if (draft !== null && topicIsUncommitted(draft, committed)) {
-      try {
-        await commitTopic(draft);
-      } catch (error) {
-        setFailure(errorMessage(error));
-        return;
-      }
-      closeAtOnce(close);
+    if (!topicIsUncommitted(draft, saved.current)) {
+      close();
       return;
     }
-    close();
+    setFailure(null);
+    try {
+      await commitTopic(draft);
+    } catch (error) {
+      setFailure(errorMessage(error));
+      return;
+    }
+    // A save of this text that was already on its way, and failed, said so when it failed.
+    if (topicIsUncommitted(draft, saved.current)) return;
+    closeAtOnce(close);
   }
 
   async function copyDraft(chosen: string) {
@@ -156,11 +197,11 @@ export function PacketSheet({ plan, onClose }: { plan: VisitPlan; onClose: () =>
               rows={3}
               aria-describedby={captionId}
               placeholder={data.topicPlaceholder}
-              value={draft ?? ''}
+              value={draft}
               onChange={(event) => typed(event.target.value)}
             />
             <p id={captionId} className="note">
-              {showsSeededCaption(draft ?? '', data.researchQuestion) ? words.packetTopicSeeded : words.packetTopicUnseeded}
+              {showsSeededCaption(draft, data.researchQuestion) ? words.packetTopicSeeded : words.packetTopicUnseeded}
             </p>
           </div>
           <fieldset className="packet-options">

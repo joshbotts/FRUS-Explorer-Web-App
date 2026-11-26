@@ -255,7 +255,7 @@ An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an i
 
 ## PDF export
 
-**Export…**, in a collection's editor, and **Save as PDF**, in an Archives Visit's packet, save a PDF while the server has its PDF service: Gotenberg, whose Chromium prints the collection's HTML export with its print styles, on US Letter pages with an inch's margin, as FRUS Explorer lays out its own. Chromium breaks the pages, so they fall where the HTML export lets them rather than where the app's do. The service is `compose.yaml`'s `pdf` service, which runs only with the `pdf` profile; its first start downloads about 500 MB:
+**Export…**, in a collection's editor, saves a PDF while the server has its PDF service, as **Save as PDF** does in an Archives Visit's packet (below): Gotenberg, whose Chromium prints the collection's HTML export with its print styles, on US Letter pages with an inch's margin, as FRUS Explorer lays out its own. Chromium breaks the pages, so they fall where the HTML export lets them rather than where the app's do. The service is `compose.yaml`'s `pdf` service, which runs only with the `pdf` profile; its first start downloads about 500 MB:
 
 ```bash
 echo "COMPOSE_PROFILES=pdf" >> .env

@@ -23,12 +23,15 @@
 // Suggested Next's seed, named after the project, with both halves on (`planVisit(_:)`), and its gate
 // (`GET …/visit`); and a collection's reading list (`GET /api/v1/me/collections/{id}/visit-documents`), the one membership
 // rule every add from a collection shares (`TripPacketSeed.resolve`): a smart collection's saved search's results, in their
-// order, else its documents and excerpts, by the kit's rule over its entries (`staticSeedDocuments(from:)`). A collection
-// authority's record's citing documents are ArchivalCollection.swift's.
+// order, else its documents and excerpts, by the kit's rule over its entries (`staticSeedDocuments(from:)`); and a
+// collection authority's record's citing documents (`GET /api/v1/me/archival-collection/documents?id=`,
+// `fetchCitingDocumentsForPlan(expected:)`), every document of the served index the record's own match finds, to the app's
+// ceiling, under `/me` since only the add reads them.
 //
 // App code mirrored here, held to its source by ArchivePacketMirrorParityTests: `TripPacketSheet`'s `render(_:)`, its
 // `facilities` and `copyDraft(for:)`, its `rebuild()`'s order of refusals, `applyTopicEdit()`'s write and
-// `persistDeliverables()`; `TripPacketPDFRenderer.render`'s page; and `ProjectHomeView.planVisit(_:)` and `projectPlan`.
+// `persistDeliverables()`; `TripPacketPDFRenderer.render`'s page; `ProjectHomeView.planVisit(_:)` and `projectPlan`; and
+// `CollectionDetailView.fetchCitingDocumentsForPlan(expected:)`.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -87,6 +90,16 @@ public struct ProjectVisitAnswer: Codable, Equatable, Sendable, ResponseEncodabl
     public var plan: VisitPlanDetail
 }
 
+/// A collection authority's record's citing documents in the served index, every one, as its In Your Library's Add to an
+/// Archives Visit seeds a plan from them.
+public struct ArchivalCollectionDocuments: Codable, Equatable, Sendable, ResponseEncodable {
+    /// The record's name, which the picker's basis quotes and a plan made from them takes.
+    public var name: String
+    /// How many documents cite it, which `documents` holds all of below the fetch's ceiling.
+    public var totalCount: Int
+    public var documents: [VisitSeedDocuments.Document]
+}
+
 /// A collection's reading list, as an add from it seeds a plan, with the names its picker reads.
 public struct VisitSeedDocuments: Codable, Equatable, Sendable, ResponseEncodable {
     public var documents: [Document]
@@ -104,6 +117,10 @@ public struct VisitSeedDocuments: Codable, Equatable, Sendable, ResponseEncodabl
 // MARK: - Routes
 
 enum ArchivePacketRoutes {
+    /// The citing set's fetch ceiling (`planSeedFetchCeiling`): above the corpus's largest unit, 17,613, so the fetch is
+    /// whole in practice; one capped by it says so, as the picker's basis does.
+    static let planSeedFetchCeiling = 20_000
+
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
                     provider: ServedIndexProvider) {
         let store = services.store
@@ -195,6 +212,32 @@ enum ArchivePacketRoutes {
                 created: true, plan: try await ArchiveVisitRoutes.answer(rows, projects: projects, provider: provider, resources: resources)))
         }
 
+        // `fetchCitingDocumentsForPlan(expected:)`: every indexed document drawn from the record, the match Archival
+        // Neighbors runs over its own fields (`collectionNeighbors`), with the limit raised to the ceiling; a query that
+        // fails gives none, as the app's `try?` gives no picker.
+        me.get("archival-collection/documents") { request, context -> ArchivalCollectionDocuments in
+            let query = try FormQuery(request.uri.query)
+            try query.refuseUnknown(["id"])
+            _ = try context.requireUser()
+            guard let id = try query.single("id")?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else {
+                throw APIProblem.invalidParameter("id", "name a record of the collection authority")
+            }
+            // The authority is 2 MB of JSON, decoded once, off the cooperative pool.
+            guard let record = try await Blocking.run({ try resources.collectionAuthorityRecord(id) }) else {
+                throw APIProblem(.notFound, code: "COLLECTION_NOT_FOUND", detail: "The collection authority has no record \(id).")
+            }
+            let served = try await provider.served()
+            let result = try await context.whileClientConnected {
+                (try? await served.pipeline.collectionNeighbors(
+                    lotFileNorm: record.lotFileNorm, repository: record.repository, recordGroup: record.recordGroup,
+                    names: [record.name] + record.aliases, limit: planSeedFetchCeiling))
+                    .map { Citing(documents: $0.documents.map { .init(volumeId: $0.volumeId, documentId: $0.documentId) }, totalCount: $0.totalCount) }
+                    ?? Citing(documents: [], totalCount: 0)
+            }
+            withExtendedLifetime(served) {}
+            return ArchivalCollectionDocuments(name: record.name, totalCount: result.totalCount, documents: result.documents)
+        }
+
         // A collection's reading list, as Add to Archives Visit… seeds a plan from it.
         me.get("collections/:collectionId/visit-documents") { request, context -> VisitSeedDocuments in
             try FormQuery(request.uri.query).refuseUnknown([])
@@ -208,6 +251,12 @@ enum ArchivePacketRoutes {
                 listName: CollectionEditorNaming.listName(savedName: collection.name),
                 suggestedName: collection.name.trimmingCharacters(in: .whitespacesAndNewlines))
         }
+    }
+
+    /// What the record's match found, as the route carries it out of the client's watch.
+    struct Citing: Sendable {
+        let documents: [VisitSeedDocuments.Document]
+        let totalCount: Int
     }
 
     // MARK: The packet

@@ -1080,12 +1080,13 @@ enum ArchiveVisitRoutes {
 
     // MARK: Refusals
 
-    /// An add's documents, as the kit's add takes them: one at least and `seedLimit` at most, each a document of a
-    /// volume this server's catalogue lists, as every route that names a document checks it (`UserDataRoutes.document`).
+    /// An add's documents, as the kit's add takes them: `seedLimit` at most, each a document of a volume this server's
+    /// catalogue lists, as every route that names a document checks it (`UserDataRoutes.document`). None is an add of
+    /// nothing, as the app's picker writes nothing for a smart collection whose search finds none, and its New row makes
+    /// an empty plan.
     static func checked(_ documents: [SeedDocument], resources: ServerResources) throws -> [(volumeId: String, documentId: String)] {
         // The bound's words are written with the constant they state.
         assert(seedLimit == 20_000)
-        guard !documents.isEmpty else { throw APIProblem.invalidParameter("documents", "name at least one document") }
         guard documents.count <= seedLimit else {
             throw APIProblem.invalidParameter("documents", "an add takes at most 20,000 documents")
         }

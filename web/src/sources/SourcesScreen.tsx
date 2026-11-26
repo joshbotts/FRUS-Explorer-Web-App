@@ -9,7 +9,8 @@
 // NARA proxy, once there is a key, the user's or the instance's, and shows what the app's section shows. From PLAN's
 // S30d the Source Note's header carries Add to Archives Visit, the app's menu of three: the archival source, the
 // unprinted references, with their count, or both, an option with nothing behind it absent, each opening the plan picker
-// over this one document, on a server that keeps user data.
+// over this one document, on a server that keeps user data; for a document with pointers and no note, the Unprinted
+// Material's header carries it, as the app's does, the one way in such a document has.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { Children, type ReactNode, useId, useRef, useState } from 'react';
@@ -106,7 +107,9 @@ export function Explorer({ sources }: { sources: SourceExplorer }) {
       {sources.noSourceNote && <NoSourceNote section={sources.noSourceNote} />}
       <Neighbours sources={sources} />
       <ArchivalCollection collection={sources.collection} />
-      {sources.unprinted && <Unprinted unprinted={sources.unprinted} />}
+      {sources.unprinted && (
+        <Unprinted unprinted={sources.unprinted} action={sources.hasSourceNote ? undefined : <AddToVisit sources={sources} />} />
+      )}
     </div>
   );
 }
@@ -939,9 +942,9 @@ function ArchivalCollection({ collection }: { collection: SourceExplorer['collec
 }
 
 /** `unprintedPointersSection`: the footnotes that point at material FRUS did not print, in reading order. */
-function Unprinted({ unprinted }: { unprinted: NonNullable<SourceExplorer['unprinted']> }) {
+function Unprinted({ unprinted, action }: { unprinted: NonNullable<SourceExplorer['unprinted']>; action?: ReactNode }) {
   return (
-    <Section title={words.unprinted} footer={unprinted.footer}>
+    <Section title={words.unprinted} footer={unprinted.footer} action={action}>
       <ul className="se-unprinted">
         {unprinted.rows.map((row) => (
           <li key={row.id}>

@@ -2222,7 +2222,6 @@ export const copy = {
     pickerAnnounceAdded: (name: string) => `Added to ${name}`,
     pickerNoResults: (text: string) => `No Archives Visits match “${text}”.`,
     pickerLoading: 'Loading your Archives Visits…',
-    pickerResolving: 'Gathering the documents…',
     basisSourceExplorer: 'from Source Explorer',
     basisNeighbors: (count: number) => `the ${count} neighbors shown`,
     basisUnit: (name: string) => `the documents citing “${name}”`,
