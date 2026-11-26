@@ -2,6 +2,24 @@
 
 One entry per session, newest first. Phase 4's rows have their entries' places reserved below, in the order the plan expects them to end, and each session fills its own in place (`PLAN.md`, How sessions run beside each other); a session the plan does not name puts its entry directly above the entry it follows.
 
+## Phase 4's close-out: the README streamlined
+
+26 November 2026 · branch `claude/readme-streamline` · [#198](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/198) · upstream `efd73ecb`, unchanged
+
+At the owner's request, after phase 4's sign-off (S31) and before its orchestrating session closed, the README was streamlined from about 7,900 words to about 2,500.
+
+- **Status:** the phases' dates, the image, the pin and where to read more, where one paragraph of 600 words had told the whole history.
+- **What it does:** one bullet an area, the corpus, search, reading, a document's context, analytics and language, each researcher's research, running it and parity.
+- **Known gaps:** one line each, with their issues, the detail left where the rows recorded it, in SPEC, PLAN, COORDINATION and this log.
+- **Next:** the same three items, made shorter.
+- **Kept:** the plan's table, the goals, the architecture, the design decisions and the deployment.
+  - The diagram and the table now name the encoder and the vectors as the image's, with the web's tagger, `FRUSLanguage`.
+  - The Documents list's lines for PLAN, `docs/prep/` and this log are current.
+
+No code, test or other record changed.
+
+**Next:** phase 5, hardening, planned in a session of its own (PLAN's Session plan).
+
 ## Session 31: phase 4's sign-off
 
 26 November 2026 · branch `claude/ecstatic-hawking-b4b867` · [#197](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/197) · upstream `efd73ecb`, S27c's, unchanged
