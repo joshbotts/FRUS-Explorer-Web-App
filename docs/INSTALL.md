@@ -255,7 +255,7 @@ An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an i
 
 ## PDF export
 
-**Export…**, in a collection's editor, saves a PDF while the server has its PDF service, as **Save as PDF** does in an Archives Visit's packet (below): Gotenberg, whose Chromium prints the collection's HTML export with its print styles, on US Letter pages with an inch's margin, as FRUS Explorer lays out its own. Chromium breaks the pages, so they fall where the HTML export lets them rather than where the app's do. The service is `compose.yaml`'s `pdf` service, which runs only with the `pdf` profile; its first start downloads about 500 MB:
+**Export…**, in a collection's editor, saves a PDF while the server has its PDF service, as **Save as PDF** does in an Archives Visit's packet (below): Gotenberg, whose Chromium prints the collection's HTML export with its print styles, on US Letter pages with an inch's margin, as FRUS Explorer lays out its own. Chromium breaks the pages, so they fall where the HTML export lets them rather than where the app's do. For now a collection's footnotes print at the top of every page, over the text, rather than in place, a fault of the app's print styles that waits for the app's next Collections work ([FRUS-Explorer#2015](https://github.com/joshbotts/FRUS-Explorer/issues/2015)); the other formats, and an Archives Visit's packet, are not affected. The service is `compose.yaml`'s `pdf` service, which runs only with the `pdf` profile; its first start downloads about 500 MB:
 
 ```bash
 echo "COMPOSE_PROFILES=pdf" >> .env
@@ -287,7 +287,7 @@ An analytics figure's PDF comes with the analytics.
 
 ## Semantic
 
-The image holds what searching by meaning needs from a server, where FRUS Explorer downloads it on a Mac: Google's EmbeddingGemma 2, the language model that turns a question into the numbers its search compares, the app's own file, `embeddinggemma-2-Q8_0.gguf`, 310 MB, under the Apache License 2.0; and llama.cpp's `llama-server`, built at the commit the app pins, which runs it. Nothing is downloaded once the server runs, and there is nothing to accept. The image's build fetches the model from the app's release and refuses a file of any other length or SHA-256 than the bundled vectors' index names, so that a question is embedded by the model the corpus was. The image's `NOTICE`, in `/usr/share/doc/frus-light`, names the model, with llama.cpp's licences beside it.
+The image holds what searching by meaning needs from a server, where FRUS Explorer downloads it on a Mac: Google's EmbeddingGemma 2, the language model that turns a question into the numbers its search compares, the app's own file, `embeddinggemma-2-Q8_0.gguf`, 310 MB, under the Apache License 2.0; and llama.cpp's `llama-server`, built at the commit the app pins, which runs it. Nothing is downloaded once the server runs, and there is nothing to accept. The image's build fetches the model from the app's release and refuses a file of any other length or SHA-256 than the bundled vectors' index names, so that a question is embedded by the model the corpus was. Phase 4's sign-off held both to FRUS Explorer's own on a Mac: a hundred questions embedded by the server and by the app agree at a cosine of 0.9998 or more, and the server lists the nearest documents of 600 across the series exactly as the app does. The image's `NOTICE`, in `/usr/share/doc/frus-light`, names the model, with llama.cpp's licences beside it.
 
 **The encoder** is a process of the server's: `llama-server`, which the server starts at the first search by meaning, on 127.0.0.1 inside the container alone and with a key of its own each time, reading the model from the image and writing nothing. It is ready within a second or two of starting, and then embeds a question in a tenth of a second or less, on the server's own processor, so nothing a reader searches leaves the server. While it runs it holds about 450 MB of memory; the server stops it three minutes after the last search by meaning, as the app unloads its own, giving that memory back, and the next search starts it again. It stops with the server, and a search that finds it ended starts it again. A question of more than 2,048 tokens, several pages, is refused, in the app's words. **Search by** ▸ **Meaning**, in Search, asks it, and `GET /api/v1/search/meaning`, with a search's fields, its words the question, answers with the closest matches; Related Documents ranks by the vectors, as the next paragraph says.
 
@@ -332,7 +332,7 @@ A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImp
 docker compose pull && docker compose up -d
 ```
 
-When the Compose file changes too, as it did when the daily backup's folder on this machine arrived, fetch it again first, as in [1. Get the Compose file](#1-get-the-compose-file). Your settings are in `.env`, which it leaves alone:
+When the Compose file changes too, as it did when the daily backup's folder on this machine arrived, fetch it again first, as in [1. Get the Compose file](#1-get-the-compose-file). A Compose file from before search by meaning lacks only its `FRUS_ENCODER` line, and the server then takes its own default, on. Your settings are in `.env`, which it leaves alone:
 
 ```bash
 cd ~/frus-light && curl -fsSLO https://raw.githubusercontent.com/joshbotts/FRUS-Explorer-Web-App/main/compose.yaml
