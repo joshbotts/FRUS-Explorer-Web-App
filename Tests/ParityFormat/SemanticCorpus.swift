@@ -24,8 +24,8 @@ public enum SemanticQueries {
     public static let checkThreeCount = 10
     public static var count: Int { appCount + checkThreeCount }
 
-    /// The input keys a golden file made from them records: each app file, and check 3's list.
-    public static var inputKeys: [String] { appFiles + ["fixtures/parity/queries.jsonl"] }
+    /// Check 3's list, from the repository's root.
+    public static let checkThreePath = "fixtures/parity/queries.jsonl"
 
     /// A file's queries, by the harness grammar the app's fixture script reads them with
     /// (`tools/semantic-harvest/make_query_parity_fixture.py`, `parse_queries`): a blank line or one whose first
@@ -45,26 +45,24 @@ public enum SemanticQueries {
         return queries
     }
 
-    /// The hundred, in order, from the repository at `root`, with the SHA-256 of each file read, by its key; the first
-    /// ten of check 3's are its first ten lines' `query`, which must be plain words.
-    public static func load(root: URL) throws -> (queries: [String], inputs: [String: String]) {
+    /// The hundred, in order, from the repository at `root`; the first ten of check 3's are its first ten lines' `query`,
+    /// which must be plain words. A golden file records their digest, `digest(_:)`, as information: the validation holds
+    /// its queries to these themselves, so that an edit to check 3's list past its first ten leaves the file current.
+    public static func load(root: URL) throws -> [String] {
         var queries: [String] = []
-        var inputs: [String: String] = [:]
         for path in appFiles {
             let url = root.appendingPathComponent(path)
             let data: Data
             do { data = try Data(contentsOf: url) } catch {
                 throw GoldenError.malformed(path, "it could not be read: \(error.localizedDescription)")
             }
-            inputs[path] = Digest.sha256(data)
             queries += Self.queries(inFile: String(decoding: data, as: UTF8.self))
         }
         guard queries.count == appCount else {
             throw GoldenError.malformed(appFiles.joined(separator: ", "), "they hold \(queries.count) queries, not the \(appCount) the check takes")
         }
-        let listPath = "fixtures/parity/queries.jsonl"
+        let listPath = checkThreePath
         let list = try Data(contentsOf: root.appendingPathComponent(listPath))
-        inputs[listPath] = Digest.sha256(list)
         struct Line: Decodable { let id: String; let query: String }
         let lines = String(decoding: list, as: UTF8.self).split(separator: "\n").prefix(checkThreeCount)
         for line in lines {
@@ -77,8 +75,11 @@ public enum SemanticQueries {
         guard queries.count == count else {
             throw GoldenError.malformed(listPath, "it gave \(queries.count - appCount) of the \(checkThreeCount) queries")
         }
-        return (queries, inputs)
+        return queries
     }
+
+    /// The digest of the hundred, in order, a line each, which a golden file made from them records.
+    public static func digest(_ queries: [String]) -> String { Digest.sha256(queries.joined(separator: "\n")) }
 }
 
 /// `fixtures/golden/semantic/embeddings.json`: the hundred embedded by the app's own encoder on the Mac. Its members

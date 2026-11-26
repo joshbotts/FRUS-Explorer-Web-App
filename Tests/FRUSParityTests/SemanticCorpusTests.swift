@@ -27,7 +27,7 @@ import Testing
     }
 
     @Test func theHundredAreTheAppsNinetyAndCheckThreesFirstTen() throws {
-        let (queries, inputs) = try SemanticQueries.load(root: Repository.root)
+        let queries = try SemanticQueries.load(root: Repository.root)
         #expect(queries.count == 100 && Set(queries).count == 100)
         // The app's fixture script read the owner's 25 from the first file, by the same grammar.
         let fixture = try EmbedCheck.Fixture(contentsOf: Repository.layout.upstream.appendingPathComponent(EmbedCheck.fixturePath))
@@ -36,7 +36,8 @@ import Testing
         #expect(queries[70] == "Chocolate chip cookie recipe" && queries[89] == "Houseplants that need little light")
         let list = try QueryList.load(Repository.layout.queries)
         #expect(Array(queries.suffix(10)) == list.prefix(10).map(\.query))
-        #expect(Set(inputs.keys) == Set(SemanticQueries.inputKeys))
+        let golden = try Self.embeddings()
+        #expect(golden.provenance.inputs["queries.sha256"] == SemanticQueries.digest(queries))
     }
 
     @Test func theHarnessGrammar() {

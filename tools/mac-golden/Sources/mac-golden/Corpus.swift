@@ -29,7 +29,7 @@ private func bundledTiers(_ repo: Repository) throws -> (tiers: SemanticBundledT
 }
 
 func embedGolden(repo: Repository, model: URL, out: URL) async throws {
-    let (queries, inputs) = try SemanticQueries.load(root: repo.root)
+    let queries = try SemanticQueries.load(root: repo.root)
     let (tiers, _) = try bundledTiers(repo)
     let expected = tiers.index.provenance.modelFileSHA256
     let digest = try SemanticModelStore.sha256Hex(of: model)
@@ -52,8 +52,7 @@ func embedGolden(repo: Repository, model: URL, out: URL) async throws {
     let engine = "SemanticQueryEncoder, the app's own, over the vendored llama.xcframework (llama.cpp \(commit.prefix(7)), "
         + "the commit Scripts/build-llama-xcframework.sh names), loaded as the app loads it: the model mapped, Metal, a "
         + "batch of \(SemanticQueryEncoder.maxTokens) tokens, pooling and attention the GGUF's, L2-normalised in double precision"
-    var recorded = inputs
-    recorded["model.sha256"] = digest
+    let recorded = ["queries.sha256": SemanticQueries.digest(queries), "model.sha256": digest]
     let golden = SemanticEmbeddingsGolden(
         provenance: try repo.provenance(tool: "tools/mac-golden embed", inputs: recorded),
         queryPrefix: SemanticQueryPrompt.queryPrefix, ggufSHA256: digest, referenceEngine: engine, queries: rows)

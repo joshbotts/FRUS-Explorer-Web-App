@@ -168,7 +168,7 @@ public enum GoldenValidation {
         case .richText: return [RichTextGolden.harnessPath, RichTextWebCases.path]
         case .languageTags: return ParityFixtures.teiInputKeys
         case .semanticNeighbours: return SemanticNeighboursLoop.shardInputKeys
-        case .semanticEmbeddings: return SemanticQueries.inputKeys
+        case .semanticEmbeddings: return []
         case .semanticCorpusNeighbours: return []
         }
     }
@@ -350,7 +350,7 @@ public enum GoldenValidation {
             problems.append("\(file): its model is not named by a SHA-256")
         }
         do {
-            let expected = try SemanticQueries.load(root: root).queries
+            let expected = try SemanticQueries.load(root: root)
             if golden.queries.map(\.text) != expected {
                 problems.append("\(file): its queries are not the hundred the repository's files give, in their order")
             }
