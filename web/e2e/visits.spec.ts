@@ -6,6 +6,13 @@
 // under it, Re-seed from Project seeds it with the project's documents, which derive two lots at College Park and a note
 // the server cannot place, the tiers' sheet adds a tier, a lot is given the tier and a note and the other lot excluded,
 // axe at each step; and the plan, the notes and the project are deleted after, since the store outlives the run.
+//
+// S30d's done-when: Playwright adds a document from its sources, opens the packet and saves it, by keyboard on Chromium
+// with no axe violations. On the same server: Source Explorer's Add to Archives Visit adds frus1961-63v06's d10, Lot 66 D
+// 204's letter, to a new plan through the picker's New row; its editor's Export packet opens the packet, College Park's
+// chapter; the topic is written, the citation guidance included and College Park's draft copied, each by keyboard; and
+// Save as Text saves the text the sheet shows, under the kit's name; axe at each step, the plan deleted after.
+import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -200,5 +207,94 @@ test('plans a visit by keyboard: seeds it from its project, adds a tier, sets a 
       for (const note of notes) await fetch(new URL(`api/v1/me/notes/${note}`, base), { method: 'DELETE', headers });
       await fetch(new URL(`api/v1/me/projects/${project}`, base), { method: 'DELETE', headers });
     }, made);
+  }
+});
+
+test('adds a document from its sources, opens the packet and saves it, by keyboard', async ({ page }) => {
+  test.skip(!planning, 'runs on the smoke test’s Standalone server, with FRUS_E2E_VISITS');
+  // Four pages' axe passes, a derivation over the index and the packet's renders.
+  test.setTimeout(120_000);
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('sources/frus1961-63v06/d10');
+  await expect(page.getByRole('heading', { level: 1, name: 'Source Explorer' })).toBeVisible();
+  const add = page.getByRole('button', { name: 'Add to Archives Visit' });
+  await expect(add).toBeVisible();
+  await axeCheck(page);
+  let planId = '';
+  try {
+    // Add to Archives Visit ▸ Add archival source, then the picker's New row: a plan made with d10 alone.
+    await choose(page, add, 'Add archival source');
+    const picker = page.getByRole('dialog', { name: 'Add to Archives Visit' });
+    await expect(picker.getByText('Adding 1 document: archival sources — from Source Explorer')).toBeVisible();
+    await expect(picker.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await axeCheck(page);
+    const made = page.waitForResponse((response) => response.request().method() === 'POST' && /api\/v1\/me\/visits$/.test(response.url()));
+    await reach(page, picker.getByRole('button', { name: 'New Archives Visit' }));
+    await page.keyboard.press('Enter');
+    planId = ((await (await made).json()) as { id: string }).id;
+    await expect(picker).toHaveCount(0);
+    await expect(add).toBeFocused();
+
+    // The plan's editor: d10's lot at College Park, and Export packet.
+    await page.goto(`visits/${planId}`);
+    await expect(page.getByRole('heading', { level: 2, name: 'National Archives at College Park' })).toBeVisible();
+    await reach(page, page.getByRole('button', { name: 'Export packet' }));
+    await page.keyboard.press('Enter');
+    const sheet = page.getByRole('dialog', { name: 'Archives Visit' });
+    const text = sheet.getByRole('region', { name: 'The packet' });
+    await expect(text).toContainText('## National Archives at College Park');
+    await expect(text).toContainText('Files, Lot 66 D 204, RG 59, Department of State');
+    await expect(text).toContainText('## What this packet covers');
+    await axeCheck(page);
+
+    // The topic, written: the packet's drafts carry it once the pause has passed.
+    const topic = sheet.getByRole('textbox', { name: 'Inquiry topic sentence' });
+    await reach(page, topic);
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('The Vienna letters of June 1961');
+    await expect(text).toContainText('Topic: The Vienna letters of June 1961');
+    await expect(sheet.getByText('The inquiry drafts include what you write here.')).toBeVisible();
+
+    // What to Include: the citation guidance, by Space.
+    const crib = sheet.getByRole('checkbox', { name: 'Include NARA citation guidance' });
+    await reach(page, crib);
+    await page.keyboard.press('Space');
+    await expect(text).toContainText('## Citing what you find');
+    await expect(crib).toBeChecked();
+
+    // Copy inquiry draft: College Park's draft alone, on the clipboard.
+    const copyDraft = sheet.getByRole('group', { name: 'Copy inquiry draft' }).getByRole('button', { name: 'National Archives at College Park' });
+    await reach(page, copyDraft);
+    await page.keyboard.press('Enter');
+    await expect(sheet.getByText('Copied the inquiry draft for National Archives at College Park.')).toBeVisible();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied.startsWith('## Advance inquiry')).toBe(true);
+    expect(copied).toContain('Topic: The Vienna letters of June 1961');
+    await axeCheck(page);
+
+    // Save as Text: the text the sheet shows, under the kit's name.
+    const shown = (await text.textContent()) ?? '';
+    const saving = page.waitForEvent('download');
+    await reach(page, sheet.getByRole('button', { name: 'Save as Text' }));
+    await page.keyboard.press('Enter');
+    const file = await saving;
+    expect(file.suggestedFilename()).toMatch(/^Archives Visit — .+\.txt$/);
+    const saved = await readFile(await file.path(), 'utf8');
+    expect(saved).toBe(shown);
+    await expect(sheet.getByText(`Saved ${file.suggestedFilename()}.`)).toBeVisible();
+
+    // Done closes the sheet, focus back on Export packet.
+    await reach(page, sheet.getByRole('button', { name: 'Done' }));
+    await page.keyboard.press('Enter');
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Export packet' })).toBeFocused();
+  } finally {
+    if (planId) {
+      await page.evaluate(async (id) => {
+        const base = document.baseURI;
+        const me = (await (await fetch(new URL('api/v1/me', base))).json()) as { csrfToken: string };
+        await fetch(new URL(`api/v1/me/visits/${id}`, base), { method: 'DELETE', headers: { 'X-CSRF-Token': me.csrfToken } });
+      }, planId);
+    }
   }
 });

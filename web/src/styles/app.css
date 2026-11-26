@@ -7802,3 +7802,118 @@ button.visit-target-label {
 .visit-tier-name {
   font-weight: 600;
 }
+
+/* ─── Archives Visits: the packet and the ways in (S30d) ─────────────────── */
+/* The plan picker: its banner in the accent, as the app's is, its plans as the collection picker's rows. */
+dialog.plan-picker {
+  width: min(40rem, calc(100vw - 2rem));
+  max-width: min(40rem, calc(100vw - 2rem));
+}
+
+dialog.plan-picker input[type='search'] {
+  margin: 0.5rem 0;
+}
+
+.plan-picker-banner {
+  margin: 0.25rem 0 0.5rem;
+  color: var(--accent);
+  font-size: 0.875rem;
+}
+
+button.picker-new .picker-name {
+  color: var(--accent);
+}
+
+/* The packet's sheet: its topic, its options, and the text, fixed-width and selectable, as the app shows it. */
+dialog.packet-sheet {
+  width: min(52rem, calc(100vw - 2rem));
+  max-width: min(52rem, calc(100vw - 2rem));
+}
+
+.packet-topic {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+}
+
+.packet-topic-header,
+.packet-group-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.packet-topic textarea {
+  width: 100%;
+  font: inherit;
+}
+
+.packet-options,
+.packet-deliverables {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.packet-options {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.packet-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.packet-deliverables label {
+  display: block;
+  padding: 0.125rem 0;
+}
+
+.packet-text {
+  max-height: 50vh;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.packet-status:empty {
+  display: none;
+}
+
+/* Source Explorer's Source Note header carries its Add to Archives Visit, as the app's header does. */
+.se-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.se-section-head h2 {
+  margin-bottom: 0;
+}
+
+.se-add-visit .menu-button > button {
+  font-size: 0.875rem;
+}
+
+button.neighbours-add-visit {
+  margin-top: 0.5rem;
+}
+
+.project-visit {
+  margin: 0.75rem 0;
+}

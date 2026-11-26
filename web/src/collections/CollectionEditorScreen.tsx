@@ -4,7 +4,10 @@
 // since S18e, the live preview beside it, the collection as its HTML export renders it. Narrower than
 // 900 px the two are the iPhone's Outline | Preview. A smart collection says what it is first and takes
 // nothing by hand but its apparatus. A row that holds the reader's work asks before its delete, as the
-// app's has since FRUS-Explorer#1941 (`requestDelete(at:)`), and any other goes at once.
+// app's has since FRUS-Explorer#1941 (`requestDelete(at:)`), and any other goes at once. From PLAN's S30d the
+// Add menu's Add to Archives Visit…, as the iPad's places it: the collection's reading list, its saved search's results
+// for a smart one, else its documents and excerpts, resolved on the server, opens the plan picker over it with both
+// halves on and the collection's name for a plan made from it; a search that cannot run says why.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
@@ -32,6 +35,8 @@ import { useHeadingReady } from '../shell/headingFocus';
 import { closeAtOnce, Modal } from '../shell/Modal';
 import { MenuButton } from '../shell/MenuButton';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { collectionSeeds } from '../api/visits';
+import { AddToVisitFailure, PlanPicker, type PlanPickerRequest } from '../visits/PlanPicker';
 import { AddDocuments } from './AddDocuments';
 import { AddHighlights } from './AddHighlights';
 import { CollectionExportSheet } from './CollectionExportSheet';
@@ -123,6 +128,30 @@ function Editor({ detail }: { detail: CollectionDetail }) {
   const rows = contentsRows(detail, collapsed);
   const hand = detail.takesHandAddedEntries;
   const documents = entries.filter((entry) => entry.kind === 'document');
+  const [planning, setPlanning] = useState<PlanPickerRequest | null>(null);
+  const [addToVisitError, setAddToVisitError] = useState<string | null>(null);
+  // Content or a saved search, the export sheet's own rule: excerpts carry real document provenance, and a smart
+  // collection's membership comes from its search.
+  const offersVisit =
+    documents.length > 0 ||
+    entries.some((entry) => entry.kind === 'excerpt' && entry.volumeId !== '' && entry.documentId !== '') ||
+    detail.savedSearchId != null;
+
+  /** `TripPacketSeed.resolve`, on the server, then the picker over the reading list; a search that cannot run, its alert. */
+  async function addToVisit() {
+    try {
+      const seeds = await collectionSeeds(detail.id);
+      setPlanning({
+        documents: seeds.documents,
+        includeSource: true,
+        includeExternalRefs: true,
+        basis: copy.visits.basisCollection(seeds.listName),
+        suggestedName: seeds.suggestedName,
+      });
+    } catch (error) {
+      setAddToVisitError(errorMessage(error));
+    }
+  }
 
   /** A change the editor makes, its refusal said above the outline. */
   async function run<T>(work: () => Promise<T>): Promise<T | undefined> {
@@ -283,6 +312,7 @@ function Editor({ detail }: { detail: CollectionDetail }) {
       disabled: documents.length === 0 || !hand,
     },
     { kind: 'separator' as const },
+    { kind: 'item' as const, label: copy.collectionEditor.addToVisit, onSelect: () => void addToVisit(), disabled: !offersVisit },
     {
       kind: 'group' as const,
       label: copy.collectionEditor.apparatus,
@@ -502,6 +532,24 @@ function Editor({ detail }: { detail: CollectionDetail }) {
             // Kept, the row's menu takes focus back.
             if (!confirmed) requestAnimationFrame(() => focusRowMenu(entryId));
             else await remove(entryId);
+          }}
+        />
+      )}
+      {planning && (
+        <PlanPicker
+          request={planning}
+          onClose={() => {
+            setPlanning(null);
+            requestAnimationFrame(() => addMenu.current?.querySelector<HTMLElement>('button')?.focus());
+          }}
+        />
+      )}
+      {addToVisitError !== null && (
+        <AddToVisitFailure
+          message={addToVisitError}
+          onClose={() => {
+            setAddToVisitError(null);
+            requestAnimationFrame(() => addMenu.current?.querySelector<HTMLElement>('button')?.focus());
           }}
         />
       )}

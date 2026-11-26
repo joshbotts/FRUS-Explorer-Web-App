@@ -6,10 +6,13 @@
 // Everything shown is resolved on the server by the kit, the panels' words where the kit writes them, and the
 // app's own words otherwise (copy.ts). The web's own: the way back, and a link to the neighbours in their three
 // scopes. From PLAN's S22e the NARA Catalog section runs the query the app's `load()` runs, through the server's
-// NARA proxy, once there is a key, the user's or the instance's, and shows what the app's section shows.
+// NARA proxy, once there is a key, the user's or the instance's, and shows what the app's section shows. From PLAN's
+// S30d the Source Note's header carries Add to Archives Visit, the app's menu of three: the archival source, the
+// unprinted references, with their count, or both, an option with nothing behind it absent, each opening the plan picker
+// over this one document, on a server that keeps user data.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { Children, type ReactNode, useId } from 'react';
+import { Children, type ReactNode, useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { documentQuery } from '../api/endpoints';
 import { canSearch, naraStatusQuery, searchNARA } from '../api/nara';
@@ -17,6 +20,8 @@ import { type SourceExplorer, sourceExplorerQuery, type SourcePanel, type Source
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
+import { MenuButton, type MenuEntry } from '../shell/MenuButton';
+import { PlanPicker, type PlanPickerRequest } from '../visits/PlanPicker';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
 import { ClassificationChip, ConfidenceChip, ProvenanceChip } from './Chips';
 import { confirmedDay, curatedSubtitle, publishedLinks, publishedLinkStale, statusValue } from './sourcesRules';
@@ -89,7 +94,7 @@ export function Explorer({ sources }: { sources: SourceExplorer }) {
   return (
     <div className="se-sections">
       {sources.hasSourceNote && (
-        <Section title={words.rawNote}>
+        <Section title={words.rawNote} action={<AddToVisit sources={sources} />}>
           <p className="se-note">{sources.rawSourceNote}</p>
           {sources.classificationMarking && <ClassificationChip marking={sources.classificationMarking} />}
         </Section>
@@ -106,15 +111,73 @@ export function Explorer({ sources }: { sources: SourceExplorer }) {
   );
 }
 
-/** A section of the view's `Form`: its heading, its rows and its footer. */
-function Section({ title, footer, children, label }: { title?: string; footer?: ReactNode; children: ReactNode; label?: string }) {
+/** A section of the view's `Form`: its heading, with what its header carries, its rows and its footer. */
+function Section({
+  title,
+  footer,
+  children,
+  label,
+  action,
+}: {
+  title?: string;
+  footer?: ReactNode;
+  children: ReactNode;
+  label?: string;
+  action?: ReactNode;
+}) {
   const id = useId();
   return (
     <section className="se-section" aria-labelledby={title ? id : undefined} aria-label={title ? undefined : label}>
-      {title && <h2 id={id}>{title}</h2>}
+      {title && action ? (
+        <div className="se-section-head">
+          <h2 id={id}>{title}</h2>
+          {action}
+        </div>
+      ) : (
+        title && <h2 id={id}>{title}</h2>
+      )}
       <div className="se-body">{children}</div>
       {footer && <p className="se-footer">{footer}</p>}
     </section>
+  );
+}
+
+/**
+ * `addToVisitMenu`: the Source Note's three-way add, where both claims meet, the note the drawn-from one and the footnotes'
+ * pointers the pointed-at one; an option with nothing behind it is absent, and with none the menu is too. Each opens the
+ * plan picker over this one document, under its halves.
+ */
+function AddToVisit({ sources }: { sources: SourceExplorer }) {
+  const me = useQuery(meQuery);
+  const [request, setRequest] = useState<PlanPickerRequest | null>(null);
+  const holder = useRef<HTMLDivElement>(null);
+  if (me.data?.userData !== true) return null;
+  const references = sources.unprinted?.rows.length ?? 0;
+  const present = (includeSource: boolean, includeExternalRefs: boolean) =>
+    setRequest({
+      documents: [{ volumeId: sources.volumeId, documentId: sources.documentId }],
+      includeSource,
+      includeExternalRefs,
+      basis: copy.visits.basisSourceExplorer,
+    });
+  const entries: MenuEntry[] = [];
+  if (sources.hasSourceNote) entries.push({ kind: 'item', label: words.addVisitSource, onSelect: () => present(true, false) });
+  if (references > 0) entries.push({ kind: 'item', label: words.addVisitRefs(references), onSelect: () => present(false, true) });
+  if (sources.hasSourceNote && references > 0) entries.push({ kind: 'item', label: words.addVisitBoth, onSelect: () => present(true, true) });
+  if (entries.length === 0) return null;
+  return (
+    <div ref={holder} className="se-add-visit">
+      <MenuButton label={words.addVisit} entries={entries} />
+      {request && (
+        <PlanPicker
+          request={request}
+          onClose={() => {
+            setRequest(null);
+            requestAnimationFrame(() => holder.current?.querySelector<HTMLElement>('.menu-button > button')?.focus());
+          }}
+        />
+      )}
+    </div>
   );
 }
 

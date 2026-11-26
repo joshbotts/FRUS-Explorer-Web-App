@@ -5,13 +5,17 @@
 // set to All volumes for a document and to This volume for a Sources row; then the list, at most thirty rows,
 // each the document's head or id, its volume and dateline, and the line for more than it shows. The query, the
 // order, the cut and the line are the kit's, on the server. The web's own: the scope is in the address, and the
-// way back.
+// way back. From PLAN's S30d, under the list, the app's one honest option over the documents shown: Add the N shown to an
+// Archives Visit…, which opens the plan picker over them with the source alone, a neighbor being a document that shares
+// an archival source, on a server that keeps user data.
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link, useCanGoBack, useRouter } from '@tanstack/react-router';
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { archivalNeighboursQuery, type NeighbourScope, type NeighboursRequest } from '../api/sources';
+import { meQuery } from '../api/userData';
 import { copy } from '../copy';
+import { PlanPicker, type PlanPickerRequest } from '../visits/PlanPicker';
 import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
 
@@ -41,6 +45,9 @@ export function NeighboursScreen() {
   }, [code, navigate]);
   const data = neighbours.data;
   const scope: NeighbourScope = request.scope ?? data?.scope ?? 'all';
+  const me = useQuery(meQuery);
+  const [planning, setPlanning] = useState<PlanPickerRequest | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
 
   return (
     <div className="neighbours">
@@ -118,9 +125,35 @@ export function NeighboursScreen() {
                 ))}
               </ol>
               {data.totalCount > data.documents.length && <p className="note">{words.overflow(data.totalCount - data.documents.length)}</p>}
+              {me.data?.userData === true && (
+                <button
+                  ref={addButton}
+                  type="button"
+                  className="link-button neighbours-add-visit"
+                  onClick={() =>
+                    setPlanning({
+                      documents: data.documents.map((document) => ({ volumeId: document.volumeId, documentId: document.documentId })),
+                      includeSource: true,
+                      includeExternalRefs: false,
+                      basis: copy.visits.basisNeighbors(data.documents.length),
+                    })
+                  }
+                >
+                  {words.addToVisit(data.documents.length)}
+                </button>
+              )}
             </>
           )}
         </div>
+      )}
+      {planning && (
+        <PlanPicker
+          request={planning}
+          onClose={() => {
+            setPlanning(null);
+            requestAnimationFrame(() => addButton.current?.focus());
+          }}
+        />
       )}
     </div>
   );

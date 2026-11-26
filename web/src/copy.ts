@@ -1084,6 +1084,8 @@ export const copy = {
     inVisitPlan: 'in an archive-visit plan',
     openNote: 'Open note',
     editTags: 'Edit Tags…',
+    /** One row a plan the document seeds (S30d). */
+    openPlan: (name: string) => `Open the plan “${name}”`,
     othersFooter:
       'These carry no position in the text, so the app cannot judge them against the change — it can only take you to them. Review them by eye; a summary describes the text as it was when it was written, and the app cannot tell you which of these predate the correction.',
   },
@@ -1173,6 +1175,11 @@ export const copy = {
    * server that is offline or keeps no user data.
    */
   sources: {
+    /** Add to Archives Visit, the Source Note's menu of three (S30d): the source, the unprinted references, or both. */
+    addVisit: 'Add to Archives Visit',
+    addVisitSource: 'Add archival source',
+    addVisitRefs: (count: number) => `Add unprinted references (${count})`,
+    addVisitBoth: 'Add both',
     title: 'Source Explorer',
     tile: 'Sources',
     tileHelp: 'Resolve this document’s source note in the NARA Catalog or RG-59 records',
@@ -1389,7 +1396,7 @@ export const copy = {
   },
   /**
    * Archival Neighbors (PLAN's S22d), in the words of the app's `ArchivalNeighborsSheet`. The way back is
-   * the web's own; its Add to an Archives Visit waits for phase 4's visits.
+   * the web's own; its Add to an Archives Visit since S30d.
    */
   archivalNeighbors: {
     title: 'Archival Neighbors',
@@ -1401,6 +1408,7 @@ export const copy = {
     emptyDetail: 'No documents in your indexed volumes cite this archival source — indexing more volumes may surface some.',
     emptyDetailScoped: 'No documents in this scope cite this archival source — switch to All volumes to search the whole index.',
     overflow: (count: number) => `${count} more share this source — open Source Explorer to see them all.`,
+    addToVisit: (count: number) => `Add the ${count} shown to an Archives Visit…`,
     backToSources: 'Back to Source Explorer',
     backToCollection: 'Back to the collection',
     back: 'Back',
@@ -1429,6 +1437,8 @@ export const copy = {
     localFooter: 'Counted from your own indexed volumes — the series-wide list below is independent of what you have downloaded.',
     neighbours: 'Show Archival Neighbors',
     neighboursHint: 'Lists your indexed documents drawn from this collection',
+    /** The unit-grain add (S30d), its count on the control and again on the picker's banner. */
+    addToVisit: (count: number) => `Add the ${count} citing documents to an Archives Visit…`,
     related: 'Related Collections',
     relatedEmpty: 'No other collection is cited alongside this one in two or more volumes.',
     relatedShared: (count: number) => `${count} shared vols`,
@@ -1917,6 +1927,8 @@ export const copy = {
     statNotes: 'Notes',
     statVisited: 'Documents Visited',
     statSearches: 'Searches Run',
+    /** Plan a Visit (S30d): the project's plan opened, or made from its engaged documents. */
+    planVisit: 'Plan a Visit',
     focusSubjects: 'Focus subjects',
     focusSubjectsAdd: 'Add',
     focusSubjectsEdit: 'Edit',
@@ -2068,7 +2080,7 @@ export const copy = {
     caption: 'Plans for consulting the records behind your documents',
     emptyTitle: 'No Archives Visits',
     emptyDetail:
-      'An Archives Visit uses information drawn from documents’ source notes to generate a draft research-trip plan. Seed one from a project — or start empty below.',
+      'An Archives Visit uses information drawn from documents’ source notes to generate a draft research-trip plan. Seed one from Source Explorer, Archival Neighbors, a collection, or a project — or start empty below.',
     footer:
       'An Archives Visit is an initial draft of a plan for consulting the records behind these documents — what to see, in what order, at which repository. The whole plan is kept on this server.',
     new: 'New Archives Visit',
@@ -2111,7 +2123,7 @@ export const copy = {
     reseed: 'Re-seed from Project',
     duplicated: (name: string) => `Duplicated as “${name}”`,
     noSeedsTitle: 'No documents seeded',
-    noSeedsDetail: 'A plan made while a project is active can be seeded from it with Re-seed from Project.',
+    noSeedsDetail: 'Seed this plan from Source Explorer, Archival Neighbors, a collection, or a project — each surface offers Add to Archives Visit.',
     allOff:
       'Every document’s contributions are switched off — turn a document’s archival source or unprinted references back on under Documents.',
     noTargets:
@@ -2192,6 +2204,64 @@ export const copy = {
     deleteTier: 'Delete Tier',
     deleteTierTitle: (tier: string) => `Delete “${tier}”?`,
     deleteTierMessage: (count: number) => `Its ${count} targets move to Unprioritized. Nothing is removed from the plan.`,
+
+    // The editor's Export packet (S30d).
+    exportPacket: 'Export packet',
+    /** The app's help, with the web's saves where its sheet shares. */
+    exportPacketHelp:
+      'Open this plan’s packet — its research targets, repository visit-planning links and inquiry email drafts — to save as plain text or as a PDF',
+
+    // The plan picker, Add to Archives Visit (S30d), its banner naming what is added, under which claims, from where.
+    pickerTitle: 'Add to Archives Visit',
+    pickerAddingBoth: (documents: string) => `Adding ${documents}: archival sources + unprinted references`,
+    pickerAddingSource: (documents: string) => `Adding ${documents}: archival sources`,
+    pickerAddingRefs: (documents: string) => `Adding ${documents}: unprinted references`,
+    pickerSearch: 'Search Archives Visits…',
+    pickerAdded: 'Added',
+    /** Said aloud as a choice is made, the web's own, as the collection picker says its choice. */
+    pickerAnnounceAdded: (name: string) => `Added to ${name}`,
+    pickerNoResults: (text: string) => `No Archives Visits match “${text}”.`,
+    pickerLoading: 'Loading your Archives Visits…',
+    pickerResolving: 'Gathering the documents…',
+    basisSourceExplorer: 'from Source Explorer',
+    basisNeighbors: (count: number) => `the ${count} neighbors shown`,
+    basisUnit: (name: string) => `the documents citing “${name}”`,
+    basisUnitPartial: (shown: number, total: number, name: string) => `the first ${shown} of ${total} documents citing “${name}”`,
+    basisCollection: (name: string) => `from the collection “${name}”`,
+    collectionErrorTitle: 'Couldn’t Add to Archives Visit',
+    ok: 'OK',
+
+    // The packet's sheet (S30d): its topic, the repositories it covers, what to include, each repository's draft, and
+    // its saves.
+    packetTitle: 'Archives Visit',
+    packetBuilding: 'Reading your documents’ source notes…',
+    packetNoIndexTitle: 'The search index isn’t ready',
+    /** The app's first sentence, the second a server's: its admin indexes, where the app's reader does. */
+    packetNoIndex: 'The packet reads source notes from the search index, which this server isn’t serving yet. Try again once it is.',
+    packetEmptyTitle: 'Nothing to plan yet',
+    packetEmpty:
+      'There are no documents here to plan over. Add documents to a collection, write a note on one, or apply a focus tag — the packet is built from the documents you have engaged with.',
+    packetOptions: 'Options',
+    packetScope: 'Repository',
+    packetScopeAll: 'All repositories',
+    packetCopyDraft: 'Copy inquiry draft',
+    /** Said once a draft is on the clipboard, the web's own, as the app copies with no word. */
+    packetCopied: (repository: string) => `Copied the inquiry draft for ${repository}.`,
+    packetDeliverables: 'What to Include',
+    packetLinks: 'Repository visit-planning links',
+    packetTargets: 'Target list',
+    packetInquiry: 'Inquiry email drafts',
+    packetCrib: 'Include NARA citation guidance',
+    packetTopicHeader: 'Inquiry topic sentence',
+    packetTopicSeeded:
+      'Seeded from your project’s research question — edit freely. The drafts include what you write here, never the stored note.',
+    packetTopicUnseeded: 'The inquiry drafts include what you write here.',
+    packetText: 'The packet',
+    /** The web's saves for the sheet's two shares, the packet as text and as PDF. */
+    packetSaveText: 'Save as Text',
+    packetSavePDF: 'Save as PDF',
+    packetSaving: 'Saving…',
+    packetSaved: (name: string) => `Saved ${name}.`,
   },
 
   // ─── Collections ──────────────────────────────────────────────────────────
@@ -2293,6 +2363,8 @@ export const copy = {
     addHeading: 'Add Section Heading',
     addProse: 'Add Note Block',
     addHighlights: 'Add Highlighted Passages…',
+    /** Add to Archives Visit…, the collection's reading list seeding a plan (S30d). */
+    addToVisit: 'Add to Archives Visit…',
     apparatus: 'Apparatus',
     addDocumentsFooter:
       'Search the index, browse volumes, paste citations or history.state.gov links, or gather a tag. New documents are added to the end of the list.',

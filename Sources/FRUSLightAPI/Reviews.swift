@@ -272,10 +272,18 @@ public struct ReviewOthers: Codable, Equatable, Sendable {
     /// Its summaries, headnote drafts left out.
     public var summaryCount: Int
     public var inVisitPlan: Bool
+    /// The Archives Visit plans that seed it, each a row the sheet's Open the plan opens (PLAN's S30d), by name as the
+    /// app shows it, then by id: one row a plan, since a document can seed several.
+    public var plans: [Plan]
 
     public struct Note: Codable, Equatable, Sendable {
         public var id: String
         public var title: String?
+    }
+
+    public struct Plan: Codable, Equatable, Sendable {
+        public var id: String
+        public var name: String
     }
 }
 
@@ -433,7 +441,8 @@ enum ReviewRoutes {
             "collection_entries": ["id", "collection_id", "kind", "volume_id", "document_id", "text", "sort_order",
                                    "excerpt_rendering_version"],
             "summaries": ["volume_id", "document_id", "is_headnote_draft"],
-            "visit_documents": ["document_key"],
+            "visit_documents": ["document_key", "plan_id"],
+            "visit_plans": ["id", "name"],
         ]
         let (highlights, ledger, rows) = try await Blocking.run {
             (try store.highlights(of: key, for: user), try store.documentReviews(of: key, for: user),
@@ -536,7 +545,8 @@ enum ReviewRoutes {
         }
         let others = ReviewOthers(notes: notes, tagCount: ofDocument("tag_assignments").count,
                                   collectionCount: entries.filter { $0.optionalText("kind") == CollectionEntryKind.document.rawValue }.count,
-                                  summaryCount: summaries, inVisitPlan: inVisitPlan)
+                                  summaryCount: summaries, inVisitPlan: inVisitPlan,
+                                  plans: planRows(seeding: documentKey, documents: rows["visit_documents"], plans: rows["visit_plans"]))
 
         let highlightsStale = rowsOfHighlights.contains { $0.status == "stale" }
         let state = documentChange(key, change: change, ledger: ledger, highlightsStale: highlightsStale)
@@ -547,6 +557,25 @@ enum ReviewRoutes {
     }
 
     // MARK: Helpers
+
+    /// `planRows`: the plans the document seeds, through each seed's plan id, one row a plan, a seed whose plan is gone
+    /// none; each by its display name, the name or "Untitled Archives Visit", ordered as the app orders them, by name
+    /// whatever its case, then by id.
+    static func planRows(seeding documentKey: String, documents: [ExportRow], plans: [ExportRow]) -> [ReviewOthers.Plan] {
+        let seeded = Set(documents.compactMap { row -> String? in
+            let fields = ResearchExport.Fields("visit_documents", row)
+            guard fields.optionalText("document_key") == documentKey else { return nil }
+            return fields.optionalText("plan_id").map(UserSearchText.uuidString)
+        })
+        return plans.compactMap { row -> ReviewOthers.Plan? in
+            let fields = ResearchExport.Fields("visit_plans", row)
+            guard let id = fields.optionalText("id").map(UserSearchText.uuidString), seeded.contains(id) else { return nil }
+            return ReviewOthers.Plan(id: id, name: ArchiveVisitPlanWrites.displayName(of: fields.optionalText("name") ?? ""))
+        }.sorted {
+            let c = $0.name.localizedCaseInsensitiveCompare($1.name)
+            return c != .orderedSame ? c == .orderedAscending : $0.id < $1.id
+        }
+    }
 
     /// The reviews the index records (ReviewStamps.swift), and those Administration's tallies count, in both modes: a
     /// change every user whose research is on the document has reviewed, by their ledgers, or, on a document no one's

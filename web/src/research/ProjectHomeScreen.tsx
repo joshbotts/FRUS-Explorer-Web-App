@@ -6,14 +6,16 @@
 // of its document's text, where the served index holds it, and Dismiss, with Refresh, which has the
 // server find them again, and "Finding leads…" while it does; under them Beyond your library, the volumes the
 // project reaches that the server does not serve (ProjectReach.tsx, PLAN's S26d); Recent Activity; and the quick ways
-// to Research and Search. The app's Collections section and Plan a Visit wait for the rows that bring them, and its
-// weighting for a row of its own.
+// to Research and Search. The app's Collections section waits for a row that brings it, and its weighting for a row of
+// its own. Plan a Visit (PLAN's S30d), its button, follows the tiles where that section would begin: it opens the
+// project's plan, or makes one from the project's engaged documents, and is offered with either.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getRouteApi, Link } from '@tanstack/react-router';
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import { dismissLead, findingLeads, projectHomeQuery, type ProjectHome, refreshLeads, updateProject } from '../api/research';
 import { meQuery, tagsQuery } from '../api/userData';
+import { planVisit, projectVisitQuery } from '../api/visits';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { Modal } from '../shell/Modal';
@@ -104,6 +106,7 @@ function Workspace({ home, onFailure }: { home: ProjectHome; onFailure: () => vo
           </li>
         ))}
       </ul>
+      <PlanVisit projectId={project.id} />
       {home.focusSubjects && <FocusSubjects home={home} />}
       {home.hasTags && <FocusTags home={home} />}
       <Leads home={home} onFailure={onFailure} />
@@ -114,6 +117,43 @@ function Workspace({ home, onFailure }: { home: ProjectHome; onFailure: () => vo
         <Link to="/search">{copy.projectHome.actionSearch}</Link>
       </nav>
     </>
+  );
+}
+
+/**
+ * Plan a Visit (`planVisit(_:)`): the project's plan opened, the most recently changed that names it, or one made from its
+ * engaged documents with both halves on, in its editor. Offered while the project engages a document or has a plan, which
+ * can always be opened (#1457's gate), the engaged set read afresh where the plan is made.
+ */
+function PlanVisit({ projectId }: { projectId: string }) {
+  const client = useQueryClient();
+  const navigate = useNavigate();
+  const visit = useQuery(projectVisitQuery(projectId));
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const offered = visit.data !== undefined && (visit.data.engagedDocuments > 0 || visit.data.planId != null);
+  async function plan() {
+    setBusy(true);
+    setFailure(null);
+    try {
+      const answer = await planVisit(client, projectId);
+      void navigate({ to: '/visits/$planId', params: { planId: answer.plan.id } });
+    } catch (error) {
+      setFailure(errorMessage(error));
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="project-visit">
+      <button type="button" disabled={!offered || busy} onClick={() => void plan()}>
+        {copy.projectHome.planVisit}
+      </button>
+      {failure && (
+        <p className="error" role="alert">
+          {failure}
+        </p>
+      )}
+    </div>
   );
 }
 

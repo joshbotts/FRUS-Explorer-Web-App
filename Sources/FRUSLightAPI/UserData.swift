@@ -502,8 +502,12 @@ enum UserDataRoutes {
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources, meaning: meaning)
         SavedSearchRoutes.add(to: me, services: services, provider: provider)
         VolumeScopeRoutes.add(to: me, services: services, provider: provider, resources: resources)
-        // The Archives Visits, their list and their editor (PLAN's S30c).
-        ArchiveVisitRoutes.add(to: me, services: services, resources: resources, provider: provider)
+        // The Archives Visits, their list and their editor (PLAN's S30c), with the ways in's adds of documents in a group of
+        // their own, whose limit takes 20,000 documents' ids, and the packet (S30d).
+        let visitSeeds = router.group("/api/v1/me")
+            .add(middleware: UserDataGuard(services: services, bodyLimit: ArchiveVisitRoutes.seedsBodyLimit))
+        ArchiveVisitRoutes.add(to: me, seeds: visitSeeds, services: services, resources: resources, provider: provider)
+        ArchivePacketRoutes.add(to: me, services: services, resources: resources, provider: provider)
         // A working corpus's capture carries the results Checklist Mode hides, so its two routes have
         // a group of their own, with its larger limit (S17e).
         let captures = router.group("/api/v1/me")

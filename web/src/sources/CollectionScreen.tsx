@@ -10,16 +10,21 @@
 // `CollectionRelations.previewRowCap` rows, which the server sends, until Show all, and the lists shown whole are in
 // the address, as the app's Browse keeps them for its host (`CollectionDetailView.Expansions`), so Back from a citing
 // volume returns them as the reader left them, while a related record opens with each at its cap. The way back is
-// the web's own.
+// the web's own. From PLAN's S30d In Your Library's unit-grain add, Add the N citing documents to an Archives Visit…, its
+// count on the control: every indexed document drawn from the record, fetched to the app's ceiling, opens the plan
+// picker with the source alone and the record's name for a plan made from them, on a server that keeps user data.
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link, useCanGoBack, useRouter } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { type ArchivalCollection, archivalCollectionQuery, type CoverageEra, type LotClaimant } from '../api/sources';
+import { meQuery } from '../api/userData';
+import { recordSeeds } from '../api/visits';
 import { copy } from '../copy';
 import { columnPath, niceStep, useWidth } from '../search/Readings';
 import { requestHeadingFocus, useHeadingReady } from '../shell/headingFocus';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { PlanPicker, type PlanPickerRequest } from '../visits/PlanPicker';
 import { ProvenanceChip } from './Chips';
 import { claimantCaption, overlapMeterWidth, overlapPercent, relatedCaption } from './sourcesRules';
 
@@ -183,6 +188,7 @@ export function Record({ collection }: { collection: ArchivalCollection }) {
             <Link className="se-link" to="/archival-neighbors" search={{ collection: collection.id }} title={words.neighboursHint}>
               {words.neighbours}
             </Link>
+            <AddCitingToVisit collection={collection} />
           </>
         ) : (
           <p className="se-text">{words.localEmpty}</p>
@@ -308,6 +314,63 @@ export function Record({ collection }: { collection: ArchivalCollection }) {
 }
 
 /** A series NARA divided the lot into: its title, NARA's caption and entry numbers, and its catalogue record. */
+/**
+ * `fetchCitingDocumentsForPlan(expected:)`: every indexed document drawn from the record, then the picker over the whole
+ * set, the source alone, its basis saying so where the fetch's ceiling cut it; none fetched, no picker, as the app's.
+ */
+function AddCitingToVisit({ collection }: { collection: ArchivalCollection }) {
+  const me = useQuery(meQuery);
+  const [fetching, setFetching] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [request, setRequest] = useState<PlanPickerRequest | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  if (me.data?.userData !== true) return null;
+  async function fetchSeeds() {
+    if (fetching) return;
+    setFetching(true);
+    setFailure(null);
+    try {
+      const seeds = await recordSeeds(collection.id);
+      if (seeds.documents.length === 0) return;
+      setRequest({
+        documents: seeds.documents,
+        includeSource: true,
+        includeExternalRefs: false,
+        basis:
+          seeds.totalCount > seeds.documents.length
+            ? copy.visits.basisUnitPartial(seeds.documents.length, seeds.totalCount, seeds.name)
+            : copy.visits.basisUnit(seeds.name),
+        suggestedName: seeds.name,
+      });
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setFetching(false);
+    }
+  }
+  return (
+    <>
+      <button ref={button} type="button" className="link-button se-link" aria-disabled={fetching || undefined} onClick={() => void fetchSeeds()}>
+        {words.addToVisit(collection.documentCount)}
+      </button>
+      {failure && (
+        <p className="error" role="alert">
+          {failure}
+        </p>
+      )}
+      {request && (
+        <PlanPicker
+          request={request}
+          onClose={() => {
+            setRequest(null);
+            requestAnimationFrame(() => button.current?.focus());
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 function Claimant({ claimant }: { claimant: LotClaimant }) {
   const titleId = useId();
   return (

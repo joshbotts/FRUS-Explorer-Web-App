@@ -124,8 +124,48 @@ public struct ArchivalCollectionAnswer: Codable, Equatable, Sendable, ResponseEn
     }
 }
 
+/// A record's citing documents in the served index, every one, as its In Your Library's Add to an Archives Visit seeds a
+/// plan from them (PLAN's S30d).
+public struct ArchivalCollectionDocuments: Codable, Equatable, Sendable, ResponseEncodable {
+    /// The record's name, which the picker's basis quotes and a plan made from them takes.
+    public var name: String
+    /// How many documents cite it, which `documents` holds all of below the fetch's ceiling.
+    public var totalCount: Int
+    public var documents: [Document]
+
+    public struct Document: Codable, Equatable, Sendable {
+        public var volumeId: String
+        public var documentId: String
+    }
+}
+
 enum ArchivalCollectionRoutes {
+    /// The citing set's fetch ceiling (`planSeedFetchCeiling`): above the corpus's largest unit, 17,613, so the fetch is
+    /// whole in practice; one capped by it says so, as the picker's basis does.
+    static let planSeedFetchCeiling = 20_000
+
     static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
+        // `fetchCitingDocumentsForPlan(expected:)`: every indexed document drawn from the record, the match Archival
+        // Neighbors runs over its own fields (`collectionNeighbors`), with the limit raised to the ceiling; a query that
+        // fails gives none, as the app's `try?` gives no picker.
+        router.get("/api/v1/archival-collection/documents") { request, _ -> ArchivalCollectionDocuments in
+            let query = try FormQuery(request.uri.query)
+            try query.refuseUnknown(["id"])
+            guard let id = try query.single("id")?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else {
+                throw APIProblem.invalidParameter("id", "name a record of the collection authority")
+            }
+            guard let record = try await Blocking.run({ try resources.collectionAuthorityRecord(id) }) else {
+                throw APIProblem(.notFound, code: "COLLECTION_NOT_FOUND", detail: "The collection authority has no record \(id).")
+            }
+            let served = try await provider.served()
+            let result = (try? await served.pipeline.collectionNeighbors(
+                lotFileNorm: record.lotFileNorm, repository: record.repository, recordGroup: record.recordGroup,
+                names: [record.name] + record.aliases, limit: planSeedFetchCeiling)) ?? (documents: [], totalCount: 0, basis: nil)
+            withExtendedLifetime(served) {}
+            return ArchivalCollectionDocuments(
+                name: record.name, totalCount: result.totalCount,
+                documents: result.documents.map { .init(volumeId: $0.volumeId, documentId: $0.documentId) })
+        }
         router.get("/api/v1/archival-collection") { request, _ -> ArchivalCollectionAnswer in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["id"])
