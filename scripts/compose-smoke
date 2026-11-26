@@ -116,7 +116,7 @@ cleanup() {
     fi
   fi
   docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" "$COMPOSE_PROJECT_NAME-keyless" \
-    "$COMPOSE_PROJECT_NAME-library-github" "$COMPOSE_PROJECT_NAME-library-services" >/dev/null 2>&1 || true
+    "$COMPOSE_PROJECT_NAME-library-github" "$COMPOSE_PROJECT_NAME-library-services" "$COMPOSE_PROJECT_NAME-shards" >/dev/null 2>&1 || true
   # The library's Standalone project (PLAN's S21c), with its volume.
   docker compose -p "$COMPOSE_PROJECT_NAME-library" -f compose.yaml -f compose.standalone.yaml down --volumes --remove-orphans >/dev/null 2>&1 || true
   docker volume rm "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
@@ -313,10 +313,11 @@ if [ -n "${FRUS_PARITY_IMAGE:-}" ]; then
   echo "   $(grep "^check 9's kernel half passes" "$work/check9-kernel.log" | cut -c1-200)"
   # At full scale (S31): 600 corpus rows' ten nearest over the image's own 553 shards, copied out of it, each held to
   # the bundled manifest by the server's store, against the Mac's lists in rows, order and score bits.
-  docker rm -f frus-light-smoke-shards >/dev/null 2>&1 || true
-  docker create --name frus-light-smoke-shards "$FRUS_IMAGE" >/dev/null || fail "could not create a container of the image to read its shards"
-  docker cp frus-light-smoke-shards:"$shards_folder" "$work/shards" > /dev/null || fail "could not copy the image's shards"
-  docker rm frus-light-smoke-shards >/dev/null
+  docker create --name "$COMPOSE_PROJECT_NAME-shards" "$FRUS_IMAGE" >/dev/null || fail "could not create a container of the image to read its shards"
+  copied=0
+  docker cp "$COMPOSE_PROJECT_NAME-shards:$shards_folder" "$work/shards" > /dev/null && copied=1
+  docker rm -f "$COMPOSE_PROJECT_NAME-shards" >/dev/null 2>&1 || true
+  [ "$copied" = 1 ] || fail "could not copy the image's shards"
   chmod -R a+rX "$work/shards"
   docker run --rm --user "$(id -u):$(id -g)" --network none -v "$PWD:/repo:ro" -v "$work/shards:/shards:ro" "$FRUS_PARITY_IMAGE" \
     frus-parity corpus-neighbours --shards /shards --repo /repo > "$work/check9-corpus.log" 2>&1 \

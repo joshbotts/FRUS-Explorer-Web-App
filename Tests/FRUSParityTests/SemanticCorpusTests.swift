@@ -41,9 +41,12 @@ import Testing
     }
 
     @Test func theHarnessGrammar() {
-        let text = "# a comment\r\n   # an indented comment\n\nMexican Revolution\r\nSpace aliens   # null control\n"
-            + "C# in diplomacy  \n\"trust but verify\"\n"
-        #expect(SemanticQueries.queries(inFile: text) == ["Mexican Revolution", "Space aliens", "C# in diplomacy", "\"trust but verify\""])
+        // Lines end as Python's text mode ends them, at a line feed, a carriage return or the two, and white space is
+        // Unicode's, a no-break space among it.
+        let text = "# a comment\r\n   # an indented comment\n\nMexican Revolution\r\nSpace aliens   # null control\r"
+            + "C# in diplomacy  \n\"trust but verify\"\u{00A0}\n\tSuez crisis 1956\t\r\n"
+        #expect(SemanticQueries.queries(inFile: text)
+            == ["Mexican Revolution", "Space aliens", "C# in diplomacy", "\"trust but verify\"", "\tSuez crisis 1956"])
     }
 
     @Test func theMacsVectorsForTheAppsTwentyFiveAreTheAppsFixturesAtItsBar() async throws {
@@ -117,6 +120,10 @@ import Testing
         candidates[1].candidates = SemanticNeighboursLoop.record([2, 5])
         #expect(SemanticCorpusLoop.differences(anchors, candidates).count == 1)
         #expect(SemanticCorpusLoop.differences(anchors, [anchors[0]]).first == "the rows differ: the Mac's 2, Linux's 1")
+        var moved = anchors
+        moved[1].row = 525
+        #expect(SemanticCorpusLoop.differences(anchors, moved).first
+            == "the rows differ: the Mac's 2, Linux's 2, parting at row 524 on the Mac and 525 on Linux")
     }
 
     @Test func theValidationFindsAFileThatIsNotWhole() throws {
@@ -138,6 +145,10 @@ import Testing
         #expect(GoldenValidation.semanticCorpusNeighboursProblems(corpus).count == 1)
         corpus = try Self.corpus()
         corpus.anchors[9].candidates = SemanticNeighboursLoop.record([1, 2, 3])
+        #expect(GoldenValidation.semanticCorpusNeighboursProblems(corpus).count == 1)
+        // A stride its rows could not be counted by is reported, never multiplied.
+        corpus = try Self.corpus()
+        corpus.stride = Int.max / 2
         #expect(GoldenValidation.semanticCorpusNeighboursProblems(corpus).count == 1)
     }
 

@@ -5,11 +5,9 @@
     "appBuild" : 1861,
     "indexVersion" : 75,
     "inputs" : {
-      "fixtures/parity/queries.jsonl" : "662a60c72f8c75299a080d75dff534787baf9128db9ecde95a56d237df9c2d23",
       "model.sha256" : "2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135",
-      "upstream/FRUS-Explorer/Planning/semantic-vectors/eg2-b4-move-2026-10-15/session-null-queries.txt" : "0fd55be260fc99f7f8fe71b843d9a6c334a63636599e8d15c8ba294844452ec1",
-      "upstream/FRUS-Explorer/Planning/semantic-vectors/eg2-b4-move-2026-10-15/session-topical-queries.txt" : "bf8406364652b5a577962b78eb29694704901ba8064470eb6a6020f07bc08ebf",
-      "upstream/FRUS-Explorer/Planning/semantic-vectors/owner-eval-queries-2026-08-27.txt" : "df70c25f13fa05c99d3fe07b70ea3eb0514ed9b801b7fd60b5c650a2fb9f1535"
+      "queries.sha256" : "5f4a941ba235f2b02c03151d60c79b96c6b60cbd1d43fa40841377c5f095c6db",
+      "upstream/FRUS-Explorer/Scripts/build-llama-xcframework.sh" : "293fe0caf8a79b9b229d8f60200ced17822b6d93f1e18836f89c3c9f257f6256"
     },
     "platform" : {
       "arch" : "arm64",

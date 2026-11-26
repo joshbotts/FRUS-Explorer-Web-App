@@ -168,7 +168,7 @@ public enum GoldenValidation {
         case .richText: return [RichTextGolden.harnessPath, RichTextWebCases.path]
         case .languageTags: return ParityFixtures.teiInputKeys
         case .semanticNeighbours: return SemanticNeighboursLoop.shardInputKeys
-        case .semanticEmbeddings: return []
+        case .semanticEmbeddings: return [SemanticEmbeddingsGolden.encoderScriptPath]
         case .semanticCorpusNeighbours: return []
         }
     }
@@ -380,8 +380,10 @@ public enum GoldenValidation {
         where digest.wholeMatch(of: /[0-9a-f]{64}/) == nil {
             problems.append("\(file): its \(name) is not a SHA-256")
         }
-        let rows = (0..<SemanticCorpusLoop.rowCount).map { $0 * golden.stride }
-        if golden.stride <= 0 || golden.anchors.map(\.row) != rows {
+        // The stride is read before anything is multiplied by it, so that a file that is not whole is reported, not trapped on.
+        let strideReads = golden.stride > 0 && golden.stride <= Int.max / SemanticCorpusLoop.rowCount
+        let rows = strideReads ? (0..<SemanticCorpusLoop.rowCount).map { $0 * golden.stride } : []
+        if !strideReads || golden.anchors.map(\.row) != rows {
             problems.append("\(file): its rows are not the first \(SemanticCorpusLoop.rowCount) of a stride of \(golden.stride)")
         }
         for anchor in golden.anchors {

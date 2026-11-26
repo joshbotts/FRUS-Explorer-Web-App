@@ -835,13 +835,18 @@ func embed(_ arguments: Arguments) async throws {
     // Reported, not gated (PLAN's S31): how many of each query's ten nearest the two encoders' vectors share.
     var agreement: EmbedCheck.Agreement?
     if let shards, result.refusals.isEmpty {
-        let resources = try repository(arguments).upstream.appendingPathComponent(ParityIndex.resourcesPath)
-        let found = try await EmbedCheck.agreement(fixture: fixture, server: result.serverVectors, resources: resources, shards: shards)
-        for row in found.rows where row.shared < min(row.fixture.count, row.server.count) {
-            print("\(row.shared) of \(min(row.fixture.count, row.server.count)) nearest shared  \(row.query)")
+        do {
+            let resources = try repository(arguments).upstream.appendingPathComponent(ParityIndex.resourcesPath)
+            let found = try await EmbedCheck.agreement(fixture: fixture, server: result.serverVectors, resources: resources, shards: shards)
+            for row in found.rows where row.shared < min(row.fixture.count, row.server.count) {
+                print("\(row.shared) of \(min(row.fixture.count, row.server.count)) nearest shared  \(row.query)")
+            }
+            print(found.summary())
+            agreement = found
+        } catch {
+            // Information, never the check: a list that cannot be compared is said, and the cosines decide.
+            print("the two encoders' lists were not compared: \(error)")
         }
-        print(found.summary())
-        agreement = found
     }
     if let out = arguments.options["--out"] {
         let encoder = JSONEncoder()

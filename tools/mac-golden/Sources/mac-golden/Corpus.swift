@@ -52,7 +52,11 @@ func embedGolden(repo: Repository, model: URL, out: URL) async throws {
     let engine = "SemanticQueryEncoder, the app's own, over the vendored llama.xcframework (llama.cpp \(commit.prefix(7)), "
         + "the commit Scripts/build-llama-xcframework.sh names), loaded as the app loads it: the model mapped, Metal, a "
         + "batch of \(SemanticQueryEncoder.maxTokens) tokens, pooling and attention the GGUF's, L2-normalised in double precision"
-    let recorded = ["queries.sha256": SemanticQueries.digest(queries), "model.sha256": digest]
+    let recorded = [
+        "queries.sha256": SemanticQueries.digest(queries), "model.sha256": digest,
+        SemanticEmbeddingsGolden.encoderScriptPath:
+            try ParityFormat.Digest.sha256(contentsOf: repo.url(SemanticEmbeddingsGolden.encoderScriptPath)),
+    ]
     let golden = SemanticEmbeddingsGolden(
         provenance: try repo.provenance(tool: "tools/mac-golden embed", inputs: recorded),
         queryPrefix: SemanticQueryPrompt.queryPrefix, ggufSHA256: digest, referenceEngine: engine, queries: rows)

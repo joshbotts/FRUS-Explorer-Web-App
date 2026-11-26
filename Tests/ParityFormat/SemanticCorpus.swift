@@ -28,19 +28,31 @@ public enum SemanticQueries {
     public static let checkThreePath = "fixtures/parity/queries.jsonl"
 
     /// A file's queries, by the harness grammar the app's fixture script reads them with
-    /// (`tools/semantic-harvest/make_query_parity_fixture.py`, `parse_queries`): a blank line or one whose first
-    /// character past its leading spaces is `#` is skipped, and a query's tag is split off at three spaces and `#`,
-    /// then its trailing spaces.
+    /// (`tools/semantic-harvest/make_query_parity_fixture.py`, `parse_queries`): lines as Python's text mode reads
+    /// them, ended by a line feed, a carriage return or the two together; a blank line or one whose first character past
+    /// its leading white space is `#` skipped; and a query's tag split off at three spaces and `#`, then its trailing
+    /// white space. The text is read by Unicode scalars, since a carriage return and a line feed are one `Character`.
     public static func queries(inFile text: String) -> [String] {
+        var lines: [String.UnicodeScalarView] = [String.UnicodeScalarView()]
+        var afterReturn = false
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "\r": lines.append(String.UnicodeScalarView()); afterReturn = true; continue
+            case "\n": if !afterReturn { lines.append(String.UnicodeScalarView()) }
+            default: lines[lines.count - 1].append(scalar)
+            }
+            afterReturn = false
+        }
+        let space = CharacterSet.whitespacesAndNewlines
         var queries: [String] = []
-        for raw in text.components(separatedBy: "\n") {
-            var line = raw
-            while line.hasSuffix("\r") { line.removeLast() }
-            let leading = line.drop { $0 == " " || $0 == "\t" }
-            if line.trimmingCharacters(in: .whitespaces).isEmpty || leading.hasPrefix("#") { continue }
+        for scalars in lines {
+            let leading = scalars.drop { space.contains($0) }
+            if leading.isEmpty || leading.first == "#" { continue }
+            var line = String(scalars)
             if let tag = line.range(of: "   #") { line = String(line[..<tag.lowerBound]) }
-            while let last = line.last, last == " " || last == "\t" { line.removeLast() }
-            queries.append(line)
+            var kept = line.unicodeScalars
+            while let last = kept.last, space.contains(last) { kept.removeLast() }
+            queries.append(String(kept))
         }
         return queries
     }
@@ -112,6 +124,9 @@ public struct SemanticEmbeddingsGolden: Codable, Equatable, Sendable {
     public static let currentFormat = 1
     /// The vectors' width: EmbeddingGemma 2's.
     public static let dimensions = 768
+    /// The app's script that builds its `llama.xcframework`, which names the llama.cpp commit the app's encoder runs:
+    /// a required input, so that a pin move to another commit makes the file stale.
+    public static let encoderScriptPath = "upstream/FRUS-Explorer/Scripts/build-llama-xcframework.sh"
 
     public init(provenance: Provenance, queryPrefix: String, ggufSHA256: String, referenceEngine: String, queries: [Query]) {
         self.format = Self.currentFormat
@@ -222,7 +237,9 @@ public enum SemanticCorpusLoop {
     public static func differences(_ mac: [SemanticCorpusAnchor], _ linux: [SemanticCorpusAnchor], limit: Int = 20) -> [String] {
         var found: [String] = []
         if mac.map(\.row) != linux.map(\.row) {
-            found.append("the rows differ: the Mac's \(mac.count), Linux's \(linux.count)")
+            let at = (0..<min(mac.count, linux.count)).first { mac[$0].row != linux[$0].row }
+            found.append("the rows differ: the Mac's \(mac.count), Linux's \(linux.count)"
+                + (at.map { ", parting at row \(mac[$0].row) on the Mac and \(linux[$0].row) on Linux" } ?? ""))
         }
         let theirs = Dictionary(linux.map { ($0.row, $0) }, uniquingKeysWith: { first, _ in first })
         for anchor in mac {
@@ -257,8 +274,11 @@ public enum SemanticCorpusLoop {
             guard let bytes = try? Data(contentsOf: url, options: .alwaysMapped) else {
                 throw GoldenError.malformed(folder.path, "it holds no \(shard.volumeID).vec, which the bundled manifest names")
             }
-            guard bytes.count == shard.bytes, Digest.sha256(bytes) == shard.sha256 else {
+            guard bytes.count == shard.bytes else {
                 throw GoldenError.malformed(folder.path, "\(shard.volumeID).vec is not the bundled manifest's: \(bytes.count) bytes, where it names \(shard.bytes)")
+            }
+            guard Digest.sha256(bytes) == shard.sha256 else {
+                throw GoldenError.malformed(folder.path, "\(shard.volumeID).vec is not the bundled manifest's: its SHA-256 is not the one it names")
             }
         }
         return Digest.sha256(data)
