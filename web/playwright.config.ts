@@ -39,8 +39,9 @@ const correcting = !!process.env.FRUS_E2E_PEOPLE;
 // collocates, on the smoke test's Standalone server, whose index holds the three fixture volumes' text.
 const language = /distinctive-collocates\.spec\.ts$/;
 const ranking = !!process.env.FRUS_E2E_LANGUAGE;
-// Archives Visits (PLAN's S30c): its spec's Standalone test, a plan seeded from a project's notes over the smoke test's
-// Standalone server's index of the three fixture volumes, whose source notes derive its targets.
+// Archives Visits (PLAN's S30c): its spec's Standalone tests, a plan seeded from a project's notes over the smoke test's
+// Standalone server's index of the three fixture volumes, whose source notes derive its targets, and (S30d) a document added
+// from its sources and the plan's packet opened and saved.
 const visits = /visits\.spec\.ts$/;
 const planning = !!process.env.FRUS_E2E_VISITS;
 

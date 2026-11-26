@@ -4,8 +4,10 @@
 // kit's search found its passage again close to where it was, Move Here, with the words and what surrounds them,
 // and Confirm and Remove…; each quotation with the kit's check of it; and the other annotations, counted, the
 // notes opened from it and the tags edited. It moves nothing and removes nothing of its own accord, as the app's
-// does not. Its rows keep the order they opened in, so that a move does not shift a row under the keyboard.
+// does not. Its rows keep the order they opened in, so that a move does not shift a row under the keyboard. From PLAN's
+// S30d each Archives Visit plan the document seeds has its row, Open the plan, which opens the plan's editor.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import {
@@ -346,6 +348,14 @@ function Sections({
               {words.editTags}
             </button>
           </li>
+          {/* One row a plan the document seeds: the editor takes a whole plan, so the row promises only to open it. */}
+          {others.plans.map((plan) => (
+            <li key={plan.id}>
+              <Link to="/visits/$planId" params={{ planId: plan.id }}>
+                {words.openPlan(plan.name)}
+              </Link>
+            </li>
+          ))}
         </ul>
         <p className="note">{words.othersFooter}</p>
       </section>

@@ -162,7 +162,7 @@ import Testing
             (Self.list, #"if indexed < seeds.count {"#, Self.listScreen, #"{plan.indexedDocumentCount < plan.documentCount && ("#),
             (Self.list, #"opened = copy"#, Self.listScreen, #"void navigate({ to: '/visits/$planId', params: { planId: copied.id } });"#),
             (Self.list, #"let plan = ArchiveVisitPlan.make(name: "", activeProjectId: appState.activeProjectId, in: modelContext)"#,
-             Self.server, #"let plan = ArchiveVisitPlanWrites.newPlan(name: body.name ?? "", projectId: project?.id, researchQuestion: project?.researchQuestion, id: UUID(), now: time)"#),
+             Self.server, #"var plan = ArchiveVisitPlanWrites.newPlan(name: body.name ?? "", projectId: project?.id, researchQuestion: project?.researchQuestion, id: UUID(), now: time)"#),
             (Self.model, #"let record = ArchiveVisitPlanWrites.newPlan(name: name, projectId: activeProject?.id, researchQuestion: activeProject?.researchQuestion)"#,
              Self.server, #"researchQuestion: project?.researchQuestion, id: UUID(), now: time)"#),
         ])
@@ -248,6 +248,13 @@ import Testing
             (editor, "archiveVisit.editor.tiers", "Priority Tiers…", "tiers: 'Priority Tiers…',"),
             (editor, "archiveVisit.editor.reseed", "Re-seed from Project", "reseed: 'Re-seed from Project',"),
             (editor, "archiveVisit.editor.noSeeds.title", "No documents seeded", "noSeedsTitle: 'No documents seeded',"),
+            // The app's two sentences, true here since S30d brought the ways in.
+            (editor, "archiveVisit.editor.noSeeds.detail",
+             "Seed this plan from Source Explorer, Archival Neighbors, a collection, or a project — each surface offers Add to Archives Visit.",
+             "noSeedsDetail: 'Seed this plan from Source Explorer, Archival Neighbors, a collection, or a project — each surface offers Add to Archives Visit.',"),
+            (list, "archiveVisit.empty.detail",
+             "An Archives Visit uses information drawn from documents’ source notes to generate a draft research-trip plan. Seed one from Source Explorer, Archival Neighbors, a collection, or a project — or start empty below.",
+             "emptyDetail: 'An Archives Visit uses information drawn from documents’ source notes to generate a draft research-trip plan. Seed one from Source Explorer, Archival Neighbors, a collection, or a project — or start empty below.',"),
             (editor, "archiveVisit.editor.allOff",
              "Every document’s contributions are switched off — turn a document’s archival source or unprinted references back on under Documents.",
              "allOff: 'Every document’s contributions are switched off — turn a document’s archival source or unprinted references back on under Documents.',"),
@@ -345,9 +352,6 @@ import Testing
 
         // The app's words of a device, its sync and its index, which the web says of this server: both held.
         for (source, key, words, line) in [
-            (list, "archiveVisit.empty.detail",
-             "An Archives Visit uses information drawn from documents’ source notes to generate a draft research-trip plan. Seed one from Source Explorer, Archival Neighbors, a collection, or a project — or start empty below.",
-             "emptyDetail: 'An Archives Visit uses information drawn from documents’ source notes to generate a draft research-trip plan. Seed one from a project — or start empty below.',"),
             (list, "archiveVisit.list.footer",
              "An Archives Visit is an initial draft of a plan for consulting the records behind these documents — what to see, in what order, at which repository. The whole plan syncs to your other devices.",
              "footer: 'An Archives Visit is an initial draft of a plan for consulting the records behind these documents — what to see, in what order, at which repository. The whole plan is kept on this server.',"),
@@ -365,9 +369,6 @@ import Testing
             (editor, "archiveVisit.info.sparsity.measured.v2",
              #"On this device: \(sparsity.withReferences.formatted()) of \(sparsity.indexed.formatted()) indexed documents carry such references."#,
              "`On this server: ${withReferences.toLocaleString('en-US')} of ${indexed.toLocaleString('en-US')} indexed documents carry such references.`,"),
-            (editor, "archiveVisit.editor.noSeeds.detail",
-             "Seed this plan from Source Explorer, Archival Neighbors, a collection, or a project — each surface offers Add to Archives Visit.",
-             "noSeedsDetail: 'A plan made while a project is active can be seeded from it with Re-seed from Project.',"),
             (editor, "archiveVisit.editor.noTargets",
              "No targets derive from these documents on this device — their volumes may not be indexed yet, or their source notes name nothing the app can place.",
              "noTargets: 'No targets derive from these documents on this server — their volumes may not be indexed yet, or their source notes name nothing the server can place.',"),

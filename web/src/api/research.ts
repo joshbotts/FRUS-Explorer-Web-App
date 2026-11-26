@@ -275,7 +275,8 @@ export const preferencesQuery = queryOptions({
 
 /** After a project changes, every list of them and every account of one, and what a note names of them. */
 function projectsChanged(client: QueryClient) {
-  for (const key of ['projects', 'projectHome', 'history', 'notes', 'note', 'documentNotes', 'exportContents']) {
+  // Plan a Visit's gate reads the project's engaged documents, which its focus tags are among (#1457).
+  for (const key of ['projects', 'projectHome', 'projectVisit', 'history', 'notes', 'note', 'documentNotes', 'exportContents']) {
     void client.invalidateQueries({ queryKey: [key] });
   }
 }

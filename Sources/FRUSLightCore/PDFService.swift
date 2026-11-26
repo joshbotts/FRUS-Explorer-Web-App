@@ -153,10 +153,12 @@ public actor PDFService {
     // MARK: - Printing
 
     /// The PDF Chromium prints of `html`, a page that loads nothing from elsewhere, through Gotenberg's
-    /// `POST /forms/chromium/convert/html`, the page as its `index.html`.
-    public nonisolated func pdf(fromHTML html: Data) async throws -> Data {
+    /// `POST /forms/chromium/convert/html`, the page as its `index.html`, on the page `fields` sets: a
+    /// collection's, `printFields`, unless the caller names another, as an Archives Visit's packet does (PLAN's
+    /// S30d).
+    public nonisolated func pdf(fromHTML html: Data, fields: [(name: String, value: String)] = PDFService.printFields) async throws -> Data {
         let boundary = Self.boundary(avoiding: html)
-        let body = Self.form(html: html, boundary: boundary)
+        let body = Self.form(html: html, boundary: boundary, fields: fields)
         let answer: HTTPAnswer
         do {
             answer = try await exchange(
@@ -186,7 +188,7 @@ public actor PDFService {
 
     /// The form Gotenberg's Chromium route reads: the page as `files`, named `index.html`, which the route
     /// requires, then the print fields.
-    static func form(html: Data, boundary: String) -> [UInt8] {
+    static func form(html: Data, boundary: String, fields printFields: [(name: String, value: String)] = PDFService.printFields) -> [UInt8] {
         var form: [UInt8] = []
         func line(_ text: String) { form += Array(text.utf8) + [13, 10] }
         line("--\(boundary)")

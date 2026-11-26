@@ -8,7 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CollectionDetail, CollectionEntry, CollectionListItem, EntryInspector } from '../api/collections';
 import { sent } from '../test/notes';
-import { ready, renderAt, stubServer } from '../test/renderRoute';
+import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { collectionCaption } from './CollectionsScreen';
 
 afterEach(() => {
@@ -352,6 +352,53 @@ describe('a collection’s editor', () => {
     expect(within(rows[4]!).getByText('Chronology')).toBeTruthy();
     expect(within(rows[4]!).getByText('Lists 1 document. Generated from this collection’s documents at export and in the preview.')).toBeTruthy();
     expect(rows.map((row) => row.className.match(/indent-\d/)?.[0])).toEqual(['indent-0', 'indent-1', 'indent-1', 'indent-1', 'indent-1']);
+  });
+
+  it('adds its reading list to an Archives Visit from the Add menu, both halves on (S30d)', async () => {
+    const fetch = server({
+      [`/api/v1/me/collections/${berlinId}`]: detail({ entries: outline, documentCount: 1 }),
+      [`/api/v1/me/collections/${berlinId}/visit-documents`]: {
+        documents: [
+          { volumeId: 'frus1961-63v06', documentId: 'd1' },
+          { volumeId: 'frus1961-63v06', documentId: 'd2' },
+        ],
+        listName: 'Berlin',
+        suggestedName: 'Berlin',
+      },
+      '/api/v1/me/visits': { total: 0, items: [] },
+      'POST /api/v1/me/visits': { id: 'V1' },
+    });
+    renderAt(`/collections/${berlinId}`);
+    await screen.findByRole('list', { name: 'Contents' });
+    await userEvent.click(screen.getByRole('button', { name: /^Add documents, a section heading/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add to Archives Visit…' }));
+    const picker = await screen.findByRole('dialog', { name: 'Add to Archives Visit' });
+    expect(within(picker).getByText('Adding 2 documents: archival sources + unprinted references — from the collection “Berlin”')).toBeTruthy();
+    await userEvent.click(within(picker).getByRole('button', { name: 'New Archives Visit' }));
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/v1/me/visits') && init?.method === 'POST')).toBe(true));
+    const made = fetch.mock.calls.find(([url, init]) => String(url).endsWith('/api/v1/me/visits') && init?.method === 'POST');
+    expect(JSON.parse(String(made?.[1]?.body))).toEqual({
+      name: 'Berlin',
+      documents: [
+        { volumeId: 'frus1961-63v06', documentId: 'd1' },
+        { volumeId: 'frus1961-63v06', documentId: 'd2' },
+      ],
+      includeSource: true,
+      includeExternalRefs: true,
+    });
+  });
+
+  it('says why a collection’s add found no reading list (S30d)', async () => {
+    server({
+      [`/api/v1/me/collections/${berlinId}`]: detail({ entries: outline, documentCount: 1 }),
+      [`/api/v1/me/collections/${berlinId}/visit-documents`]: new ProblemAnswer(409, 'SAVED_SEARCH_MISSING', 'The linked saved search could not be found.'),
+    });
+    renderAt(`/collections/${berlinId}`);
+    await screen.findByRole('list', { name: 'Contents' });
+    await userEvent.click(screen.getByRole('button', { name: /^Add documents, a section heading/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add to Archives Visit…' }));
+    const alert = await screen.findByRole('alertdialog', { name: 'Couldn’t Add to Archives Visit' });
+    expect(within(alert).getByText('The linked saved search could not be found.')).toBeTruthy();
   });
 
   it('names each row’s remove for its kind, with the app’s help as its tip (FRUS-Explorer#1941)', async () => {

@@ -1,7 +1,9 @@
 // The user's Archives Visit plans (PLAN's S30c), /api/v1/me/visits: the list, a plan's editor state, and every write
-// the editor makes, each answering the plan as it then stands, which the editor shows at once.
+// the editor makes, each answering the plan as it then stands, which the editor shows at once. From PLAN's S30d the
+// ways in, an add of documents to a plan or a plan made with them, Project Home's Plan a Visit, a collection's reading
+// list and a collection authority's record's citing documents; and the packet's sheet, its writes and its files.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
-import { getJSON } from './client';
+import { getFile, getJSON } from './client';
 import { change } from './userData';
 
 const segment = encodeURIComponent;
@@ -152,11 +154,20 @@ export function visitQuery(id: string) {
   });
 }
 
-/** Each write answers the plan as it then stands: its editor shows it at once, and the list is read again. */
+/**
+ * Each write answers the plan as it then stands: its editor shows it at once, and the list is read again, as is its
+ * packet, which reads its seeds, stored state, topic and deliverables (S30d).
+ */
 function changed(client: QueryClient, plan: VisitPlan): VisitPlan {
   client.setQueryData(visitQuery(plan.id).queryKey, plan);
   void client.invalidateQueries({ queryKey: ['visits'] });
+  void client.invalidateQueries({ queryKey: ['visitPacket', plan.id.toUpperCase()] });
   return plan;
+}
+
+/** A write that changes the seeds a document's review lists the plans of. */
+function seedsChanged(client: QueryClient) {
+  void client.invalidateQueries({ queryKey: ['documentReview'] });
 }
 
 const path = (id: string, tail = '') => `/api/v1/me/visits/${segment(id)}${tail}`;
@@ -166,8 +177,139 @@ export async function createVisit(client: QueryClient, name?: string): Promise<V
   return changed(client, (await change<VisitPlan>(client, 'POST', '/api/v1/me/visits', name === undefined ? {} : { name }))!);
 }
 
-export async function editVisit(client: QueryClient, id: string, fields: { name?: string; inquiryText?: string }): Promise<VisitPlan> {
+/** The packet's four deliverables, any of which a write names. */
+export type VisitDeliverables = VisitPlan['deliverables'];
+
+export async function editVisit(
+  client: QueryClient,
+  id: string,
+  fields: { name?: string; inquiryText?: string; deliverables?: Partial<VisitDeliverables> },
+): Promise<VisitPlan> {
   return changed(client, (await change<VisitPlan>(client, 'PATCH', path(id), fields))!);
+}
+
+/** A document one of the ways in adds. */
+export interface SeedDocument {
+  volumeId: string;
+  documentId: string;
+}
+
+/** What the plan picker adds: its documents, and the halves its way in presets (`PlanPickerRequest`). */
+export interface SeedRequest {
+  documents: SeedDocument[];
+  includeSource: boolean;
+  includeExternalRefs: boolean;
+}
+
+/** The picker's row: the documents added to a plan by the kit's one add, a seed's halves turned on and never off. */
+export async function addSeeds(client: QueryClient, id: string, request: SeedRequest): Promise<VisitPlan> {
+  const plan = changed(client, (await change<VisitPlan>(client, 'POST', path(id, '/documents'), request))!);
+  seedsChanged(client);
+  return plan;
+}
+
+/** The picker's New row: a plan made under the active project, named as its way in suggests, then seeded with them. */
+export async function createVisitWith(client: QueryClient, request: SeedRequest, name: string): Promise<VisitPlan> {
+  const plan = changed(client, (await change<VisitPlan>(client, 'POST', '/api/v1/me/visits', { name, ...request }))!);
+  seedsChanged(client);
+  return plan;
+}
+
+/** Project Home's Plan a Visit, before it is pressed: the project's plan, and how many documents it engages. */
+export interface ProjectVisit {
+  planId?: string | null;
+  engagedDocuments: number;
+}
+
+export function projectVisitQuery(projectId: string) {
+  return queryOptions({
+    queryKey: ['projectVisit', projectId.toUpperCase()],
+    queryFn: ({ signal }) => getJSON<ProjectVisit>(`/api/v1/me/projects/${segment(projectId)}/visit`, undefined, signal),
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+/** Plan a Visit: the project's plan opened, or made from its engaged documents. */
+export async function planVisit(client: QueryClient, projectId: string): Promise<{ created: boolean; plan: VisitPlan }> {
+  const answer = (await change<{ created: boolean; plan: VisitPlan }>(client, 'POST', `/api/v1/me/projects/${segment(projectId)}/visit`))!;
+  changed(client, answer.plan);
+  void client.invalidateQueries({ queryKey: ['projectVisit', projectId.toUpperCase()] });
+  seedsChanged(client);
+  return answer;
+}
+
+/** A collection's reading list, as Add to Archives Visit… seeds a plan from it, with the names its picker reads. */
+export interface CollectionSeeds {
+  documents: SeedDocument[];
+  listName: string;
+  suggestedName: string;
+}
+
+export async function collectionSeeds(collectionId: string): Promise<CollectionSeeds> {
+  return getJSON<CollectionSeeds>(`/api/v1/me/collections/${segment(collectionId)}/visit-documents`);
+}
+
+/** A collection authority's record's citing documents in this server's index, every one below the fetch's ceiling. */
+export interface RecordSeeds {
+  name: string;
+  totalCount: number;
+  documents: SeedDocument[];
+}
+
+export async function recordSeeds(recordId: string): Promise<RecordSeeds> {
+  return getJSON<RecordSeeds>('/api/v1/me/archival-collection/documents', new URLSearchParams({ id: recordId }));
+}
+
+/** The packet's sheet over a plan (`GET …/packet`). */
+export interface VisitPacket {
+  /** Why there is no packet: no index served, or no documents seeded. */
+  unavailable?: 'indexUnavailable' | 'noDocuments' | null;
+  /** The kit's exporter's text, the whole plan's or a repository's slice. */
+  text?: string | null;
+  /** The day its header's stamp prints, `yyyy-MM-dd` in UTC. */
+  day: string;
+  /** The repository it is scoped to; none for the whole plan. */
+  repository?: string | null;
+  /** The repositories it covers, which it may be scoped to and each with its draft. */
+  repositories: string[];
+  drafts: { repository: string; text: string }[];
+  /** The plan's topic as stored. */
+  topic?: string | null;
+  topicPlaceholder: string;
+  /** The research question of the plan's project, which the topic's caption compares the field to. */
+  researchQuestion?: string | null;
+  deliverables: VisitDeliverables;
+  title: string;
+  fileName: string;
+  textFileName: string;
+}
+
+/**
+ * The packet over the plan `id`, for a repository's slice or the whole plan, and the day the sheet opened on. Kept while
+ * its sheet is open and no longer: a sheet opens on the packet as the plan now stands, never on one an earlier opening read,
+ * which a write since, or one whose answer the sheet's closing cut off, would have left stale.
+ */
+export function packetQuery(id: string, repository: string | null, day: string | null) {
+  return queryOptions({
+    queryKey: ['visitPacket', id.toUpperCase(), repository, day],
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams();
+      if (repository !== null) params.set('repository', repository);
+      if (day !== null) params.set('day', day);
+      return getJSON<VisitPacket>(path(id, '/packet'), params, signal);
+    },
+    staleTime: 30_000,
+    gcTime: 0,
+    retry: false,
+  });
+}
+
+/** The packet saved, as text or as PDF, for the slice and the day the sheet shows: the file, with the name the server gives. */
+export async function packetFile(id: string, format: 'text' | 'pdf', packet: VisitPacket): Promise<{ blob: Blob; name: string }> {
+  const params = new URLSearchParams({ format, day: packet.day });
+  if (packet.repository) params.set('repository', packet.repository);
+  return getFile(`${path(id, '/packet/file')}?${params.toString()}`, format === 'pdf' ? packet.fileName : packet.textFileName);
 }
 
 export async function duplicateVisit(client: QueryClient, id: string): Promise<VisitPlan> {
@@ -178,6 +320,7 @@ export async function deleteVisit(client: QueryClient, id: string): Promise<void
   await change(client, 'DELETE', path(id));
   client.removeQueries({ queryKey: visitQuery(id).queryKey });
   void client.invalidateQueries({ queryKey: ['visits'] });
+  seedsChanged(client);
 }
 
 export async function reseedVisit(client: QueryClient, id: string): Promise<VisitReseed> {
@@ -210,7 +353,9 @@ export async function writeSeed(
 }
 
 export async function removeSeed(client: QueryClient, id: string, key: string): Promise<VisitPlan> {
-  return changed(client, (await change<VisitPlan>(client, 'DELETE', path(id, `/documents?key=${segment(key)}`)))!);
+  const plan = changed(client, (await change<VisitPlan>(client, 'DELETE', path(id, `/documents?key=${segment(key)}`)))!);
+  seedsChanged(client);
+  return plan;
 }
 
 export async function addTier(client: QueryClient, id: string): Promise<VisitPlan> {

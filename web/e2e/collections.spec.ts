@@ -242,8 +242,9 @@ test('makes a collection three sections deep, with documents, a note block and a
     .poll(async () => (await collection(page, id)).entries.find((entry) => entry.kind === 'prose')?.runs)
     .toEqual([run('Read these two '), run('together', { bold: true })]);
 
-  // An apparatus block: the chronology, which the kit puts at the front.
-  await addItem(5, 'Chronology');
+  // An apparatus block: the chronology, which the kit puts at the front, past Add to Archives Visit…, which the iPad's Add
+  // menu holds before its Apparatus (S30d).
+  await addItem(6, 'Chronology');
   await expect(contents.getByRole('button', { name: 'Actions: Chronology' })).toBeFocused();
   await expect(contents.getByRole('group', { name: 'Generated block: Chronology' })).toContainText(
     'Lists 2 documents. Generated from this collection’s documents at export and in the preview.',

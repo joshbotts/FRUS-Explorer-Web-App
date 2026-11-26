@@ -2,8 +2,9 @@
 // its source by ArchiveVisitMirrorParityTests: the Targets list's four filters and what clears them, the claims' line,
 // which never sums its two counts, the line where no target derives, and the citation's italics. The server gives the
 // sections in the app's order, each section's targets by tier then label, with the kit's words; the filters narrow them
-// here, as the app's view narrows the derivation it holds.
-import type { VisitPlan, VisitSection, VisitTarget } from '../api/visits';
+// here, as the app's view narrows the derivation it holds. From PLAN's S30d the packet sheet's topic rules, the kit's
+// (`TripPacketTopicSentence`), and the plan picker's banner and search (`PlanPickerSheet`).
+import type { VisitPlan, VisitPlanItem, VisitSection, VisitTarget } from '../api/visits';
 import { copy } from '../copy';
 
 /** The tier filter's three shapes: every target, those with no tier, or one tier's. */
@@ -116,4 +117,43 @@ export function citationText(text: string): string {
   return citationRuns(text)
     .map((run) => run.text)
     .join('');
+}
+
+/** `TripPacketTopicSentence.written`: the text as written when it holds anything but white space, else none. */
+export function writtenTopic(text: string | null | undefined): string | null {
+  return text != null && text.trim() !== '' ? text : null;
+}
+
+/** `sameText`: two topics that say the same thing, both written and equal once the white space around them is set aside. */
+export function sameTopicText(first: string | null | undefined, second: string | null | undefined): boolean {
+  const a = writtenTopic(first);
+  const b = writtenTopic(second);
+  return a !== null && b !== null && a.trim() === b.trim();
+}
+
+/** `showsSeededCaption(draft:researchQuestion:)`: the caption says "Seeded…" only while the field still reads the question. */
+export function showsSeededCaption(draft: string, researchQuestion: string | null | undefined): boolean {
+  return sameTopicText(draft, researchQuestion);
+}
+
+/** `isUncommitted(draft:edited:)`: the field holds an edit the plan has not taken, which Done writes before it closes. */
+export function topicIsUncommitted(draft: string, edited: string | null | undefined): boolean {
+  return writtenTopic(draft) !== writtenTopic(edited);
+}
+
+/** The picker's banner (`bannerText`): what is being added, under which claims, from where. */
+export function pickerBanner(count: number, includeSource: boolean, includeExternalRefs: boolean, basis: string): string {
+  const documents = copy.visits.documents(count);
+  const contribution =
+    includeSource && includeExternalRefs
+      ? copy.visits.pickerAddingBoth(documents)
+      : includeSource
+        ? copy.visits.pickerAddingSource(documents)
+        : copy.visits.pickerAddingRefs(documents);
+  return `${contribution} — ${basis}`;
+}
+
+/** The picker's search (`filtered`): a plan whose name as its row shows it holds the text, whatever its case. */
+export function planMatches(plan: VisitPlanItem, search: string): boolean {
+  return search === '' || plan.displayName.toLocaleLowerCase('en-US').includes(search.toLocaleLowerCase('en-US'));
 }

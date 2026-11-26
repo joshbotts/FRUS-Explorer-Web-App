@@ -80,7 +80,7 @@ const review: DocumentReview = {
       warning: false,
     },
   ],
-  others: { notes: [{ id: 'N1', title: 'Gresham’s telegram' }], tagCount: 0, collectionCount: 0, summaryCount: 0, inVisitPlan: false },
+  others: { notes: [{ id: 'N1', title: 'Gresham’s telegram' }], tagCount: 0, collectionCount: 0, summaryCount: 0, inVisitPlan: false, plans: [] },
 };
 
 const documentPath = '/api/v1/me/volumes/frus1894Nicaragua/documents/d2';
@@ -133,6 +133,24 @@ describe('the review sheet', () => {
     expect(within(sheet).getByRole('button', { name: 'Edit Tags…' })).toBeTruthy();
     // The found words in what surrounds them.
     expect(within(sheet).getByText(review.highlights[0]!.context!.found).tagName).toBe('STRONG');
+  });
+
+  it('opens each Archives Visit plan the document seeds, one row a plan (S30d)', async () => {
+    const plans = [
+      { id: 'P2', name: 'Berlin' },
+      { id: 'P1', name: 'Untitled Archives Visit' },
+    ];
+    server({ [`${documentPath}/review`]: { ...review, others: { ...review.others, inVisitPlan: true, plans } } });
+    renderAt('/research?group=updated');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: `Review Changes…: ${row.title}` }));
+    const sheet = await screen.findByRole('dialog', { name: row.title });
+    const links = await within(sheet).findAllByRole('link', { name: /^Open the plan/ });
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['Open the plan “Berlin”', '/visits/P2'],
+      ['Open the plan “Untitled Archives Visit”', '/visits/P1'],
+    ]);
+    expect(within(sheet).getByText(/in an archive-visit plan/)).toBeTruthy();
   });
 
   it('moves a highlight by keyboard with the version it judged by, and marks the document reviewed', async () => {

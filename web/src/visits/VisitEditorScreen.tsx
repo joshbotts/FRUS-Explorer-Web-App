@@ -6,7 +6,9 @@
 // control and its menu, Edit Note… and Include or Exclude, its seedings under a disclosure, and the stored targets a change
 // has orphaned or another row is shown over, each with Remove Stored State, which asks first. Documents: each seed with its
 // two switches, or the caption where a half is absent, Open Document and Remove. The tiers' sheet adds, renames, moves by a
-// step and deletes tiers. Every write is the server's, by the kit's rules, and answers the plan as it then stands.
+// step and deletes tiers. Every write is the server's, by the kit's rules, and answers the plan as it then stands. From
+// PLAN's S30d the toolbar's Export packet, disabled for a plan with no documents, opens the packet's sheet over the plan
+// (PacketSheet.tsx).
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
@@ -36,6 +38,7 @@ import { useHeadingReady } from '../shell/headingFocus';
 import { MenuButton, type MenuEntry } from '../shell/MenuButton';
 import { closeAtOnce, Modal } from '../shell/Modal';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { PacketSheet } from './PacketSheet';
 import { DeleteVisitDialog } from './VisitsScreen';
 import {
   citationRuns,
@@ -61,7 +64,8 @@ type Dialog =
   | { kind: 'removeStored'; key: string }
   | { kind: 'delete' }
   | { kind: 'tiers' }
-  | { kind: 'topic'; question: string; current: string };
+  | { kind: 'topic'; question: string; current: string }
+  | { kind: 'packet' };
 
 export function VisitEditorScreen() {
   const { planId } = editorRoute.useParams();
@@ -168,6 +172,10 @@ export function VisitEditorScreen() {
         <>
           <NameField plan={plan} onRename={(name) => run(() => editVisit(client, plan.id, { name }))} />
           <div className="visit-toolbar">
+            {/* Every Export packet control reads one rule: a plan with no documents has nothing to export. */}
+            <button type="button" title={copy.visits.exportPacketHelp} disabled={plan.documents.length === 0} onClick={() => open({ kind: 'packet' })}>
+              {copy.visits.exportPacket}
+            </button>
             <button
               type="button"
               aria-expanded={showInfo}
@@ -275,6 +283,7 @@ export function VisitEditorScreen() {
             />
           )}
           {dialog?.kind === 'tiers' && <TiersDialog plan={plan} onClose={closeDialog} />}
+          {dialog?.kind === 'packet' && <PacketSheet plan={plan} onClose={closeDialog} />}
           {dialog?.kind === 'topic' && (
             <TopicDialog
               question={dialog.question}

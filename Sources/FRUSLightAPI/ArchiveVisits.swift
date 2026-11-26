@@ -16,6 +16,13 @@
 // over it at each answer (`overlay(for:over:)`); its sections, their order and the words the server writes are the app's view's, mirrored and held
 // to its source by `ArchiveVisitMirrorParityTests`. A duplicated plan's targets are created anew, as the app's are, so a
 // target several rows answer for, none under its own key, can show another of them in the copy (FRUS-Explorer#1989).
+//
+// PLAN's S30d adds the ways in and the packet's writes: Add to an Archives Visit, the app's plan picker, adds documents
+// to a plan by the kit's one add (`addingSeeds`, its halves turned on and never off), or makes one with them, New then
+// the add, as the picker's New row and Project Home's Plan a Visit make one; and the packet's sheet writes the topic and
+// the four deliverables to the plan, as its Done and its toggles do. The topic is not read by the derivation's key: a
+// topic edited in the sheet costs no derivation, as the app's sheet re-renders the model it holds, the plan's topic set
+// over the kept model by the kit's rule (`derive`'s). The packet itself is ArchivePacket.swift's.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -224,12 +231,11 @@ public struct VisitReseedAnswer: Codable, Equatable, Sendable, ResponseEncodable
 
 // MARK: - The derivation, kept while its index is served
 
-/// What a plan's derivation reads of it, past its stored state: its seeds with their switches, its topic, and which of
-/// their volumes the index holds; and the window of two minutes it was asked in. Two plans that read the same in one
-/// window derive the same model.
+/// What a plan's derivation reads of it, past its stored state and its topic: its seeds with their switches and which
+/// of their volumes the index holds; and the window of two minutes it was asked in. Two plans that read the same in one
+/// window derive the same model, but for its topic sentence, which the answer sets from the plan's own (S30d).
 struct VisitDerivationKey: Hashable, Sendable {
     let seeds: [ArchiveVisitDerivation.InputSignature.Seed: Int]
-    let inquiryText: String?
     let indexedSeedVolumes: Set<String>
     let window: Int
 }
@@ -271,14 +277,83 @@ struct VisitIndexReadFailed: Error {}
 // MARK: - Routes
 
 enum ArchiveVisitRoutes {
+    /// New Archives Visit, and the picker's New row (S30d): a name, and the documents it is made with, with the halves
+    /// they contribute.
     struct Create: Decodable {
         let name: String?
+        let documents: [SeedDocument]?
+        let includeSource: Bool?
+        let includeExternalRefs: Bool?
     }
 
+    /// Rename, the topic, and the packet's four deliverables (S30d), each written where the body names it.
     struct Edit: Decodable {
         let name: String?
         let inquiryText: String?
+        let deliverables: DeliverablesEdit?
     }
+
+    /// The packet sheet's What to Include: the toggles the body names, the others left as they are, and none it does not
+    /// know, as a body holds only the fields its route takes.
+    struct DeliverablesEdit: Decodable {
+        let includeLinks: Bool?
+        let includeTargets: Bool?
+        let includeInquiry: Bool?
+        let includeCitationCrib: Bool?
+
+        enum CodingKeys: String, CodingKey, CaseIterable { case includeLinks, includeTargets, includeInquiry, includeCitationCrib }
+
+        /// Any key the object holds, to refuse one that names no toggle.
+        struct AnyKey: CodingKey {
+            let stringValue: String
+            init?(stringValue: String) { self.stringValue = stringValue }
+            var intValue: Int? { nil }
+            init?(intValue: Int) { nil }
+        }
+
+        init(from decoder: any Decoder) throws {
+            let known = Set(CodingKeys.allCases.map(\.rawValue))
+            if let unknown = try decoder.container(keyedBy: AnyKey.self).allKeys.first(where: { !known.contains($0.stringValue) }) {
+                throw APIProblem.invalidParameter("deliverables", "\(unknown.stringValue) is not one of the packet's deliverables")
+            }
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            includeLinks = try container.decodeIfPresent(Bool.self, forKey: .includeLinks)
+            includeTargets = try container.decodeIfPresent(Bool.self, forKey: .includeTargets)
+            includeInquiry = try container.decodeIfPresent(Bool.self, forKey: .includeInquiry)
+            includeCitationCrib = try container.decodeIfPresent(Bool.self, forKey: .includeCitationCrib)
+        }
+
+        /// `deliverables` with the toggles this edit names.
+        func applied(to deliverables: ArchiveVisitDeliverables) -> ArchiveVisitDeliverables {
+            var written = deliverables
+            if let includeLinks { written.includeLinks = includeLinks }
+            if let includeTargets { written.includeTargets = includeTargets }
+            if let includeInquiry { written.includeInquiry = includeInquiry }
+            if let includeCitationCrib { written.includeCitationCrib = includeCitationCrib }
+            return written
+        }
+    }
+
+    /// A document one of the ways in adds, by its ids.
+    struct SeedDocument: Decodable {
+        let volumeId: String
+        let documentId: String
+    }
+
+    /// Add to an Archives Visit, the app's plan picker (S30d): its documents, and which of their two halves contribute.
+    struct SeedsAdded: Decodable {
+        let documents: [SeedDocument]
+        let includeSource: Bool
+        let includeExternalRefs: Bool
+    }
+
+    /// The most documents one add takes: the app's ceiling on a collection's citing documents, which a unit's add
+    /// fetches (`CollectionDetailView.planSeedFetchCeiling`), above the corpus's largest unit, 17,613.
+    static let seedLimit = 20_000
+
+    /// The body an add of documents may have: 20,000 documents' ids, as long as a note's, which the guard of the
+    /// group the two routes are added to takes.
+    static let seedsBodyLimit = UserDataServices.noteBodyLimit
 
     /// A target's write: its key, and one of a tier (none for Unprioritized), its exclusion or its note.
     struct TargetEdit: Decodable {
@@ -328,8 +403,10 @@ enum ArchiveVisitRoutes {
         let by: Int
     }
 
-    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
-                    provider: ServedIndexProvider) {
+    /// The routes, under `me`; the two that take documents, New and an add, under `seeds`, whose guard takes
+    /// `seedsBodyLimit`.
+    static func add(to me: RouterGroup<APIRequestContext>, seeds: RouterGroup<APIRequestContext>, services: UserDataServices,
+                    resources: ServerResources, provider: ServedIndexProvider) {
         let store = services.store
         let now = services.now
 
@@ -352,17 +429,32 @@ enum ArchiveVisitRoutes {
             return VisitPlanList(total: items.count, items: items)
         }
         // New Archives Visit: `ArchiveVisitPlan.make(name:activeProjectId:in:)`, under the user's active project with its
-        // research question as the topic, or none in the Global Context, untitled unless the body names it.
-        me.post("visits") { request, context -> EditedResponse<VisitPlanDetail> in
+        // research question as the topic, or none in the Global Context, untitled unless the body names it. With
+        // documents, the picker's New row (S30d, `createAndAdd()`): the plan made, then seeded like any other row, the
+        // halves the picker presets, in one write.
+        seeds.post("visits") { request, context -> EditedResponse<VisitPlanDetail> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let body = try await JSONBody.decode(Create.self, from: request, fields: ["name"])
+            let body = try await JSONBody.decode(Create.self, from: request, fields: ["name", "documents", "includeSource", "includeExternalRefs"],
+                                                 limit: seedsBodyLimit)
+            let documents = try body.documents.map { try checked($0, resources: resources) }
+            if documents != nil {
+                guard let source = body.includeSource, let refs = body.includeExternalRefs else {
+                    throw APIProblem.invalidParameter("includeSource", "documents come with includeSource and includeExternalRefs")
+                }
+                try checkedHalves(source, refs)
+            }
             let time = UserStoreDate.rounded(now())
             let projects = try await projects(of: user.id, in: store)
             let active = try await Blocking.run { try store.activeProjectId(of: user.id) }
             let project = active.flatMap { id in projects.first { $0.id.uuidString == UserSearchText.uuidString(id) } }
-            let plan = ArchiveVisitPlanWrites.newPlan(name: body.name ?? "", projectId: project?.id,
+            var plan = ArchiveVisitPlanWrites.newPlan(name: body.name ?? "", projectId: project?.id,
                                                       researchQuestion: project?.researchQuestion, id: UUID(), now: time)
+            if let documents {
+                apply(ArchiveVisitPlanWrites.addingSeeds(documents, includeSource: body.includeSource ?? false,
+                                                         includeExternalRefs: body.includeExternalRefs ?? false,
+                                                         to: plan.documents, planId: plan.id, now: time), to: &plan)
+            }
             let rows = try await added(plan, for: user.id, in: store)
             let location = context.basePath.prefixing("/api/v1/me/visits/\(plan.id.uuidString)")
             return EditedResponse(status: .created, headers: [.location: location],
@@ -375,15 +467,18 @@ enum ArchiveVisitRoutes {
             return try await answer(rows, projects: try await projects(of: user.id, in: store), provider: provider, resources: resources)
         }
         // Rename, from the reader's draft (`name(fromDraft:)`: an empty commit writes nothing), and the topic, which the
-        // confirmed half of Re-seed from Project writes (`replaceInquiryTopic(with:)`), a blank one as none.
+        // confirmed half of Re-seed from Project writes (`replaceInquiryTopic(with:)`), a blank one as none, as the
+        // packet sheet's topic field writes it (S30d, `applyTopicEdit()`); and the sheet's What to Include, the toggles
+        // it names (`persistDeliverables()`, which writes the four the sheet holds).
         me.patch("visits/:planId") { request, context -> VisitPlanDetail in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let body = try await JSONBody.decode(Edit.self, from: request, fields: ["name", "inquiryText"])
+            let body = try await JSONBody.decode(Edit.self, from: request, fields: ["name", "inquiryText", "deliverables"])
             let time = UserStoreDate.rounded(now())
             let rows = try await changed(try context.parameters.require("planId"), for: user.id, in: store, at: time) { plan in
                 if let draft = body.name, let name = ArchiveVisitPlanWrites.name(fromDraft: draft) { plan.name = name }
                 if let topic = body.inquiryText { plan.inquiryText = TripPacketTopicSentence.written(topic) }
+                if let deliverables = body.deliverables { plan.deliverables = deliverables.applied(to: plan.deliverables) }
             }
             return try await answer(rows, projects: try await projects(of: user.id, in: store), provider: provider, resources: resources)
         }
@@ -497,6 +592,24 @@ enum ArchiveVisitRoutes {
                     throw targetNotFound(key)
                 }
                 plan.targets.remove(at: row.index)
+            }
+            return try await answer(rows, projects: try await projects(of: user.id, in: store), provider: provider, resources: resources)
+        }
+        // Add to an Archives Visit (S30d): the picker's row, `plan.addSeeds(_:includeSource:includeExternalRefs:in:)`, the
+        // one add every way in shares: a document already seeded gains the halves asked for, never losing one, and a new
+        // one is minted under its derived id with exactly those, in the order the documents came.
+        seeds.post("visits/:planId/documents") { request, context -> VisitPlanDetail in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let user = try context.requireUser()
+            let body = try await JSONBody.decode(SeedsAdded.self, from: request, fields: ["documents", "includeSource", "includeExternalRefs"],
+                                                 limit: seedsBodyLimit)
+            let documents = try checked(body.documents, resources: resources)
+            try checkedHalves(body.includeSource, body.includeExternalRefs)
+            let time = UserStoreDate.rounded(now())
+            let rows = try await changed(try context.parameters.require("planId"), for: user.id, in: store, at: time) { plan in
+                apply(ArchiveVisitPlanWrites.addingSeeds(documents, includeSource: body.includeSource,
+                                                         includeExternalRefs: body.includeExternalRefs,
+                                                         to: plan.documents, planId: plan.id, now: time), to: &plan)
             }
             return try await answer(rows, projects: try await projects(of: user.id, in: store), provider: provider, resources: resources)
         }
@@ -679,16 +792,16 @@ enum ArchiveVisitRoutes {
                            facts wanted: Bool = false) async throws -> VisitDerivation {
         let window = Int(Date().timeIntervalSince1970 / keptSeconds)
         let signature = ArchiveVisitDerivation.inputSignature(plan: plan, indexedVolumeIds: served.indexedVolumeIds)
-        let key = VisitDerivationKey(seeds: signature.seeds, inquiryText: plan.inquiryText,
-                                     indexedSeedVolumes: signature.indexedSeedVolumes, window: window)
+        let key = VisitDerivationKey(seeds: signature.seeds, indexedSeedVolumes: signature.indexedSeedVolumes, window: window)
         let kept = try await served.visits.value(for: .model(key)) {
             // Decoded off the main actor, the first time, where the derivation runs.
             let (indexes, manifest) = try await Blocking.run { (packetIndexes(resources), manifestMap(resources)) }
             return .model(await derive(plan, served: served, indexes: indexes, manifest: manifest))
         }
         guard case .model(let once) = kept else { preconditionFailure("a model's key keeps a model") }
+        let model = withTopic(of: plan, over: once.model)
         let derived = ArchiveVisitDerivation.Derived(
-            model: once.model, overlay: ArchiveVisitDerivation.overlay(for: plan, over: once.model),
+            model: model, overlay: ArchiveVisitDerivation.overlay(for: plan, over: model),
             seededDocumentCount: once.seededDocumentCount, indexedDocumentCount: once.indexedDocumentCount)
         guard wanted else { return VisitDerivation(derived: derived, facts: [:], sparsity: nil) }
         let seedKeys = Set(plan.documents.map(\.documentKey)).sorted()
@@ -698,6 +811,19 @@ enum ArchiveVisitRoutes {
         }
         guard case .facts(let facts, let sparsity) = known else { preconditionFailure("the facts' key keeps facts") }
         return VisitDerivation(derived: derived, facts: facts, sparsity: sparsity)
+    }
+
+    /// `model`, kept for a plan's seeds whatever its topic, with `plan`'s topic sentence, by `derive`'s rule: the builder
+    /// seeds none (`researchQuestion: nil`), and the plan's inquiry text, where it has any, is the edited sentence.
+    /// The sheet's edit of a model it holds, `applyTopicEdit()`, as the app's sheet re-renders a topic, costs no derivation.
+    static func withTopic(of plan: ArchiveVisitPlanExport, over model: TripPacketModel) -> TripPacketModel {
+        var model = model
+        model.topicSentence = .seeded(from: nil)
+        if let inquiryText = plan.inquiryText,
+           !inquiryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            model.topicSentence.edited = inquiryText
+        }
+        return model
     }
 
     /// `ArchiveVisitDerivation.derive` over the served index and the bundled files.
@@ -953,6 +1079,32 @@ enum ArchiveVisitRoutes {
     static let locale = Locale(identifier: "en_US")
 
     // MARK: Refusals
+
+    /// An add's documents, as the kit's add takes them: `seedLimit` at most, each a document of a volume this server's
+    /// catalogue lists, as every route that names a document checks it (`UserDataRoutes.document`). None is an add of
+    /// nothing, as the app's picker writes nothing for a smart collection whose search finds none, and its New row makes
+    /// an empty plan.
+    static func checked(_ documents: [SeedDocument], resources: ServerResources) throws -> [(volumeId: String, documentId: String)] {
+        // The bound's words are written with the constant they state.
+        assert(seedLimit == 20_000)
+        guard documents.count <= seedLimit else {
+            throw APIProblem.invalidParameter("documents", "an add takes at most 20,000 documents")
+        }
+        return try documents.map { document in
+            guard resources.volume(document.volumeId) != nil else { throw APIProblem.volumeNotFound(document.volumeId) }
+            guard document.documentId.utf8.count <= 256, FRUSURLScheme.isSafeComponent(document.documentId) else {
+                throw APIProblem.invalidParameter("documents", "\(document.documentId) is not a document's id.")
+            }
+            return (volumeId: document.volumeId, documentId: document.documentId)
+        }
+    }
+
+    /// An add names one half at least, as each of the app's ways in presets one or both: an add of neither writes nothing.
+    static func checkedHalves(_ includeSource: Bool, _ includeExternalRefs: Bool) throws {
+        guard includeSource || includeExternalRefs else {
+            throw APIProblem.invalidParameter("includeSource", "an add turns on includeSource, includeExternalRefs or both")
+        }
+    }
 
     static func tierId(_ raw: String) throws -> UUID {
         guard let id = UUID(uuidString: raw) else { throw tierNotFound(raw) }

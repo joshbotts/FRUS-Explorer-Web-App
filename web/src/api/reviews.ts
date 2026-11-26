@@ -71,6 +71,8 @@ export interface DocumentReview {
     collectionCount: number;
     summaryCount: number;
     inVisitPlan: boolean;
+    /** The Archives Visit plans that seed it, each a row that opens its plan (S30d). */
+    plans: { id: string; name: string }[];
   };
 }
 
