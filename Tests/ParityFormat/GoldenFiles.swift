@@ -21,12 +21,19 @@ public enum GoldenFile: String, CaseIterable, Sendable {
     /// Check 9's kernel half on the fixtures (S26c): each fixture document's ten nearest by the kit's two stages, made
     /// from the app's source and the fixture volumes' shards on the owner's Mac by `scripts/make-golden`.
     case semanticNeighbours = "semantic/neighbours.json"
+    /// Check 9's encoder half at full scale (S31): the hundred queries embedded by the app's own encoder over the app's
+    /// model on the owner's Mac, made by `scripts/make-golden`, which fetches the model as the image's build does.
+    case semanticEmbeddings = "semantic/embeddings.json"
+    /// Check 9's kernel half at full scale (S31): 600 corpus rows' ten nearest over all 553 shards, made from the app's
+    /// source and the shards on the owner's Mac by `scripts/make-golden`, which fetches them as the image's build does.
+    case semanticCorpusNeighbours = "semantic/corpus-neighbours.json"
 
     /// True for a file made from the owner's export, which may wait for it. One made from the
     /// app's source alone is made in the session and committed, never left pending.
     public var needsExport: Bool {
         switch self {
-        case .render, .expressions, .richText, .languageTags, .semanticNeighbours: false
+        case .render, .expressions, .richText, .languageTags, .semanticNeighbours, .semanticEmbeddings,
+             .semanticCorpusNeighbours: false
         case .results, .indexSummary: true
         }
     }

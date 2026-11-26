@@ -6,8 +6,11 @@
 // judged queries, embedded on a Mac by llama.cpp's command line at the app's commit. With each cosine, as
 // information, how many of the first 512 values' signs differ, which the retrieval's Hamming stage reads.
 
+import FRUSCoreKit
 import FRUSLightCore
 import Foundation
+import ParityFormat
+import SemanticVectorsKit
 
 public enum EmbedCheck {
     /// The app's fixture, in its repository.
@@ -59,6 +62,12 @@ public enum EmbedCheck {
         public var refusals: [String] = []
         public var server: Server?
         public var reference: String = ""
+        /// The server's vectors by query, kept when `run` is asked to keep them, for `agreement`; never reported.
+        public var serverVectors: [String: [Double]] = [:]
+
+        enum CodingKeys: String, CodingKey {
+            case rows, failures, refusals, server, reference
+        }
 
         public var least: Row? { rows.min { $0.cosine < $1.cosine } }
         public var mean: Double { rows.isEmpty ? 0 : rows.map(\.cosine).reduce(0, +) / Double(rows.count) }
@@ -81,8 +90,9 @@ public enum EmbedCheck {
     public typealias Get = @Sendable (String) async throws -> (status: Int, body: Data)
 
     /// Embeds each of `fixture`'s queries through `get`, a running server's routes, one at a time as its
-    /// encoder serves them, and holds each to its vector.
-    public static func run(fixture: Fixture, get: Get) async -> Result {
+    /// encoder serves them, and holds each to its vector; with `keepVectors`, keeps the server's vectors in
+    /// `serverVectors`, for `agreement`.
+    public static func run(fixture: Fixture, get: Get, keepVectors: Bool = false) async -> Result {
         var result = Result()
         result.reference = fixture.referenceEngine
         if fixture.queryPrefix != SearchModel.queryPrefix {
@@ -123,11 +133,64 @@ public enum EmbedCheck {
                 result.rows.append(Row(query: query.text, cosine: cosine(embedded.vector, query.vector),
                                        signsDiffering: signsDiffering(embedded.vector, query.vector), tokens: embedded.tokens,
                                        seconds: embedded.seconds))
+                if keepVectors { result.serverVectors[query.text] = embedded.vector }
             } catch {
                 result.failures.append("\(query.text): \(error)")
             }
         }
         return result
+    }
+
+    /// How far the two encoders' lists agree (PLAN's S31, reported and not gated): for each query, the ten nearest
+    /// that search by meaning lists for the fixture's vector and for the server's, by the kit's searcher over the
+    /// bundled tier and every shard, and how many of the ten they share. The app's own ladder puts it near 98 in 100
+    /// at a cosine of 0.999 (`Planning/semantic-vectors/parity-ladder.json`): a re-embedded query is never held to
+    /// an exact list.
+    public struct Agreement: Codable, Sendable {
+        public struct Row: Codable, Sendable {
+            public let query: String
+            public let shared: Int
+            public let fixture: [String]
+            public let server: [String]
+        }
+
+        public var rows: [Row] = []
+        public var shared: Int { rows.reduce(0) { $0 + $1.shared } }
+        public var listed: Int { rows.reduce(0) { $0 + min($1.fixture.count, $1.server.count) } }
+
+        public func summary() -> String {
+            let whole = rows.filter { $0.shared == min($0.fixture.count, $0.server.count) }.count
+            let per = listed == 0 ? 0 : Double(shared) / Double(listed) * 100
+            return "the two encoders' ten nearest share \(shared) of \(listed), \(String(format: "%.1f", per)) in 100; \(whole) of \(rows.count) queries list the same ten"
+        }
+    }
+
+    /// The agreement of `fixture`'s vectors and `server`'s, by query, over the bundled files in `resources` and the
+    /// shards in `shards`, through the server's own store and the kit's searcher.
+    public static func agreement(fixture: Fixture, server: [String: [Double]], resources: URL, shards: URL) async throws -> Agreement {
+        let vectors = SemanticVectors(resources: resources, shards: shards)
+        let tiers: SemanticBundledTiers
+        switch await vectors.tiers() {
+        case .success(let read): tiers = read
+        case .failure(let refused): throw SemanticNeighbours.Refusal(description: "the bundled vectors are refused: \(refused)")
+        }
+        func nearest(_ table: [String: [Double]], _ query: String) async throws -> [String] {
+            let searcher = SemanticQuerySearcher(
+                index: tiers.index, corpus: tiers.corpus, shards: vectors,
+                encoder: SemanticEmbedFunction { text in table[text] ?? [] }, requestShardFetch: { _ in false })
+            return try await searcher.search(query, limit: SemanticNeighboursLoop.neighbourCount).hits
+                .map { "\($0.volumeID)/\($0.documentID)" }
+        }
+        let theFixture = Dictionary(fixture.queries.map { ($0.text, $0.vector) }, uniquingKeysWith: { first, _ in first })
+        var agreement = Agreement()
+        for query in fixture.queries {
+            guard server[query.text] != nil else { continue }
+            let fromFixture = try await nearest(theFixture, query.text)
+            let fromServer = try await nearest(server, query.text)
+            agreement.rows.append(.init(query: query.text, shared: Set(fromFixture).intersection(fromServer).count,
+                                        fixture: fromFixture, server: fromServer))
+        }
+        return agreement
     }
 
     /// The cosine of two vectors, in double precision.

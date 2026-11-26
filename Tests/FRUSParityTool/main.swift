@@ -21,9 +21,10 @@
 //   frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
 //   frus-parity compare-order <library.db> <index.db>
 //   frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
-//   frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
+//   frus-parity embed --api <url> [--fixture <json>] [--shards <dir>] [--out <report.json>] [--repo <root>]
 //   frus-parity language-report [--golden <tags.json>] [--model <file>] [--out <report.json>] [--no-speed] [--repo <root>]
 //   frus-parity neighbours [--golden <neighbours.json>] [--out <neighbours.json>] [--repo <root>]
+//   frus-parity corpus-neighbours --shards <dir> [--golden <corpus-neighbours.json>] [--out <corpus-neighbours.json>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -59,9 +60,10 @@ let usage = """
            frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
            frus-parity compare-order <library.db> <index.db>
            frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
-           frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
+           frus-parity embed --api <url> [--fixture <json>] [--shards <dir>] [--out <report.json>] [--repo <root>]
            frus-parity language-report [--golden <tags.json>] [--model <file>] [--out <report.json>] [--no-speed] [--repo <root>]
            frus-parity neighbours [--golden <neighbours.json>] [--out <neighbours.json>] [--repo <root>]
+           frus-parity corpus-neighbours --shards <dir> [--golden <corpus-neighbours.json>] [--out <corpus-neighbours.json>] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -824,15 +826,28 @@ func embed(_ arguments: Arguments) async throws {
         ?? repository(arguments).upstream.appendingPathComponent(EmbedCheck.fixturePath)
     let fixture = try EmbedCheck.Fixture(contentsOf: fixtureURL)
     let fetch = httpFetch(base)
-    let result = await EmbedCheck.run(fixture: fixture, get: { path in try await fetch(path, nil) })
+    let shards = arguments.options["--shards"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+    let result = await EmbedCheck.run(fixture: fixture, get: { path in try await fetch(path, nil) }, keepVectors: shards != nil)
     for row in result.rows {
         print(String(format: "%.6f  %3ld signs  %4ld tokens  %6.3f s  ", row.cosine, row.signsDiffering, row.tokens, row.seconds) + row.query)
     }
     for failure in result.failures { print("not embedded  \(failure)") }
+    // Reported, not gated (PLAN's S31): how many of each query's ten nearest the two encoders' vectors share.
+    var agreement: EmbedCheck.Agreement?
+    if let shards, result.refusals.isEmpty {
+        let resources = try repository(arguments).upstream.appendingPathComponent(ParityIndex.resourcesPath)
+        let found = try await EmbedCheck.agreement(fixture: fixture, server: result.serverVectors, resources: resources, shards: shards)
+        for row in found.rows where row.shared < min(row.fixture.count, row.server.count) {
+            print("\(row.shared) of \(min(row.fixture.count, row.server.count)) nearest shared  \(row.query)")
+        }
+        print(found.summary())
+        agreement = found
+    }
     if let out = arguments.options["--out"] {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        try encoder.encode(EmbedReport(summary: result.summary(), result: result)).write(to: URL(fileURLWithPath: out))
+        try encoder.encode(EmbedReport(summary: result.summary(), result: result, agreement: agreement))
+            .write(to: URL(fileURLWithPath: out))
         print("wrote \(out)")
     }
     guard result.passes else { fail(result.summary()) }
@@ -902,10 +917,38 @@ func neighbours(_ arguments: Arguments) async throws {
     print("check 9's kernel half passes: \(linux.anchors.count) documents' nearest, \(neighbours) neighbours, the Mac's in rows, order and score bits, at a pool of \(linux.rerankPool) over the generation \(linux.generation.prefix(8))")
 }
 
-/// What `embed --out` writes: the summary line and each query's row.
+/// Check 9's kernel half at full scale (PLAN's S31): 600 corpus rows' ten nearest by the kit's two stages on Linux,
+/// over the server's own store of all 553 shards in --shards, each held to the bundled manifest, held to the Mac's
+/// lists, in rows, order and score bits; with --out, Linux's lists in the golden file's form.
+func corpusNeighbours(_ arguments: Arguments) async throws {
+    guard arguments.positional.isEmpty else { throw UsageError("corpus-neighbours takes no arguments") }
+    guard let shards = arguments.options["--shards"] else { throw UsageError("corpus-neighbours takes --shards <dir>") }
+    let layout = try repository(arguments)
+    let linux = try await SemanticNeighbours.corpusLists(
+        resources: layout.upstream.appendingPathComponent(ParityIndex.resourcesPath),
+        shards: URL(fileURLWithPath: shards, isDirectory: true))
+    if let out = arguments.options["--out"] {
+        try GoldenJSON.write(linux, to: URL(fileURLWithPath: out))
+        print("wrote \(out)")
+    }
+    let goldenURL = arguments.options["--golden"].map { URL(fileURLWithPath: $0) }
+        ?? layout.golden.appendingPathComponent(GoldenFile.semanticCorpusNeighbours.rawValue)
+    let mac = try GoldenJSON.read(SemanticCorpusNeighboursGolden.self, from: goldenURL)
+    guard mac.generation == linux.generation, mac.rerankPool == linux.rerankPool, mac.shardManifest == linux.shardManifest,
+          mac.stride == linux.stride else {
+        fail("the Mac's lists are of the generation \(mac.generation.prefix(8)) and the shard manifest \(mac.shardManifest.prefix(8)) at a pool of \(mac.rerankPool) and a stride of \(mac.stride), Linux's of \(linux.generation.prefix(8)) and \(linux.shardManifest.prefix(8)) at \(linux.rerankPool) and \(linux.stride)")
+    }
+    let differences = SemanticCorpusLoop.differences(mac.anchors, linux.anchors)
+    guard differences.isEmpty else { fail("check 9's kernel half at full scale fails:\n  " + differences.joined(separator: "\n  ")) }
+    let neighbours = linux.anchors.reduce(0) { $0 + $1.neighbours.count }
+    print("check 9's kernel half at full scale passes: \(linux.anchors.count) rows' nearest, one in every \(linux.stride), \(neighbours) neighbours over all 553 shards, the Mac's in rows, order and score bits, at a pool of \(linux.rerankPool) over the generation \(linux.generation.prefix(8))")
+}
+
+/// What `embed --out` writes: the summary line, each query's row, and with --shards the two encoders' lists.
 struct EmbedReport: Encodable {
     let summary: String
     let result: EmbedCheck.Result
+    let agreement: EmbedCheck.Agreement?
 }
 
 /// What `check-citations --out` writes: the summary line and every finding.
@@ -958,11 +1001,13 @@ do {
     case "check-citations":
         try await checkCitations(Arguments(arguments.dropFirst(), options: ["--api", "--index", "--per-volume", "--resources", "--out", "--repo"]))
     case "embed":
-        try await embed(Arguments(arguments.dropFirst(), options: ["--api", "--fixture", "--out", "--repo"]))
+        try await embed(Arguments(arguments.dropFirst(), options: ["--api", "--fixture", "--shards", "--out", "--repo"]))
     case "language-report":
         try await languageReport(Arguments(arguments.dropFirst(), flags: ["--no-speed"], options: ["--golden", "--model", "--out", "--repo"]))
     case "neighbours":
         try await neighbours(Arguments(arguments.dropFirst(), options: ["--golden", "--out", "--repo"]))
+    case "corpus-neighbours":
+        try await corpusNeighbours(Arguments(arguments.dropFirst(), options: ["--shards", "--golden", "--out", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))

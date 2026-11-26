@@ -18,6 +18,16 @@
 #                              the bundled tier and fixtures/semantic's shards through the app's own store,
 #                              with each score's bits, which frus-parity neighbours holds Linux's to
 #                              (check 9's kernel half, S26c)
+#   semantic/embeddings.json   check 9's encoder half at full scale (S31): the hundred queries, the 90 the app's
+#                              repository keeps and the first ten of check 3's, embedded by the app's own encoder
+#                              over the app's model, which frus-parity embed holds a server's to
+#   semantic/corpus-neighbours.json
+#                              check 9's kernel half at full scale (S31): 600 corpus rows' ten nearest over all 553
+#                              shards through the app's own store, which frus-parity corpus-neighbours holds Linux's to
+#   The last two need the model, 310 MB, and the 553 shards, 162 MB, which no repository holds: the script fetches
+#   them as the image's build does, with scripts/fetch-model and docker/fetch-vectors, each held to the bundled
+#   index's and manifest's SHA-256, into $FRUS_GOLDEN_CACHE (~/Library/Caches/frus-light-golden), where they stay
+#   for the next run. They are never committed.
 # From an export, with frus-parity and tools/mac-golden:
 #   index-summary.json         each table's row count and content hash (check 2)
 #   queries.results.json       each query's count and first 50 results (check 3)
@@ -44,8 +54,8 @@
 # The script copies the export to a new temporary folder under .build, which the container sees,
 # and works on the copy only.
 #
-# Needs macOS 26 or later, Xcode 27, the submodule and Docker, for scripts/swift. The first run
-# builds the app module in release, which takes about four minutes.
+# Needs macOS 26 or later, Xcode 27, the submodule, Docker, for scripts/swift, and jq, for docker/fetch-vectors. The
+# first run builds the app module in release, which takes about four minutes.
 
 fixes=0
 ok()    { printf '  ok     %s\n' "$*"; }
@@ -172,6 +182,36 @@ if [ -n "$tool" ]; then
   golden_tool tags tags
   golden_tool neighbours neighbours
 fi
+
+echo "From the app's model and every shard"
+# The model and the shards the image holds, fetched as its build fetches them and held to the same digests. The
+# shards are laid out in one folder, each the current commit's where a re-pack changed it and the base's otherwise,
+# as the image's two layers lay them out, by symbolic link.
+cache=${FRUS_GOLDEN_CACHE:-$HOME/Library/Caches/frus-light-golden}
+model=""
+shards=""
+if step fetch-model scripts/fetch-model "$cache/model"; then
+  model=$(sed -n 's/^ARG MODEL_URL=//p' docker/Dockerfile)
+  model="$cache/model/${model##*/}"
+  ok "the model in $cache/model"
+else
+  fix "scripts/fetch-model failed (above)"
+fi
+if step fetch-vectors docker/fetch-vectors "$cache/vectors"; then
+  base=$(sed -n 's/^ARG VECTORS_BASE_COMMIT=//p' docker/Dockerfile)
+  current=$(sed -n 's/^ARG VECTORS_COMMIT=//p' docker/Dockerfile)
+  shards="$work/shards"
+  mkdir -p "$shards"
+  for volume in $(jq -r '.shards[].volumeID' upstream/FRUS-Explorer/FRUSExplorer/Resources/semantic-shards-manifest.json); do
+    if [ -f "$cache/vectors/$current/$volume.vec" ]; then ln -s "$cache/vectors/$current/$volume.vec" "$shards/$volume.vec"
+    else ln -s "$cache/vectors/$base/$volume.vec" "$shards/$volume.vec"; fi
+  done
+  ok "the 553 shards in $cache/vectors"
+else
+  fix "docker/fetch-vectors failed (above)"
+fi
+if [ -n "$tool" ] && [ -n "$model" ]; then golden_tool embed embed --model "$model"; fi
+if [ -n "$tool" ] && [ -n "$shards" ]; then golden_tool corpus-neighbours corpus-neighbours --shards "$shards"; fi
 
 echo "From the export"
 if [ -z "$export_file" ]; then
